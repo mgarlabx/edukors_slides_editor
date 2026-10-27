@@ -6,8 +6,6 @@ Most of the creation and formatting work can be delegated to an **AI assistant**
 
 The repository also contains the **interactive questions server** in [`server/poll/`](server/poll/README.md): PHP + MySQL, ready for anyone to host their own and point the app to it.
 
-> **Status:** version 1.0.0 is being prepared. Installers will be published on the [Releases](https://github.com/mgarlabx/edukors_slides_editor/releases) page; until then, run it from source (see [Development](#development)).
-
 ## Install
 
 Download the file for your system from the [latest release](https://github.com/mgarlabx/edukors_slides_editor/releases/latest). The app does not require Node, Python or Chrome, and updates itself when a new version is published.
@@ -16,7 +14,7 @@ Download the file for your system from the [latest release](https://github.com/m
 | --- | --- | --- |
 | macOS, Apple silicon (M1 or later) | `…-arm64.dmg` | Signed and notarized by Apple. Open the `.dmg` and drag the app to Applications. |
 | macOS, Intel | `…-x64.dmg` | Same as above. |
-| Windows 10/11 (x64 or Arm) | `…-setup.exe` | Signed installer. In 1.0 the AI assistant is not available on Windows (see [Known limitations](#known-limitations)). |
+| Windows 10/11 (x64 or Arm) | Microsoft Store (coming soon) or `…-setup.exe` | The Store version is signed by Microsoft and updated by the Store. The `setup.exe` is not code-signed yet: on first run, SmartScreen asks for **More info → Run anyway**. In 1.0 the AI assistant is not available on Windows (see [Known limitations](#known-limitations)). |
 | Linux (x64 or Arm) | `.AppImage`, `.deb` or `.rpm` | The AppImage updates itself; mark it as executable (`chmod +x`). The AI assistant needs `bubblewrap` (`bwrap`) installed. |
 
 Each release lists the SHA-256 checksum of every file (`SHA256SUMS.txt`) and carries a GitHub build provenance attestation (`gh attestation verify <file> -R mgarlabx/edukors_slides_editor`).
