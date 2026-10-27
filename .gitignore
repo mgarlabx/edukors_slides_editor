@@ -1,0 +1,25 @@
+.edukors/
+dist/
+node_modules/
+release/
+test-results/
+
+.local-data/
+.cache/
+poll.config.php
+*.log
+.DS_Store
+.vscode/
+.idea/
+.claude/settings.local.json
+
+# Credenciais de assinatura e segredos (nunca versionar)
+*.p12
+*.p8
+*.pem
+*.key
+*.cer
+*.mobileprovision
+.env
+.env.*
+private/
