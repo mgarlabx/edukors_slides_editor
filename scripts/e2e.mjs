@@ -512,7 +512,9 @@ try{
   const selected=async()=>{for(let i=0,v;;i++){v=await box.evaluate(()=>getSelection().toString()).catch(e=>{if(!/detached|destroyed/.test(e.message))throw e;});if(v==='world'||i>=50)return v;await page.waitForTimeout(100);}};
   assert.equal(await selected(),'world','selection kept after the color');
   await page.locator('.manual-toolbar .format-button.bold').click();await canvas.locator('[data-manual=text] b').filter({hasText:/^world$/}).waitFor();
-  await canvas.locator('html[data-esf-ready=true]').waitFor();const c=await page.locator('.slide-canvas').boundingBox();await page.mouse.click(c.x+5,c.y+5);await canvas.locator('[data-manual=text][contenteditable]').waitFor({state:'detached'});
+  // After the bold the frame reloads; a click while it reloads is lost, so click again until the text leaves editing.
+  for(let i=0;;i++){await canvas.locator('html[data-esf-ready=true]').waitFor();const c=await page.locator('.slide-canvas').boundingBox();await page.mouse.click(c.x+5,c.y+5);
+   try{await canvas.locator('[data-manual=text][contenteditable]').waitFor({state:'detached',timeout:5000});break;}catch(e){if(i===4)throw e;}}
   const b0=await box.boundingBox(),x=b0.x+30,y=b0.y+1;await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+50,y+30,{steps:8});await page.mouse.up();
   await canvas.locator('[data-manual=text][style*="translate"]').waitFor();const b1=await box.boundingBox();assert.ok(Math.abs(b1.x-b0.x-50)<6&&Math.abs(b1.y-b0.y-30)<6,`text box moved ${b0.x},${b0.y} → ${b1.x},${b1.y}`);
   await menu('copy');await page.waitForTimeout(200);await menu('paste');await page.waitForFunction(()=>true);await canvas.locator('[data-manual=text]').nth(1).waitFor();
