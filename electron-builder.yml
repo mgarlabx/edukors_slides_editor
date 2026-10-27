@@ -1,0 +1,62 @@
+# Installers for macOS, Windows and Linux. Local: node scripts/package.mjs; releases: .github/workflows/release.yml.
+appId: org.edukors.slides
+productName: Edukors Slides Editor
+copyright: Copyright © 2026 Edukors
+directories:
+  output: release
+  buildResources: build
+# dist/ already bundles React, fflate and electron-updater; nothing from node_modules goes in.
+files:
+  - dist/main.cjs
+  - dist/preload.cjs
+  - dist/ui.js
+  - dist/ui.css
+  - dist/index.html
+  - package.json
+asar: true
+npmRebuild: false
+afterPack: build/after-pack.cjs
+fileAssociations:
+  - ext: esf
+    name: Edukors Slides Editor Presentation
+    description: Edukors Slides Editor Presentation
+    mimeType: application/vnd.edukors.slides+zip
+    role: Editor
+    rank: Owner
+publish:
+  provider: github
+  owner: mgarlabx
+  repo: edukors_slides_editor
+
+mac:
+  category: public.app-category.productivity
+  target: [dmg, zip]
+  artifactName: Edukors-Slides-Editor-${version}-mac-${arch}.${ext}
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    UTExportedTypeDeclarations:
+      - UTTypeIdentifier: org.edukors.slides.esf
+        UTTypeDescription: Edukors Slides Editor Presentation
+        UTTypeConformsTo: [public.zip-archive, public.data]
+        UTTypeTagSpecification:
+          public.filename-extension: [esf, ESF]
+          public.mime-type: [application/vnd.edukors.slides+zip]
+dmg:
+  artifactName: Edukors-Slides-Editor-${version}-mac-${arch}.${ext}
+
+win:
+  target: nsis
+  artifactName: Edukors-Slides-Editor-${version}-setup.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+
+linux:
+  target: [AppImage, deb, rpm]
+  category: Office
+  executableName: edukors-slides-editor
+  synopsis: Desktop editor for HTML presentations
+  maintainer: Edukors
+  artifactName: Edukors-Slides-Editor-${version}-linux-${arch}.${ext}
