@@ -506,7 +506,7 @@ try{
   await page.locator('.pick-menu button[aria-label="Vermelho"]').click();await canvas.locator('[data-manual=text] span[style*="color"]').filter({hasText:/^world$/}).waitFor();
   assert.equal(await box.evaluate(()=>getSelection().toString()),'world','selection kept after the color');
   await page.locator('.manual-toolbar .format-button.bold').click();await canvas.locator('[data-manual=text] b').filter({hasText:/^world$/}).waitFor();
-  const c=await page.locator('.slide-canvas').boundingBox();await page.mouse.click(c.x+5,c.y+5);await canvas.locator('[data-manual=text][contenteditable]').waitFor({state:'detached'});
+  await canvas.locator('html[data-esf-ready=true]').waitFor();const c=await page.locator('.slide-canvas').boundingBox();await page.mouse.click(c.x+5,c.y+5);await canvas.locator('[data-manual=text][contenteditable]').waitFor({state:'detached'});
   const b0=await box.boundingBox(),x=b0.x+30,y=b0.y+1;await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+50,y+30,{steps:8});await page.mouse.up();
   await canvas.locator('[data-manual=text][style*="translate"]').waitFor();const b1=await box.boundingBox();assert.ok(Math.abs(b1.x-b0.x-50)<6&&Math.abs(b1.y-b0.y-30)<6,`text box moved ${b0.x},${b0.y} → ${b1.x},${b1.y}`);
   await menu('copy');await page.waitForTimeout(200);await menu('paste');await page.waitForFunction(()=>true);await canvas.locator('[data-manual=text]').nth(1).waitFor();
