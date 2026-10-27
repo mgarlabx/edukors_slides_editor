@@ -1,0 +1,18 @@
+/* EDUKORS app tokens (Manual de Estilo Visual — Apps EDUKORS, 25/10/2026). Same file in every EDUKORS app; no hex outside it. */
+:root{
+  --bg:#f6f7fb;--panel:#ffffff;--panel-2:#f1f3f8;--canvas:#fbfbfd;--border:#dde1ea;--border-strong:#c3c9d6;
+  --text:#1d2330;--muted:#677085;--accent:#5b5bd6;--accent-soft:#ececfd;
+  --ok:#2f9e44;--ok-soft:#e6f6ea;--warning:#c77700;--warning-soft:#fff4dd;--error:#d63939;--error-soft:#fdecec;
+  --backdrop:rgba(10,12,20,.45);--on-accent:#ffffff;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --fs-xs:11px;--fs-sm:12px;--fs-base:13px;--fs-chat:14px;--fs-h3:15px;--fs-h2:17px;--fs-h1:22px;
+  --radius-sm:6px;--radius:8px;--radius-lg:12px;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.06);--shadow-lg:0 20px 60px rgba(16,24,40,.3);
+}
+/* Dark tokens: the Slides Editor stays light (themeSource 'light'); these apply only where an app opts in. */
+:root[data-theme="dark"]{
+  --bg:#15171c;--panel:#1d2027;--panel-2:#252932;--canvas:#181a20;--border:#2f343f;--border-strong:#3f4553;
+  --text:#e6e8ee;--muted:#98a0b3;--accent:#8b8bf5;--accent-soft:#2b2b4f;
+  --ok:#51cf66;--ok-soft:#1d3324;--warning:#f0a83a;--warning-soft:#392d18;--error:#ff6b6b;--error-soft:#3a2124;
+  --backdrop:rgba(0,0,0,.55);
+}

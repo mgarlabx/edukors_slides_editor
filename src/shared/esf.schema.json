@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "edukors-slides/esf-3.schema.json",
+  "title": "Edukors Slides Editor package manifest (manifest.json inside the .ESF)",
+  "description": "An .ESF is a ZIP package. This UTF-8 JSON manifest is its manifest.json entry: identity, order, metadata and references. Slide code, masters, layouts and resources are separate entries whose paths are relative to the package root; other entries (media/, research/, exports/, .edukors/ai/conversations.json, the rest of ai/) are auxiliary content preserved as is.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "packageVersion",
+    "schemaVersion",
+    "runtimeVersion",
+    "id",
+    "revision",
+    "title",
+    "canvas",
+    "masters",
+    "activeMaster",
+    "layouts",
+    "slides",
+    "assets"
+  ],
+  "properties": {
+    "format": {
+      "const": "edukors-slides"
+    },
+    "packageVersion": {
+      "const": 1,
+      "description": "Version of the ZIP package layout, independent of schemaVersion and runtimeVersion."
+    },
+    "schemaVersion": {
+      "const": 3
+    },
+    "runtimeVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^deck-[\\w-]+$",
+      "description": "Stable presentation ID."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height"
+      ],
+      "properties": {
+        "width": {
+          "const": 1600
+        },
+        "height": {
+          "const": 900
+        }
+      }
+    },
+    "systemPrompt": {
+      "const": "ai/system-prompt.md",
+      "description": "Optional Markdown file with the presentation's instructions for the AI assistant (context of the talk)."
+    },
+    "masters": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "description": "Slide masters. Ordinary layouts follow activeMaster; imported layouts can retain a source master through masterId.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "html",
+          "css"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[\\w-]+$",
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "html": {
+            "type": "string",
+            "pattern": "^masters/[\\w-]+/master\\.html$",
+            "description": "Objects drawn behind the content of every slide while this master is active."
+          },
+          "css": {
+            "type": "string",
+            "pattern": "^masters/[\\w-]+/theme\\.css$",
+            "description": "Theme CSS of every slide while this master is active."
+          }
+        }
+      }
+    },
+    "activeMaster": {
+      "type": "string",
+      "pattern": "^[\\w-]+$",
+      "description": "ID of the master in use."
+    },
+    "layouts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "description": "Layouts shared by all masters: the HTML a new slide starts from.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "html"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[\\w-]+$",
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "html": {
+            "type": "string",
+            "pattern": "^layouts/[\\w-]+\\.html$"
+          },
+          "css": {
+            "type": "string",
+            "pattern": "^layouts/[\\w-]+\\.css$"
+          },
+          "masterId": {
+            "type": "string",
+            "description": "Optional source master retained by pasted layouts; otherwise activeMaster applies."
+          }
+        }
+      }
+    },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 300,
+      "description": "Presentation order.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "layoutId",
+          "notes",
+          "html",
+          "css",
+          "script",
+          "staticHtml",
+          "staticState"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^s-[\\w-]+$",
+            "description": "Stable, unique and independent of position."
+          },
+          "title": {
+            "type": "string",
+            "description": "Navigation title."
+          },
+          "layoutId": {
+            "type": "string",
+            "description": "ID of the slide's layout."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Speaker notes."
+          },
+          "html": {
+            "type": "string",
+            "pattern": "^slides/s-[\\w-]+/content\\.html$",
+            "description": "One <section class=\"slide\"> at 1600x900. No script, iframe, object, embed, base, form, link or meta tags and no on* attributes. Editable text has data-field; progressive reveals use data-step."
+          },
+          "css": {
+            "type": "string",
+            "pattern": "^slides/s-[\\w-]+/style\\.css$",
+            "description": "Slide CSS. No @import or external url()."
+          },
+          "script": {
+            "type": "string",
+            "pattern": "^slides/s-[\\w-]+/behavior\\.js$",
+            "description": "Optional JavaScript assigning window.slideBehavior={mount(root),enter(root),step(n),leave(),dispose(),renderStatic(root)}. No network or imports."
+          },
+          "staticHtml": {
+            "type": "string",
+            "pattern": "^slides/s-[\\w-]+/static\\.html$",
+            "description": "Optional final static state used by PDF/PPTX when the slide animates."
+          },
+          "staticState": {
+            "const": "final"
+          },
+          "poll": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "provider",
+              "type",
+              "prompt"
+            ],
+            "properties": {
+              "version": {
+                "const": 1
+              },
+              "provider": {
+                "enum": [
+                  "edukors",
+                  "solverpoll"
+                ]
+              },
+              "type": {
+                "enum": [
+                  "quiz",
+                  "tag",
+                  "post"
+                ]
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 5,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "quiz"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "options"
+                  ]
+                },
+                "else": {
+                  "not": {
+                    "required": [
+                      "options"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "maxItems": 2000,
+      "description": "Embedded images and fonts, referenced in slides as asset:ID. Every resource must be embedded: external URLs and relative paths are rejected; <a href> links may stay external.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "mime",
+          "path"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^asset-[\\w-]+$"
+          },
+          "name": {
+            "type": "string",
+            "description": "Original file name."
+          },
+          "mime": {
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/gif",
+              "image/svg+xml",
+              "image/avif",
+              "font/woff2",
+              "font/woff",
+              "font/ttf",
+              "font/otf"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^(images|fonts)/asset-[\\w-]+\\.(png|jpg|webp|gif|svg|avif|woff2|woff|ttf|otf)$",
+            "maxLength": 300
+          }
+        }
+      }
+    }
+  }
+}

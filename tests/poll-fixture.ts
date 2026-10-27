@@ -1,0 +1,10 @@
+import {newDeck,newSlide} from '../src/shared/model';
+import {playerDocument} from '../src/shared/player';
+const deck=newDeck('Interatividade');
+deck.slides[0].poll={version:1,provider:'edukors',type:'quiz',prompt:'Qual abordagem ajuda mais a aprender?',options:['Experimentar na prática','Discutir em grupo','Ler e refletir','Assistir a uma explicação']};
+deck.slides.push(newSlide(deck.layouts[0]),newSlide(deck.layouts[0]),newSlide(deck.layouts[0]));
+deck.slides[1].poll={version:1,provider:'edukors',type:'tag',prompt:'Qual palavra representa esta experiência?'};
+deck.slides[2].poll={version:1,provider:'edukors',type:'post',prompt:'O que você levaria desta aula para sua prática?'};
+deck.slides[3].html='<section class="slide"><h1>Fim da atividade</h1></section>';
+export const html=playerDocument(deck,{lang:'pt',pollServer:'https://edukors.org/poll'});
+export const htmlFor=(pollServer:string)=>playerDocument(deck,{lang:'pt',pollServer});

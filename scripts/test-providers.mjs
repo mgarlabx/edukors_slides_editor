@@ -1,0 +1,38 @@
+import {_electron as electron} from 'playwright';
+import {createRequire} from 'node:module';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const require=createRequire(import.meta.url),root=path.resolve('test-results/provider-ui-'+Date.now()),data=path.join(root,'appdata');await fs.mkdir(data,{recursive:true});
+const env={...process.env,ESF_DATA_DIR:data,ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+await fs.writeFile(path.join(data,'preferences.json'),JSON.stringify({language:'pt',profiles:[{id:'old',name:'Claude existente',executable:'/nonexistent/claude',configDir:path.join(root,'claude')}],activeProfile:'old',aiModel:'claude-sonnet-5-5',aiEffort:'high'}));
+const launch=()=>electron.launch({executablePath:require('electron'),args:['.'],env,timeout:30000});
+let app=await launch();const errors=[];
+try{
+ let page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.locator('.empty-desk').waitFor();
+ await page.getByRole('button',{name:'Configurações',exact:true}).click();await page.getByRole('button',{name:'Contas de IA',exact:true}).click();
+ assert.equal(await page.locator('.account-card').count(),1);await page.getByRole('button',{name:'Adicionar conta',exact:true}).click();
+ assert.equal(await page.locator('.provider-grid [role=radio]').count(),6);await page.screenshot({path:path.join(root,'01-create.png')});
+ const create=async(provider,name,first=false)=>{if(!first)await page.getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:provider,exact:true}).click();await page.locator('.provider-create').getByLabel('Nome da conta').fill(name);await page.getByRole('button',{name:'Criar conta',exact:true}).click();await page.locator('.provider-create').waitFor({state:'detached'});};
+ await create('Codex','Codex pessoal',true);await create('Codex','Codex trabalho');
+ const card=name=>page.locator('.account-card').filter({has:page.locator('.account-toggle').filter({hasText:name})});
+ for(const name of ['Codex pessoal','Codex trabalho'])await card(name).getByText('Avançado',{exact:true}).click();
+ const dirs=await Promise.all(['Codex pessoal','Codex trabalho'].map(name=>card(name).getByLabel('Diretório de configuração').inputValue()));assert.notEqual(dirs[0],dirs[1]);assert.ok(dirs[1].includes('/accounts/profile-'));
+ await card('Codex trabalho').getByRole('button',{name:'Conectar conta',exact:true}).click();await card('Codex trabalho').locator('.account-login').waitFor();assert.match(await card('Codex trabalho').locator('pre').innerText(),/CODEX_HOME=/);
+ await card('Codex trabalho').getByRole('button',{name:'Copiar comando'}).click();const copied=await app.evaluate(async({clipboard})=>clipboard.readText());assert.ok(copied.includes(dirs[1]));
+ for(const provider of ['Kimi','Kiro','OpenCode','Antigravity'])await create(provider,provider+' teste');
+ await page.screenshot({path:path.join(root,'02-accounts.png')});
+ const read=async()=>JSON.parse(await fs.readFile(path.join(data,'preferences.json'),'utf8'));let prefs=await read();assert.equal(prefs.profiles.length,7);assert.equal(prefs.profiles[0].model,'claude-sonnet-5-5');assert.equal(prefs.profiles[0].effort,'high');
+ await page.locator('.modal.sheet').getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('button',{name:'Nova apresentação',exact:true}).click();await page.locator('.template-card').first().dblclick();await page.locator('.composer-account').waitFor();
+ const personal=prefs.profiles.find(p=>p.name==='Codex pessoal'),work=prefs.profiles.find(p=>p.name==='Codex trabalho');
+ assert.equal(await page.locator('.composer-account optgroup[label=Codex] option').count(),2);
+ await page.locator('.composer-account select').selectOption(personal.id);await page.locator('.model-button').click();await page.getByLabel('Outro modelo (ID)').fill('personal-model');await page.keyboard.press('Escape');
+ await page.locator('.composer-account select').selectOption(work.id);assert.match(await page.locator('.model-button').innerText(),/Padrão da conta/);await page.locator('.model-button').click();await page.getByLabel('Outro modelo (ID)').fill('work-model');await page.keyboard.press('Escape');
+ await page.locator('.composer-account select').selectOption(personal.id);assert.match(await page.locator('.model-button').innerText(),/personal-model/);
+ await page.screenshot({path:path.join(root,'03-composer.png')});
+ prefs=await read();assert.equal(prefs.profiles.find(p=>p.id===personal.id).model,'personal-model');assert.equal(prefs.profiles.find(p=>p.id===work.id).model,'work-model');
+ await app.close();app=await launch();page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.locator('.empty-desk').waitFor();await page.getByRole('button',{name:'Configurações',exact:true}).click();await page.getByRole('button',{name:'Contas de IA',exact:true}).click();assert.equal(await page.locator('.account-card').count(),7);
+ assert.equal(await page.getByLabel('Conta usada pelo assistente').inputValue(),personal.id);await page.locator('.account-toggle').filter({hasText:'Codex pessoal'}).click();await page.locator('.account-card').filter({hasText:'Codex pessoal'}).getByRole('button',{name:'Remover conta'}).click();assert.equal(await page.getByLabel('Conta usada pelo assistente').inputValue(),'');assert.equal(await page.locator('.account-card').count(),6);
+ assert.deepEqual(errors,[]);console.log('PASS provider creation, multiple accounts, login command, migration, model selection, restart, removal. Screenshots: '+root);
+}finally{await app.close();}
