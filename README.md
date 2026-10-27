@@ -2,16 +2,28 @@
 
 Desktop editor for HTML presentations. Each slide is a small HTML/CSS/JS document; the main output is a **single HTML file** that opens offline in any current browser. PDF and PPTX are available as supporting static exports.
 
-Status: **local MVP for macOS (version 0.2.1)**. Design decisions, rules and open items are in `CLAUDE.md`.
+Most of the creation and formatting work can be delegated to an **AI assistant** (Claude Code or another agent CLI you already use) in a side panel. The interface is available in English, Portuguese and Spanish.
 
 The repository also contains the **interactive questions server** in [`server/poll/`](server/poll/README.md): PHP + MySQL, ready for anyone to host their own and point the app to it.
 
+> **Status:** version 1.0.0 is being prepared. Installers will be published on the [Releases](https://github.com/mgarlabx/edukors_slides_editor/releases) page; until then, run it from source (see [Development](#development)).
+
+## Install
+
+Download the file for your system from the [latest release](https://github.com/mgarlabx/edukors_slides_editor/releases/latest). The app does not require Node, Python or Chrome, and updates itself when a new version is published.
+
+| System | File | Notes |
+| --- | --- | --- |
+| macOS, Apple silicon (M1 or later) | `…-arm64.dmg` | Signed and notarized by Apple. Open the `.dmg` and drag the app to Applications. |
+| macOS, Intel | `…-x64.dmg` | Same as above. |
+| Windows 10/11 (x64 or Arm) | `…-setup.exe` | Signed installer. In 1.0 the AI assistant is not available on Windows (see [Known limitations](#known-limitations)). |
+| Linux (x64 or Arm) | `.AppImage`, `.deb` or `.rpm` | The AppImage updates itself; mark it as executable (`chmod +x`). The AI assistant needs `bubblewrap` (`bwrap`) installed. |
+
+Each release lists the SHA-256 checksum of every file (`SHA256SUMS.txt`) and carries a GitHub build provenance attestation (`gh attestation verify <file> -R mgarlabx/edukors_slides_editor`).
+
+After installing, double-clicking an `.esf` file opens the presentation in the app.
+
 ## Usage
-
-The packaged application is at `release/Edukors Slides Editor.app`. It does not require Node, Python or Chrome.
-
-- To open it: double-click the `.app` (or drag it to Applications, if you like). The first time it opens, macOS registers the association with `.ESF` files; from then on, double-clicking an `.ESF` opens the presentation with the file's folder as its root.
-- The app has an *ad hoc* (local) signature, without notarization. On another machine, Gatekeeper may block it until it is signed for distribution.
 
 ### The `.ESF` file
 
@@ -59,7 +71,7 @@ The app asks where to save (by default, next to the `.ESF`, with its name). When
 
 If the browser reports a preference for reduced motion, the exported HTML offers **Enable animations** or **Keep current setting** (in the app, the labels follow the interface language). Enabling restores CSS animations for that session only, including the following slides, without changing the system or the `.ESF` file. Without reduced motion, no notice appears. This applies to **Present** and to newly exported HTML; older HTML files must be exported again.
 
-When creating a presentation, choose the folder; the `.ESF` file gets the presentation's name (with a `-2`, `-3`… suffix if it already exists).
+A new presentation starts without a file; the first **Save** asks where to save it, and the chosen name becomes its title. Exporting a presentation that was never saved saves it first.
 
 | Format | Content |
 | --- | --- |
@@ -89,9 +101,17 @@ The agent has the Claude Code tools available in the Terminal — Bash, reading/
 
 The assistant's footer shows how much of the subscription's 5-hour window is left and when the next window starts, from the `rate_limit_event` that Claude Code emits with each request (last value kept per account). Before the first request it shows "not available".
 
+### AI accounts and providers
+
+In **Settings → Add account**, choose Claude Code, Codex, Kimi, Kiro, OpenCode or Antigravity, give it a name and create the account. A provider can be used more than once; each new account gets its own authentication directory. Existing Claude profiles are preserved. Model and effort are saved per account, and the active account can be chosen in the assistant.
+
+Install the corresponding CLI and use **Connect**. The editor provides the login command to run in Terminal; **Advanced** lets you choose the executable and directory. Antigravity uses the official ACP server `agy_acp_server.par` with `localharness_external` in the same folder, and opens the Google login from the editor. See the [installation used by T3 Code](https://github.com/pingdotgg/t3code/blob/main/docs/user/providers-antigravity.md). The regular `agy` executable does not replace that server.
+
+Claude and Codex have their own adapters; Kimi, Kiro, OpenCode and Antigravity use ACP. The new processes are confined by the macOS sandbox. Credentials are not written to the ESF. Model discovery depends on what each CLI reports; an ID can also be entered manually.
+
 ## Development
 
-The `npm` on this machine's PATH is incompatible with the installed Node; the commands below call the scripts directly.
+Requirements: Node.js 22 and npm. Install the dependencies with `npm install`; the commands below call the scripts directly with `node` (the same scripts are available as `npm run …`, see `package.json`).
 
 ```sh
 node node_modules/typescript/bin/tsc --noEmit   # typecheck
@@ -101,22 +121,23 @@ node scripts/test.mjs                           # unit and integration tests (No
 node scripts/e2e.mjs                            # full flow in the Electron window
 node scripts/test-canvas.mjs                    # interaction and legacy object regressions
 node scripts/perf.mjs                           # measurement with 50 and 300 slides
-node scripts/package-mac.mjs                    # builds the .app and a signed ZIP in release/
-node scripts/package-mac.mjs --version=0.2.1      # explicit version, no automatic increment
+node scripts/package-mac.mjs                    # builds the macOS .app and a ZIP in release/ (ad hoc signature)
+node scripts/package-mac.mjs --version=1.0.0    # explicit version, no automatic increment
 node scripts/e2e.mjs --poll-server              # real questions server (local PHP + MySQL, throwaway database)
-node scripts/sync-poll-server.mjs [--check]     # copies server/poll to the published folder (default: ../_code/public_html/poll)
 ESF_EXECUTABLE="$PWD/release/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor" node scripts/e2e.mjs
 ```
 
-The tests use a **simulated** Claude CLI; no real account is called. Test outputs and data go to `test-results/` (`ESF_DATA_DIR` isolates the preferences).
+`build.mjs` increments the patch version in `package.json` on each local build; pass `--version=X.Y.Z` to set it explicitly.
 
-Dependencies are in `node_modules/`, restored offline by `scripts/bootstrap-offline.py` from the local caches (the npm registry was not reachable). There is no `package-lock.json`.
+The tests use **simulated** AI CLIs; no real account is called. Test outputs and data go to `test-results/` (`ESF_DATA_DIR` isolates the preferences). The Electron tests run with hidden windows; set `ESF_SHOW=1` to see them.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ### Structure
 
 | Path | Responsibility |
 | --- | --- |
-| `src/shared/model.ts` | Types, blank master, reading the old format, validation |
+| `src/shared/model.ts` | Types, blank master, validation |
 | `src/shared/render.ts` | Isolated document of each slide and step runtime |
 | `src/shared/canvas.ts` | Selection, editing and gesture lifecycle on the canvas |
 | `src/shared/geometry.ts` | Matrices, snapping and resizing |
@@ -133,23 +154,18 @@ Editor previews are loaded through the internal `esf-frame:` scheme, with their 
 
 ## Known limitations
 
-- Integration with a real Claude account not yet exercised (simulated CLI only).
-- Opening an `.ESF` from Finder (double-click with the app closed/open) is not tested automatically; the same code was tested through a command-line argument.
-- PPTX validated as ZIP/OOXML and with macOS Quick Look; still needs to be opened in PowerPoint and LibreOffice.
-- Exported HTML tested in Electron's Chromium; the Safari, Chrome, Firefox and Edge matrix is still missing.
-- Windows and Linux builds do not exist yet.
-- The player uses system fonts for its controls (no Manrope).
+- **Windows:** the AI assistant is disabled in 1.0. Its commands must run inside a sandbox confined to the presentation folder, and the sandbox used on macOS and Linux does not exist on native Windows. Editing, presenting and exporting work normally.
+- **Linux:** the AI assistant requires `bubblewrap` (`bwrap`).
+- The app is not in the Mac App Store, Snap Store or Flathub: their sandboxes do not allow running the AI CLIs installed by the user.
+- Opening an `.esf` by double-click is not covered by the automated tests; the same code path is tested through a command-line argument.
+- PDF and PPTX exports are images (one per slide); PPTX has been validated as OOXML but still needs testing in PowerPoint and LibreOffice.
+- Exported HTML is tested in Chromium; Safari, Firefox and Edge are checked by hand.
+- The player uses system fonts for its controls.
+
+## Privacy and security
+
+The app collects no data and has no telemetry. The connections it makes, and when, are listed in [PRIVACY.md](PRIVACY.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT — see `LICENSE`. It also covers the server in `server/poll/`.
-
-## AI accounts and providers
-
-In **Settings → Add account**, choose Claude Code, Codex, Kimi, Kiro, OpenCode or Antigravity, give it a name and create the account. A provider can be used more than once; each new account gets its own authentication directory. Existing Claude profiles are preserved. Model and effort are saved per account, and the active account can be chosen in the assistant.
-
-Install the corresponding CLI and use **Connect**. The editor provides the login command to run in Terminal; **Advanced** lets you choose the executable and directory. Antigravity uses the official ACP server `agy_acp_server.par` with `localharness_external` in the same folder, and opens the Google login from the editor. See the [installation used by T3 Code](https://github.com/pingdotgg/t3code/blob/main/docs/user/providers-antigravity.md). The regular `agy` executable does not replace that server.
-
-Claude and Codex have their own adapters; Kimi, Kiro, OpenCode and Antigravity use ACP. The new processes are confined by the macOS sandbox. Credentials are not written to the ESF. Model discovery depends on what each CLI reports; an ID can also be entered manually.
-
-Validation: tests with simulated CLIs cover protocols, migration, environment isolation, resuming, cancellation and failures; the interface test covers creating several accounts, selection and persistence after a restart. No paid calls or real logins were made. The native sandbox test is skipped when the environment prevents nested sandboxing. The general E2E has `--without-legacy-canvas` to exclude the old card-editing expectations, which are incompatible with the current locking of layouts.
+MIT — see [`LICENSE`](LICENSE). It also covers the server in `server/poll/`.
