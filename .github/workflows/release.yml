@@ -64,11 +64,30 @@ jobs:
       - name: Without a certificate, macOS builds are signed ad hoc (Gatekeeper will warn)
         if: runner.os == 'macOS' && env.HAS_MAC_CERT != 'true'
         run: echo "BUILDER_ARGS=-c.mac.identity=- -c.mac.hardenedRuntime=false" >> "$GITHUB_ENV"
+      # Developer ID signing (CSC_LINK takes the base64 .p12) and notarization (APPLE_API_KEY is the .p8 path).
+      # Only on macOS: electron-builder would otherwise try the .p12 for Windows signing.
+      - name: Signing and notarization credentials
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
+        env:
+          P12: ${{ secrets.MAC_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey.p8"; echo "$API_KEY" | base64 --decode > "$key"
+          { echo "CSC_LINK=$P12"; echo "CSC_KEY_PASSWORD=$P12_PASSWORD"; echo "APPLE_API_KEY=$key"
+            echo "APPLE_API_KEY_ID=$API_KEY_ID"; echo "APPLE_API_ISSUER=$API_ISSUER"; } >> "$GITHUB_ENV"
       - name: Package
         shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_MAC_CERT == 'true' }}
         run: node scripts/package.mjs --no-bump ${{ matrix.args }} $BUILDER_ARGS
+      - name: Check signature and notarization
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
+        run: |
+          shopt -s failglob
+          for app in release/mac*/*.app; do codesign --verify --deep --strict "$app" && xcrun stapler validate "$app" && spctl -a -vv -t exec "$app" || exit 1; done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-${{ matrix.name }}
