@@ -561,7 +561,7 @@ try{
  assert.equal(await page.locator('.tab').count(),1,'reopen + file argument must not duplicate the tab');
  if(!win){await page.getByText('Feito pela IA').waitFor();
  assert.ok((await zipText(esf,'.edukors/ai/conversations.json')).includes('Feito pela IA'),'conversations are stored in the package');}
- await page.getByRole('button',{name:'Mostrar no Finder'}).waitFor();
+ await page.getByRole('button',{name:process.platform==='darwin'?'Mostrar no Finder':'Mostrar na pasta'}).waitFor();
  await page.locator('.statusbar button').filter({hasText:'Minha pasta'}).waitFor();
  await page.frameLocator('.slide-canvas iframe').locator('h1').filter({hasText:'Apresentação de teste'}).waitFor();
  await page.frameLocator('.slide-item:nth-child(2) iframe').locator('h2').filter({hasText:'Aprender fazendo'}).waitFor();

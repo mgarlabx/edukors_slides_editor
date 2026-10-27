@@ -121,13 +121,15 @@ node scripts/test.mjs                           # unit and integration tests (No
 node scripts/e2e.mjs                            # full flow in the Electron window
 node scripts/test-canvas.mjs                    # interaction and legacy object regressions
 node scripts/perf.mjs                           # measurement with 50 and 300 slides
-node scripts/package-mac.mjs                    # builds the macOS .app and a ZIP in release/ (ad hoc signature)
-node scripts/package-mac.mjs --version=1.0.0    # explicit version, no automatic increment
+node scripts/package.mjs                        # installers for this system in release/ (electron-builder.yml)
+node scripts/package.mjs --no-bump --x64 --arm64 # same version, both architectures
 node scripts/e2e.mjs --poll-server              # real questions server (local PHP + MySQL, throwaway database)
 ESF_EXECUTABLE="$PWD/release/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor" node scripts/e2e.mjs
 ```
 
-`build.mjs` increments the patch version in `package.json` on each local build; pass `--version=X.Y.Z` to set it explicitly.
+`build.mjs` increments the patch version in `package.json` on each local build; pass `--version=X.Y.Z` to set it, or `--no-bump` to keep it (CI never bumps).
+
+Releases: set `version` in `package.json`, commit, then push a tag `vX.Y.Z` (or `vX.Y.Z-rc.N` for a pre-release). `.github/workflows/release.yml` builds, signs and publishes the installers, checksums and provenance attestations to GitHub Releases; installed apps update themselves from there.
 
 The tests use **simulated** AI CLIs; no real account is called. Test outputs and data go to `test-results/` (`ESF_DATA_DIR` isolates the preferences). The Electron tests run with hidden windows; set `ESF_SHOW=1` to see them.
 

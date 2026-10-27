@@ -30,11 +30,16 @@ function parse(buf:Buffer,file:string):Face|null{
   }
   return{family,file,variable:fvar!==undefined,weight,italic};
 }
+// Fonts installed by the user and for all users, per system.
+const fontDirs=()=>process.platform==='win32'?[path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'AppData/Local'),'Microsoft/Windows/Fonts'),path.join(process.env.WINDIR||'C:\\Windows','Fonts')]
+  :process.platform==='linux'?[path.join(os.homedir(),'.local/share/fonts'),path.join(os.homedir(),'.fonts'),'/usr/local/share/fonts','/usr/share/fonts']
+  :[path.join(os.homedir(),'Library/Fonts'),'/Library/Fonts'];
 let installed:Promise<Face[]>|undefined;
 async function installedFaces(){
-  const dirs=(process.env.ESF_FONT_DIRS?.split(path.delimiter)||[path.join(os.homedir(),'Library/Fonts'),'/Library/Fonts']).filter(Boolean),faces:Face[]=[];
+  const dirs=(process.env.ESF_FONT_DIRS?.split(path.delimiter)||fontDirs()).filter(Boolean),faces:Face[]=[];
   for(const dir of dirs){
-    let files:string[]=[];try{files=await fs.readdir(dir);}catch{continue;}
+    // Linux keeps fonts in subfolders (truetype/<family>/…).
+    let files:string[]=[];try{files=await fs.readdir(dir,{recursive:process.platform==='linux'});}catch{continue;}
     for(const f of files.filter(f=>/\.(ttf|otf)$/i.test(f))){try{const file=path.join(dir,f),face=parse(await fs.readFile(file),file);if(face)faces.push(face);}catch{}}
   }
   return faces;

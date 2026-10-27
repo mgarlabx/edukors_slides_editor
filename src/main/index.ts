@@ -17,6 +17,7 @@ import {AIProviders,probeProvider,connectAntigravity} from './providers';
 import {providers,providerOf,normalizeProfiles} from '../shared/providers';
 import {executablePath,loginCommand} from './provider-runtime';
 import {readFileSync,existsSync} from 'node:fs';
+import {autoUpdater} from 'electron-updater';
 app.setName('Edukors Slides Editor');
 protocol.registerSchemesAsPrivileged([{scheme:'esf-frame',privileges:{standard:true,secure:true}}]);
 const workspace=path.resolve(__dirname,'..');
@@ -29,7 +30,7 @@ const store=new ProjectStore(path.join(dataDir,'workspaces'));
 // ESF_HIDDEN=1 (tests): every window stays off screen and the app never takes focus.
 const hidden=process.env.ESF_HIDDEN==='1',hide={show:!hidden,backgroundThrottling:!hidden};
 const reveal=()=>{if(!hidden){win?.show();win?.focus();}};
-let win:BrowserWindow|null=null,ready=false,prefs:Preferences,allowQuit=false;
+let win:BrowserWindow|null=null,ready=false,prefs:Preferences,allowQuit=false,installUpdate=false;
 const pending:string[]=process.argv.filter(x=>/\.esf$/i.test(x)).map(x=>path.resolve(x));
 const sessionsPath=path.join(dataDir,'ai-sessions.json');
 const loadJson=(file:string)=>{try{const v=JSON.parse(readFileSync(file,'utf8'));return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}catch{return{};}};
@@ -75,7 +76,7 @@ function menu(){
   const sep={type:'separator' as const},darwin=process.platform==='darwin';
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(darwin?[{label:'Edukors Slides Editor',submenu:[{role:'about' as const},sep,{label:l[14]+'…',accelerator:'CmdOrCtrl+,',click:command('settings')},sep,{role:'quit' as const}]}]:[]),
-    {label:l[0],submenu:[{label:l[1],accelerator:'CmdOrCtrl+N',click:command('new')},{label:l[2],accelerator:'CmdOrCtrl+O',click:command('open')},{label:l[23],click:command('recent')},sep,{label:l[3],accelerator:'CmdOrCtrl+S',click:command('save'),enabled},{label:l[4],accelerator:'CmdOrCtrl+Shift+S',click:command('saveAs'),enabled},{label:l[25],click:command('saveTemplate'),enabled},sep,{label:l[22],accelerator:'CmdOrCtrl+E',click:command('export'),enabled},{label:l[32],click:command('reveal'),enabled},sep,{label:l[5],accelerator:'CmdOrCtrl+W',click:command('close'),enabled},...(darwin?[]:[sep,{label:l[14]+'…',accelerator:'CmdOrCtrl+,',click:command('settings')},{role:'quit' as const}])]},
+    {label:l[0],submenu:[{label:l[1],accelerator:'CmdOrCtrl+N',click:command('new')},{label:l[2],accelerator:'CmdOrCtrl+O',click:command('open')},{label:l[23],click:command('recent')},sep,{label:l[3],accelerator:'CmdOrCtrl+S',click:command('save'),enabled},{label:l[4],accelerator:'CmdOrCtrl+Shift+S',click:command('saveAs'),enabled},{label:l[25],click:command('saveTemplate'),enabled},sep,{label:l[22],accelerator:'CmdOrCtrl+E',click:command('export'),enabled},{label:darwin?l[32]:({pt:'Mostrar na pasta',en:'Show in Folder',es:'Mostrar en la carpeta'})[prefs.language],click:command('reveal'),enabled},sep,{label:l[5],accelerator:'CmdOrCtrl+W',click:command('close'),enabled},...(darwin?[]:[sep,{label:l[14]+'…',accelerator:'CmdOrCtrl+,',click:command('settings')},{role:'quit' as const}])]},
     {label:l[6],enabled,submenu:[{label:l[7],accelerator:'CmdOrCtrl+Z',click:command('undo'),enabled},{label:l[8],accelerator:'CmdOrCtrl+Shift+Z',click:command('redo'),enabled},sep,{label:l[9],accelerator:'CmdOrCtrl+X',click:command('cut'),enabled},{label:l[10],accelerator:'CmdOrCtrl+C',click:command('copy'),enabled},{label:l[11],accelerator:'CmdOrCtrl+V',click:command('paste'),enabled},{label:l[18],accelerator:'CmdOrCtrl+D',click:command('duplicate'),enabled},{label:l[19],click:command('delete'),enabled},sep,{label:l[12],accelerator:'CmdOrCtrl+A',click:command('selectAll'),enabled}]},
     {label:l[27],submenu:[{label:l[28],click:command('insertText'),enabled},{label:l[29],click:command('insertImage'),enabled},{label:l[30],click:command('insertLink'),enabled},{label:l[31],click:command('insertShape'),enabled},{label:({pt:'Pergunta interativa',en:'Interactive question',es:'Pregunta interactiva'})[prefs.language],click:command('insertPoll'),enabled}]},
     {label:l[16],submenu:[{label:l[17],accelerator:'CmdOrCtrl+Shift+N',click:command('newSlide'),enabled},{label:l[26],click:command('changeLayout'),enabled}]},
@@ -388,7 +389,16 @@ handle('pollPing',async(server:unknown)=>{
     return v?.data?.service==='edukors-poll'?{ok:true}:{ok:false,error:'service'};}catch{return{ok:false,error:'network'};}
 });
 handle('website',()=>process.env.ESF_EXTERNAL_LOG?fs.appendFile(process.env.ESF_EXTERNAL_LOG,'https://edukors.org\n'):shell.openExternal('https://edukors.org'));
-handle('quit',()=>{allowQuit=true;app.quit();});
+handle('quit',()=>{allowQuit=true;if(installUpdate)autoUpdater.quitAndInstall();else app.quit();});
+// Installing goes through the renderer's quit flow first, so unsaved presentations are offered for saving.
+handle('installUpdate',()=>{installUpdate=true;win?.webContents.send('command','quit');});
+// Updates come from GitHub Releases; Microsoft Store builds are updated by the store, and tests never check.
+function checkUpdates(){
+  if(!app.isPackaged||hidden||process.windowsStore||process.env.ESF_NO_UPDATES)return;
+  autoUpdater.on('update-downloaded',i=>win?.webContents.send('update',i.version));
+  autoUpdater.on('error',e=>console.error('Update check failed:',e.message));
+  const check=()=>void autoUpdater.checkForUpdates().catch(()=>{});check();setInterval(check,6*3600_000).unref();
+}
 app.on('before-quit',e=>{if(!allowQuit&&win&&!win.isDestroyed()){e.preventDefault();win.webContents.send('command','quit');}else{ai.dispose();agentTools.dispose();}});
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
 app.whenReady().then(async()=>{
@@ -403,5 +413,5 @@ app.whenReady().then(async()=>{
   win.webContents.on('before-input-event',(e,i)=>{const k=i.key.toLowerCase(),act=i.type==='keyDown'&&!deckOpen&&(i.meta||i.control)&&!i.alt?k==='z'?i.shift?'redo':'undo':!i.shift?{x:'cut',c:'copy',v:'paste',a:'selectAll'}[k]:undefined:undefined;if(act){e.preventDefault();(win!.webContents as any)[act]();}});
   win.on('close',e=>{if(!allowQuit){e.preventDefault();win?.webContents.send('command','quit');}});
   await win.loadFile(path.join(__dirname,'index.html'));
-  app.on('activate',reveal);
+  app.on('activate',reveal);checkUpdates();
 });

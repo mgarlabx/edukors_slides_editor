@@ -4,6 +4,16 @@
   "version": "1.0.0",
   "private": true,
   "description": "Desktop HTML presentation editor",
+  "author": {
+    "name": "Edukors",
+    "url": "https://edukors.org"
+  },
+  "homepage": "https://github.com/mgarlabx/edukors_slides_editor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mgarlabx/edukors_slides_editor.git"
+  },
+  "license": "MIT",
   "main": "dist/main.cjs",
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -12,7 +22,7 @@
     "test": "node scripts/test.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "test:e2e": "node scripts/e2e.mjs",
-    "package:mac": "node scripts/package-mac.mjs",
+    "package:mac": "node scripts/package.mjs",
     "perf": "node scripts/perf.mjs",
     "test:canvas": "node scripts/test-canvas.mjs",
     "test:inheritance": "node scripts/test-inheritance.mjs",
@@ -20,22 +30,22 @@
     "test:poll": "node scripts/e2e.mjs --poll",
     "test:poll:server": "node scripts/e2e.mjs --poll-server",
     "test:poll:live": "node scripts/e2e.mjs --poll-live",
-    "sync:poll": "node scripts/sync-poll-server.mjs"
-  },
-  "dependencies": {
-    "fflate": "0.8.2",
-    "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "sync:poll": "node scripts/sync-poll-server.mjs",
+    "package": "node scripts/package.mjs"
   },
   "devDependencies": {
     "@types/node": "22.13.9",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "electron": "44.3.0",
+    "electron-builder": "26.17.0",
+    "electron-updater": "6.8.10",
     "esbuild": "0.25.10",
+    "fflate": "0.8.3",
     "playwright": "1.63.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "terser": "5.51.2",
     "typescript": "5.9.3"
-  },
-  "license": "MIT"
+  }
 }
