@@ -508,7 +508,9 @@ try{
   await box.evaluate(el=>{const t=el.firstChild,r=document.createRange();r.setStart(t,6);r.setEnd(t,11);getSelection().removeAllRanges();getSelection().addRange(r);});
   await page.locator('.manual-toolbar .pick-button[aria-label="Cor do texto"]').click();assert.equal(await box.evaluate(()=>getSelection().toString()),'world','selection kept while the menu is open');
   await page.locator('.pick-menu button[aria-label="Vermelho"]').click();await canvas.locator('[data-manual=text] span[style*="color"]').filter({hasText:/^world$/}).waitFor();
-  assert.equal(await box.evaluate(()=>getSelection().toString()),'world','selection kept after the color');
+  // Formatting reloads the frame, which restores the selection; slow machines may still be swapping frames here.
+  const selected=async()=>{for(let i=0,v;;i++){v=await box.evaluate(()=>getSelection().toString()).catch(e=>{if(!/detached|destroyed/.test(e.message))throw e;});if(v==='world'||i>=50)return v;await page.waitForTimeout(100);}};
+  assert.equal(await selected(),'world','selection kept after the color');
   await page.locator('.manual-toolbar .format-button.bold').click();await canvas.locator('[data-manual=text] b').filter({hasText:/^world$/}).waitFor();
   await canvas.locator('html[data-esf-ready=true]').waitFor();const c=await page.locator('.slide-canvas').boundingBox();await page.mouse.click(c.x+5,c.y+5);await canvas.locator('[data-manual=text][contenteditable]').waitFor({state:'detached'});
   const b0=await box.boundingBox(),x=b0.x+30,y=b0.y+1;await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+50,y+30,{steps:8});await page.mouse.up();
