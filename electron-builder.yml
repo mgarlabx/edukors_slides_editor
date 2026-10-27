@@ -47,8 +47,19 @@ dmg:
   artifactName: Edukors-Slides-Editor-${version}-mac-${arch}.${ext}
 
 win:
-  target: nsis
+  target: [nsis, appx]
   artifactName: Edukors-Slides-Editor-${version}-setup.${ext}
+# Microsoft Store package (MSIX), one per architecture; the Store signs it. Identity from Partner Center → Product identity.
+# Tiles in build/appx/ come from scripts/raster-icon.swift. Uploaded by hand to Partner Center, not to GitHub Releases.
+appx:
+  identityName: mgarlabx.EdukorsSlidesEditor
+  publisher: CN=25CB0A95-E013-4D6C-9667-81DF1CC50F46
+  publisherDisplayName: mgarlabx
+  displayName: Edukors Slides Editor
+  applicationId: EdukorsSlidesEditor
+  backgroundColor: transparent
+  languages: [en-US, pt-BR, es-ES]
+  artifactName: Edukors-Slides-Editor-${version}-${arch}.${ext}
 nsis:
   oneClick: true
   perMachine: false
