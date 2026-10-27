@@ -8,6 +8,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url),root=path.resolve('test-results/e2e-'+Date.now());
+// Windows: no AI assistant in 1.0, no Keychain, and the ⌘ shortcuts are not adapted yet; those blocks run elsewhere.
+const win=process.platform==='win32';
 await fs.mkdir(root,{recursive:true});
 const env={...process.env,ESF_EXTERNAL_LOG:path.join(root,'external.txt'),ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:process.env.ESF_SHOW?'':'1'};delete env.ELECTRON_RUN_AS_NODE;
 // Simulated Keychain and usage endpoint (live usage); the Keychain answers only once the flag file exists.
@@ -438,7 +440,8 @@ try{
  const present=await presentOpened;await present.locator('#track button').first().waitFor({state:'attached'});
  assert.equal(await present.locator('#top-bar,#wb,#ink').count(),0);await present.close();
  // AI flow: select the cover, ask, survive a rejected answer, apply the fix, then undo it.
- await page.locator('.slide-item button').first().click();
+ // The AI assistant is disabled on Windows in 1.0: the request is refused with a clear message.
+ if(!win){await page.locator('.slide-item button').first().click();
  const attachment=path.join(root,'anexo.png');await fs.copyFile(path.resolve('build/icon.png'),attachment).catch(()=>fs.writeFile(attachment,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64')));
  await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},attachment);
  await page.getByRole('button',{name:'Anexar arquivo'}).click();await page.locator('.context-chip.attachment').filter({hasText:'anexo.png'}).waitFor();
@@ -485,7 +488,8 @@ try{
  await page.getByText('Feito pela IA').waitFor();
  await page.getByRole('button',{name:'Desfazer',exact:true}).click();
  await page.locator('button[aria-label$=": Apresentação de teste"]').waitFor();
- await page.getByRole('button',{name:'Desfazer',exact:false}).first().waitFor();
+ await page.getByRole('button',{name:'Desfazer',exact:false}).first().waitFor();}
+ else{await page.getByPlaceholder('Peça uma alteração…').fill('Troque o título');await page.getByPlaceholder('Peça uma alteração…').press('Enter');await page.getByText('The AI assistant is not available on Windows in this version.').first().waitFor();}
  // The conversation is written (and marks the presentation modified) shortly after the chat changes.
  await page.locator('.statusbar .dirty').waitFor();await page.waitForTimeout(1000);
  await page.getByRole('button',{name:'Salvar',exact:true}).click();
@@ -544,17 +548,17 @@ app=await launch(esf);
 try{
  const page=watch(await app.firstWindow());
  await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();await page.locator('.usage').filter({hasText:'10%'}).waitFor();
- await fs.writeFile(keychainFlag,'');await page.evaluate(()=>window.api.invoke('limits'));await page.locator('.usage').filter({hasText:'25%'}).waitFor({timeout:35000});
- assert.ok(usageHits.includes('Bearer tok-test'),'live usage uses the account token');assert.match(await fs.readFile(path.join(root,'security-args.txt'),'utf8'),/-s Claude Code-credentials-[0-9a-f]{8}/,'per-config-dir Keychain item');assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+\.\d+$/);
- await page.locator('.workbench').click({position:{x:5,y:5}});await page.keyboard.press('End');await page.locator('.slide-item').last().and(page.locator('.selected')).waitFor();await page.keyboard.press('Home');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();
+ if(!win){await fs.writeFile(keychainFlag,'');await page.evaluate(()=>window.api.invoke('limits'));await page.locator('.usage').filter({hasText:'25%'}).waitFor({timeout:35000});
+ assert.ok(usageHits.includes('Bearer tok-test'),'live usage uses the account token');assert.match(await fs.readFile(path.join(root,'security-args.txt'),'utf8'),/-s Claude Code-credentials-[0-9a-f]{8}/,'per-config-dir Keychain item');assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+\.\d+$/);}
+ if(!win){await page.locator('.workbench').click({position:{x:5,y:5}});await page.keyboard.press('End');await page.locator('.slide-item').last().and(page.locator('.selected')).waitFor();await page.keyboard.press('Home');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();
  {const ids=()=>page.locator('.slide-item').evaluateAll(l=>l.map(x=>x.dataset.id));const before=await ids();await page.keyboard.press('Meta+ArrowDown');await page.locator('.slide-item').nth(1).and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),[before[1],before[0],...before.slice(2)],'Cmd+Down moves the slide');await page.keyboard.press('Meta+ArrowUp');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),before,'Cmd+Up moves it back');}
  {const selectAll=()=>app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Editar').submenu.items.find(x=>x.label==='Selecionar tudo').click();});
   await page.locator('.slide-item').first().locator('button').click();await selectAll();await page.waitForFunction(()=>document.querySelectorAll('.slide-item.selected').length===document.querySelectorAll('.slide-item').length);
   await page.locator('.slide-item').first().locator('button').click();await page.locator('.slide-canvas iframe').click({position:{x:4,y:4}});await page.locator('.slide-rail.inactive').waitFor();await selectAll();await page.waitForTimeout(300);
-  assert.equal(await page.evaluate(()=>getSelection().toString()),'','Cmd+A on the canvas does not select the window');assert.equal(await page.locator('.slide-item.selected').count(),1,'Cmd+A on the canvas keeps the slide selection');}
+  assert.equal(await page.evaluate(()=>getSelection().toString()),'','Cmd+A on the canvas does not select the window');assert.equal(await page.locator('.slide-item.selected').count(),1,'Cmd+A on the canvas keeps the slide selection');}}
  assert.equal(await page.locator('.tab').count(),1,'reopen + file argument must not duplicate the tab');
- await page.getByText('Feito pela IA').waitFor();
- assert.ok((await zipText(esf,'.edukors/ai/conversations.json')).includes('Feito pela IA'),'conversations are stored in the package');
+ if(!win){await page.getByText('Feito pela IA').waitFor();
+ assert.ok((await zipText(esf,'.edukors/ai/conversations.json')).includes('Feito pela IA'),'conversations are stored in the package');}
  await page.getByRole('button',{name:'Mostrar no Finder'}).waitFor();
  await page.locator('.statusbar button').filter({hasText:'Minha pasta'}).waitFor();
  await page.frameLocator('.slide-canvas iframe').locator('h1').filter({hasText:'Apresentação de teste'}).waitFor();
