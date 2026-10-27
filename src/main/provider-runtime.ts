@@ -39,7 +39,8 @@ export function sandboxPolicy(root:string,accountDirs:string[],readDirs:string[]
   const sub=(p:string)=>`(subpath ${JSON.stringify(p)})`,literal=(p:string)=>`(literal ${JSON.stringify(p)})`;
   const readable=[root,...accountDirs,...readDirs,...runtimeDirs,'/System','/Library','/usr','/bin','/sbin','/opt','/dev','/private/etc','/private/var/db','/private/var/run'];
   const writable=[root,...accountDirs];
-  return `(version 1)\n(allow default)\n(deny appleevent-send)\n(deny file-read-data (require-all ${readable.map(p=>`(require-not ${sub(p)})`).join(' ')}))\n(deny file-write* (require-all ${writable.map(p=>`(require-not ${sub(p)})`).join(' ')} (require-not ${literal('/dev/null')}) (require-not ${literal('/dev/tty')})))\n(deny file-write* ${ownedPaths.map(p=>sub(path.join(root,p))).join(' ')})`;
+  // Listing "/" itself (names only) must stay readable: without it Node aborts at startup (SIGABRT).
+  return `(version 1)\n(allow default)\n(deny appleevent-send)\n(deny file-read-data (require-all ${readable.map(p=>`(require-not ${sub(p)})`).join(' ')} (require-not ${literal('/')})))\n(deny file-write* (require-all ${writable.map(p=>`(require-not ${sub(p)})`).join(' ')} (require-not ${literal('/dev/null')}) (require-not ${literal('/dev/tty')})))\n(deny file-write* ${ownedPaths.map(p=>sub(path.join(root,p))).join(' ')})`;
 }
 export type Launch=(profile:Profile,args:string[],cwd:string,readDirs?:string[])=>Promise<ChildProcess>;
 export const launchProvider:Launch=async(profile,args,cwd,readDirs=[])=>{

@@ -1,10 +1,11 @@
 import {build} from 'esbuild';
 import {mkdir,writeFile,readFile} from 'node:fs/promises';
 await mkdir('dist',{recursive:true});
-// Every build bumps the patch version; the UI shows it in the status bar.
+// Every local build bumps the patch version; the UI shows it in the status bar. CI (or --no-bump) keeps it: the release tag decides.
 const pkg=JSON.parse(await readFile('package.json','utf8')),explicit=process.argv.find(a=>a.startsWith('--version='))?.slice(10);
 if(explicit&&!/^\d+\.\d+\.\d+$/.test(explicit))throw Error('Use --version=MAJOR.MINOR.PATCH');
-const v=pkg.version.split('.').map(Number);pkg.version=explicit||`${v[0]}.${v[1]}.${v[2]+1}`;
+const v=pkg.version.split('.').map(Number),bump=!process.env.CI&&!process.argv.includes('--no-bump');
+pkg.version=explicit||(bump?`${v[0]}.${v[1]}.${v[2]+1}`:pkg.version);
 await Promise.all([
   build({entryPoints:['src/main/index.ts'],bundle:true,platform:'node',target:'node22',format:'cjs',outfile:'dist/main.cjs',external:['electron']}),
   build({entryPoints:['src/main/preload.ts'],bundle:true,platform:'node',target:'node22',format:'cjs',outfile:'dist/preload.cjs',external:['electron']}),

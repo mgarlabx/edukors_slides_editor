@@ -14,6 +14,8 @@ import {minifyJs} from '../src/main/minify';
 import {childEnv,ClaudeProvider,CancelledError,sessionLimits,instruction,agentSettings,agentTools,ownedPaths,applySlideChanges,agentContext,removedSlides,sentKeys,contextDir} from '../src/main/ai';
 import esfSchema from '../src/shared/esf.schema.json';
 import {embedFonts} from '../src/main/fonts';
+// The AI assistant is disabled on Windows in 1.0 (no sandbox for the CLI there); these tests spawn a simulated CLI.
+const noWindowsAI={skip:process.platform==='win32'?'AI assistant is disabled on Windows':false};
 const root=path.resolve('test-results/core');
 await fs.mkdir(root,{recursive:true});
 const fixture=async()=>fs.mkdtemp(path.join(root,'case-'));
@@ -171,10 +173,10 @@ test('exported player messages use English regardless of the editor language',()
 test('CLI profile environment isolates inherited auth and preserves requested config',()=>{
   const old=process.env.ANTHROPIC_API_KEY;process.env.ANTHROPIC_API_KEY='not-a-real-key';
   const e=childEnv({id:'a',name:'a',executable:'claude',configDir:'~/.claude-A'});
-  assert.equal(e.ANTHROPIC_API_KEY,undefined);assert.ok(e.CLAUDE_CONFIG_DIR?.endsWith('/.claude-A'));assert.equal(e.CLAUDE_CODE_DISABLE_AUTO_MEMORY,'1');
+  assert.equal(e.ANTHROPIC_API_KEY,undefined);assert.ok(e.CLAUDE_CONFIG_DIR?.endsWith(path.sep+'.claude-A'));assert.equal(e.CLAUDE_CODE_DISABLE_AUTO_MEMORY,'1');
   if(old===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=old;
 });
-test('CLI stream parses split chunks, validates structured result and resumes by profile',async()=>{
+test('CLI stream parses split chunks, validates structured result and resumes by profile',noWindowsAI,async()=>{
   const dir=await fixture(),mock=path.join(dir,'mock-cli.cjs');
   await fs.writeFile(mock,`#!/usr/bin/env node
 let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input);process.stdout.write(JSON.stringify({type:'system',session_id:'session-a'})+'\\n');const out=JSON.stringify({type:'result',session_id:'session-a',structured_output:{message:'Done',slideUpdates:c.project.slides},usage:{input_tokens:12,output_tokens:8},total_cost_usd:0.01})+'\\n';process.stdout.write(out.slice(0,20));setTimeout(()=>process.stdout.write(out.slice(20)),15);});`);
@@ -188,7 +190,7 @@ let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{co
   assert.equal(provider.busy(d.id),false,'a settled request must free the project for an immediate retry');
   provider.forgetProfile('a');assert.equal(provider.sessions.size,0);assert.deepEqual(saved,{});
 });
-test('agent has the full CLI toolset, confined to the presentation folder',async()=>{
+test('agent has the full CLI toolset, confined to the presentation folder',noWindowsAI,async()=>{
   const dir=await fixture(),mock=path.join(dir,'args-cli.cjs');
   await fs.writeFile(mock,`#!/usr/bin/env node
 require('fs').writeFileSync(${JSON.stringify(path.join(dir,'argv.json'))},JSON.stringify(process.argv.slice(2)));
@@ -209,7 +211,7 @@ process.stdin.resume();process.stdin.on('end',()=>process.stdout.write(JSON.stri
   assert.ok(ownedPaths.includes('manifest.json'));assert.deepEqual(agentSettings(dir).sandbox.filesystem.denyWrite.includes(dir),false,'never denies the whole folder');
   assert.ok(agentTools.split(',').every(t=>instruction('en').includes(t)));assert.match(instruction('en'),/only on this presentation/);
 });
-test('CLI activity is reported and each conversation resumes its own session',async()=>{
+test('CLI activity is reported and each conversation resumes its own session',noWindowsAI,async()=>{
   const dir=await fixture(),mock=path.join(dir,'activity-cli.cjs');
   await fs.writeFile(mock,`#!/usr/bin/env node
 let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input),w=o=>process.stdout.write(JSON.stringify({session_id:'s-'+process.argv.length,...o})+'\\n');
@@ -228,7 +230,7 @@ w({type:'result',structured_output:{message:'ok',slideUpdates:c.project.slides}}
   assert.equal(events.find(e=>e.type==='progress').bytes,10);
   assert.ok(provider.sessions.has(d.id+':c-1:a'));
 });
-test('cancelled request never yields changes, even when the CLI answers after the signal',async()=>{
+test('cancelled request never yields changes, even when the CLI answers after the signal',noWindowsAI,async()=>{
   const dir=await fixture(),mock=path.join(dir,'late-cli.cjs');
   await fs.writeFile(mock,`#!/usr/bin/env node
 process.on('SIGINT',()=>{});let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input);setTimeout(()=>{process.stdout.write(JSON.stringify({type:'result',structured_output:{message:'late',slideUpdates:c.project.slides}})+'\\n');process.exit(0);},400);});`);
@@ -400,7 +402,7 @@ test('legacy selection metadata and object styling only accept supported propert
   for(const style of [{position:'absolute'},{'z-index':'auto'},{'z-index':'1 !important'},{'text-align':'justify'},{'align-content':'space-between'},{isolation:'auto'}])assert.equal(cleanOp({...op,style}),null);
 });
 
-test('presentation system prompt lives in ai/system-prompt.md, reaches the CLI and changes only through the answer',async()=>{
+test('presentation system prompt lives in ai/system-prompt.md, reaches the CLI and changes only through the answer',noWindowsAI,async()=>{
   const dir=await fixture(),store=newStore(),p=await store.create(await esfIn(dir),themed('Prompt'));
   const s=store.location(p.deck.id);await fs.mkdir(path.join(s.workspace,'ai'),{recursive:true});await fs.writeFile(path.join(s.workspace,'ai','notas.md'),'aux');
   p.deck.systemPrompt='# Palestra\nPúblico: professores.';
@@ -476,7 +478,7 @@ test('incremental context includes selected and unsaved edits with full authorit
   deck.slides.pop();assert.equal(agentContext(deck,[],previous).slideIndex.length,2);
 });
 
-test('provider uses incremental responses and context, but resends full state after an error',async()=>{
+test('provider uses incremental responses and context, but resends full state after an error',noWindowsAI,async()=>{
   const dir=await fixture(),mock=path.join(dir,'incremental-cli.cjs');
   await fs.writeFile(mock,`#!/usr/bin/env node
 const fs=require('node:fs');let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input);fs.appendFileSync('contexts.jsonl',input+'\\n');const answer=c.request==='fail'?{is_error:true,result:'failed'}:{structured_output:{message:'Done',slideUpdates:[{...c.project.slides[0],title:'Changed'}]}};console.log(JSON.stringify({type:'result',session_id:'delta-session',...answer}));});`);
