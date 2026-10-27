@@ -5,6 +5,14 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    # react, react-dom and their types must move together (peer ranges), or npm ci fails.
+    groups:
+      react:
+        patterns: [react, react-dom, '@types/react', '@types/react-dom']
+    # @types/node follows the Node inside Electron (24 in Electron 44), not the newest Node.
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
