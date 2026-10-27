@@ -71,7 +71,7 @@ const labels={pt:['Arquivo','Novo','Abrir…','Salvar','Salvar como…','Fechar 
 let deckOpen=false;
 function menu(){
   const l=labels[prefs.language];const command=(name:string)=>()=>win?.webContents.send('command',name),enabled=deckOpen;
-  // Same menus, order and names as the other EDUKORS apps (Manual de Estilo Visual): App, File, Edit, Insert, the domain menus, View, Window, Help.
+  // Same menus, order and names as the other EDUKORS apps (Visual Style Manual): App, File, Edit, Insert, the domain menus, View, Window, Help.
   const sep={type:'separator' as const},darwin=process.platform==='darwin';
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(darwin?[{label:'Edukors Slides Editor',submenu:[{role:'about' as const},sep,{label:l[14]+'…',accelerator:'CmdOrCtrl+,',click:command('settings')},sep,{role:'quit' as const}]}]:[]),
