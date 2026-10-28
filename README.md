@@ -12,10 +12,9 @@ Download the file for your system from the [latest release](https://github.com/m
 
 | System | File | Notes |
 | --- | --- | --- |
-| macOS, Apple silicon (M1 or later) | `…-arm64.dmg` | Signed and notarized by Apple. Open the `.dmg` and drag the app to Applications. |
-| macOS, Intel | `…-x64.dmg` | Same as above. |
-| Windows 10/11 (x64 or Arm) | Microsoft Store (coming soon) or `…-setup.exe` | The Store version is signed by Microsoft and updated by the Store. The `setup.exe` is not code-signed yet: on first run, SmartScreen asks for **More info → Run anyway**. In 1.0 the AI assistant is not available on Windows (see [Known limitations](#known-limitations)). |
-| Linux (x64 or Arm) | `.AppImage`, `.deb` or `.rpm` | The AppImage updates itself; mark it as executable (`chmod +x`). The AI assistant needs `bubblewrap` (`bwrap`) installed. |
+| macOS, Apple silicon or Intel | `Edukors-Slides-Editor-mac.dmg` (universal) | Signed and notarized by Apple. Open the `.dmg` and drag the app to Applications. |
+| Windows 10/11 (x64) | Microsoft Store (coming soon) or `Edukors-Slides-Editor-windows.exe` | The Store version is signed by Microsoft and updated by the Store. The `setup.exe` is not code-signed yet: on first run, SmartScreen asks for **More info → Run anyway**. In 1.0 the AI assistant is not available on Windows (see [Known limitations](#known-limitations)). |
+| Linux (x64) | `.AppImage` or `.deb` | The AppImage updates itself; mark it as executable (`chmod +x`). The AI assistant needs `bubblewrap` (`bwrap`) installed. |
 
 Each release lists the SHA-256 checksum of every file (`SHA256SUMS.txt`) and carries a GitHub build provenance attestation (`gh attestation verify <file> -R mgarlabx/edukors_slides_editor`).
 
@@ -120,14 +119,16 @@ node scripts/e2e.mjs                            # full flow in the Electron wind
 node scripts/test-canvas.mjs                    # interaction and legacy object regressions
 node scripts/perf.mjs                           # measurement with 50 and 300 slides
 node scripts/package.mjs                        # installers for this system in release/ (electron-builder.yml)
-node scripts/package.mjs --no-bump --x64 --arm64 # same version, both architectures
+node scripts/package.mjs --no-bump --universal   # macOS: same version, Apple silicon + Intel
 node scripts/e2e.mjs --poll-server              # real questions server (local PHP + MySQL, throwaway database)
 ESF_EXECUTABLE="$PWD/release/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor" node scripts/e2e.mjs
 ```
 
 `build.mjs` increments the patch version in `package.json` on each local build; pass `--version=X.Y.Z` to set it, or `--no-bump` to keep it (CI never bumps).
 
-Releases: set `version` in `package.json`, commit, then push a tag `vX.Y.Z` (or `vX.Y.Z-rc.N` for a pre-release). `.github/workflows/release.yml` builds, signs and publishes the installers, checksums and provenance attestations to GitHub Releases; installed apps update themselves from there.
+Releases: set `version` in `package.json`, commit, then push a tag `vX.Y.Z` (or `vX.Y.Z-rc.N` for a pre-release). `.github/workflows/release.yml` builds, signs and stages the installers, checksums and provenance attestations in a **draft** GitHub Release. Review all builds before publishing it manually; only then do installed apps see the update.
+
+Public installer copies use `Edukors-Slides-Editor-mac.dmg`, `Edukors-Slides-Editor-windows.exe`, and `Edukors-Slides-Editor-linux.{AppImage,deb}` (x64). Versioned originals, ZIPs, blockmaps and updater metadata retain their names. The download page prefers these public copies and falls back to the older versioned assets, including separate Mac architectures.
 
 The tests use **simulated** AI CLIs; no real account is called. Test outputs and data go to `test-results/` (`ESF_DATA_DIR` isolates the preferences). The Electron tests run with hidden windows; set `ESF_SHOW=1` to see them.
 
@@ -169,3 +170,5 @@ The app collects no data and has no telemetry. The connections it makes, and whe
 ## License
 
 MIT — see [`LICENSE`](LICENSE). It also covers the server in `server/poll/`.
+
+The installer matrix matches Graph: universal macOS, Windows x64, and Linux x64 (AppImage and deb). Earlier releases and their additional architectures/formats remain available on GitHub. For an older Mac release, the website expands the Mac download choice to show its separate Apple Silicon and Intel installers. Microsoft Store distribution for Slides is still pending; no Store download link is advertised before one is available.

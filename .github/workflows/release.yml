@@ -1,13 +1,13 @@
 name: Release
 
-# A tag vX.Y.Z (or vX.Y.Z-rc.N, a pre-release) builds, signs and publishes the installers.
+# A tag vX.Y.Z (or vX.Y.Z-rc.N, a pre-release) builds, signs and stages the installers in a draft release.
 # package.json must already hold X.Y.Z; the tag's pre-release suffix is applied only inside the build.
 # Pull requests that touch packaging build the installers too, without signing secrets or publishing.
 on:
   push:
     tags: ['v*']
   pull_request:
-    paths: [electron-builder.yml, build/**, scripts/package.mjs, scripts/build.mjs, package.json, package-lock.json, .github/workflows/release.yml]
+    paths: [electron-builder.yml, build/**, scripts/package.mjs, scripts/public-installers.mjs, scripts/build.mjs, package.json, package-lock.json, .github/workflows/release.yml]
 
 permissions:
   contents: read
@@ -36,10 +36,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: mac, os: macos-latest, args: --x64 --arm64}
-          - {name: win, os: windows-latest, args: --x64 --arm64}
+          - {name: mac, os: macos-latest, args: --universal}
+          - {name: win, os: windows-latest, args: --x64}
           - {name: linux-x64, os: ubuntu-latest, args: --x64}
-          - {name: linux-arm64, os: ubuntu-24.04-arm, args: --arm64}
     runs-on: ${{ matrix.os }}
     # Signing secrets live in this environment; protect it with required reviewers in the repository settings.
     environment: ${{ github.ref_type == 'tag' && 'release' || '' }}
@@ -56,11 +55,6 @@ jobs:
       - name: Version from the tag
         shell: bash
         run: node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f));p.version='${{ needs.check.outputs.version }}';require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
-      - name: Linux packaging tools
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update && sudo apt-get install -y rpm
-          if [ "$(uname -m)" = aarch64 ]; then sudo apt-get install -y ruby ruby-dev build-essential && sudo gem install fpm --no-document && echo "USE_SYSTEM_FPM=true" >> "$GITHUB_ENV"; fi
       - name: Without a certificate, macOS builds are signed ad hoc (Gatekeeper will warn)
         if: runner.os == 'macOS' && env.HAS_MAC_CERT != 'true'
         run: echo "BUILDER_ARGS=-c.mac.identity=- -c.mac.hardenedRuntime=false" >> "$GITHUB_ENV"
@@ -83,6 +77,13 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_MAC_CERT == 'true' }}
         run: node scripts/package.mjs --no-bump ${{ matrix.args }} $BUILDER_ARGS
+      - name: Check universal Mac executable
+        if: runner.os == 'macOS'
+        # lipo -verify_arch takes one architecture (a second one is read as an input file): list them and look for both.
+        run: |
+          archs=" $(lipo -archs "release/mac-universal/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor") "
+          echo "Architectures:$archs"
+          [[ "$archs" == *" x86_64 "* && "$archs" == *" arm64 "* ]]
       - name: Check signature and notarization
         if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
         run: |
@@ -97,7 +98,6 @@ jobs:
             release/*.exe
             release/*.AppImage
             release/*.deb
-            release/*.rpm
             release/*.blockmap
             release/latest*.yml
           if-no-files-found: error
@@ -120,11 +120,17 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: build-*
           path: files
           merge-multiple: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Public installer names (keep updater originals)
+        run: node scripts/public-installers.mjs files "${{ needs.check.outputs.version }}"
       - name: Checksums
         working-directory: files
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
@@ -138,4 +144,3 @@ jobs:
           pre=""; if [ "${{ needs.check.outputs.prerelease }}" = true ]; then pre="--prerelease"; fi
           gh release create "$GITHUB_REF_NAME" files/* -R "$GITHUB_REPOSITORY" --draft $pre --verify-tag \
             --title "Edukors Slides Editor ${{ needs.check.outputs.version }}" --generate-notes
-          gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false

@@ -6,8 +6,10 @@ import {providerOf,ProviderStatus} from '../shared/providers';
 import {ClaudeProvider,CancelledError,SendOptions,Outcome,probe as probeClaude,expandHome,outputSchema,instruction,agentContext,writeContext,applySlideChanges} from './ai';
 import {launchProvider,Launch,providerEnv,executablePath,readLines,stopProcess} from './provider-runtime';
 import {ACPConnection,initializeACP,acpModels} from './acp';
-// The agent CLIs need a sandbox confined to the presentation folder, which native Windows lacks.
-export const windowsAI='The AI assistant is not available on Windows in this version.';
+// The other agent CLIs need a sandbox confined to the presentation folder, which native Windows lacks;
+// Claude Code runs there without a shell (toolsFor in ai.ts).
+export const windowsAI='On Windows, the AI assistant works only with Claude Code in this version.';
+const refused=(profile:Profile)=>process.platform==='win32'&&providerOf(profile).id!=='claude';
 export function parseAnswer(deck:Deck,text:unknown):Outcome{
   let out=text;if(typeof out==='string'){const value=out.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');out=JSON.parse(value);}
   if(!out||typeof out!=='object'||Array.isArray(out)||typeof (out as any).message!=='string')throw Error('The provider returned no valid structured answer.');
@@ -38,9 +40,10 @@ export class AIProviders {
   forgetProfile(id:string){this.claude.forgetProfile(id);for(const key of [...this.sessions.keys()])if(key.endsWith(':'+id))this.sessions.delete(key);this.persist();}
   dispose(){this.claude.dispose();for(const id of this.runs.keys())this.cancel(id);}
   async send(deck:Deck,profile:Profile,prompt:string,cwd:string,selected:string[],options:SendOptions={}):Promise<Outcome>{
-    if(process.platform==='win32')throw Error(windowsAI);
+    if(refused(profile))throw Error(windowsAI);
     if(this.busy(deck.id))throw Error('A request is already running.');
-    if(providerOf(profile).id==='claude')return this.claude.send(deck,profile,prompt,cwd,selected,options);
+    // A Finder/Explorer-launched app may lack the CLI's folder on its PATH.
+    if(providerOf(profile).id==='claude')return this.claude.send(deck,{...profile,executable:await executablePath(profile.executable)},prompt,cwd,selected,options);
     if(prompt.length>40000)throw Error('Prompt is too long.');validateDeck(deck);
     const run:Run={stopped:false};this.runs.set(deck.id,run);
     const key='native:'+providerOf(profile).id+':'+(options.scope?options.scope+':':'')+deck.id+':'+(options.conversation?options.conversation+':':'')+profile.id,session=this.sessions.get(key),kind=providerOf(profile).transport;
@@ -102,7 +105,7 @@ export async function cachedModels(profile:Profile):Promise<{id:string;name:stri
   }catch{return[];}
 }
 export async function probeProvider(profile:Profile,cwd:string,auth=false,launch:Launch=launchProvider):Promise<ProviderStatus>{
-  if(process.platform==='win32')throw Error(windowsAI);
+  if(refused(profile))throw Error(windowsAI);
   const kind=providerOf(profile);
   if(kind.id==='claude')return probeClaude({...profile,executable:await executablePath(profile.executable)},auth);
   if((auth||kind.id==='agy')&&kind.transport==='acp'){
