@@ -24,7 +24,7 @@ In scope:
 - the exported HTML player;
 - the interactive questions server in [`server/poll/`](server/poll/README.md).
 
-Out of scope: vulnerabilities in the AI CLIs themselves (Claude Code, Codex and others) — report them to their vendors — and problems in servers run by third parties with the code from `server/poll/`, which should go to whoever runs them.
+Out of scope: vulnerabilities in the AI CLIs themselves (Claude Code and Codex) — report them to their vendors — and problems in servers run by third parties with the code from `server/poll/`, which should go to whoever runs them.
 
 ## Security model, in short
 

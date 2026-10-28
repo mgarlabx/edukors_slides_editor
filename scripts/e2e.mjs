@@ -1,4 +1,3 @@
-if(process.argv.includes('--providers')){await import('./test-providers.mjs');process.exit();}
 if(process.argv.includes('--poll')){await import('./test-poll.mjs');process.exit();}
 if(process.argv.includes('--poll-server')){await import('./test-poll-server.mjs');process.exit(process.exitCode||0);}
 if(process.argv.includes('--poll-live')){await import('./test-poll-live.mjs');process.exit(process.exitCode||0);}
@@ -12,47 +11,17 @@ const require=createRequire(import.meta.url),root=path.resolve('test-results/e2e
 const win=process.platform==='win32';
 await fs.mkdir(root,{recursive:true});
 const env={...process.env,ESF_EXTERNAL_LOG:path.join(root,'external.txt'),ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:process.env.ESF_SHOW?'':'1'};delete env.ELECTRON_RUN_AS_NODE;
-// Simulated Keychain and usage endpoint (live usage); the Keychain answers only once the flag file exists.
-const keychainFlag=path.join(root,'keychain-on'),security=path.join(root,'mock-security.sh'),usageHits=[];
-await fs.writeFile(security,`#!/bin/sh\necho "$@" >> '${path.join(root,'security-args.txt')}'\n[ -f '${keychainFlag}' ] || exit 44\necho '{"claudeAiOauth":{"accessToken":"tok-test","expiresAt":9999999999999}}'\n`);await fs.chmod(security,0o755);
+// The AI library's fake provider stands in for Claude and Codex: a real separate CLI process, no account.
+env.ESF_AI_FAKE=path.resolve('node_modules/@edukors/ai-cli/fixtures/fake-ai.mjs');
 const tinyPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
-const usageServer=(await import('node:http')).createServer((q,r)=>{if(q.url==='/logo.png'){r.writeHead(200,{'content-type':'image/png'}).end(tinyPng);return;}if(q.url==='/pagina'){r.writeHead(200,{'content-type':'text/html'}).end('<h1>Fonte</h1>');return;}usageHits.push(q.headers.authorization);r.end(JSON.stringify({five_hour:{utilization:25,resets_at:new Date(Date.now()+3600e3).toISOString()}}));});
-await new Promise(r=>usageServer.listen(0,'127.0.0.1',r));env.ESF_SECURITY=security;env.ESF_USAGE_URL=`http://127.0.0.1:${usageServer.address().port}/api/oauth/usage`;
+// Pages the agent's web tools (screenshot, download) fetch.
+const webServer=(await import('node:http')).createServer((q,r)=>{if(q.url==='/logo.png'){r.writeHead(200,{'content-type':'image/png'}).end(tinyPng);return;}r.writeHead(200,{'content-type':'text/html'}).end('<h1>Fonte</h1>');});
+await new Promise(r=>webServer.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${webServer.address().port}`;
 // ESF_EXECUTABLE runs the same flow against a packaged app (e.g. release/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor).
 const packaged=process.env.ESF_EXECUTABLE||(process.argv.includes('--packaged')?path.resolve('release/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor'):undefined);
 const launch=(...extra)=>electron.launch({executablePath:packaged||require('electron'),args:packaged?extra:['.',...extra],env,timeout:30000});
 const log=[],shot=(page,name)=>page.screenshot({path:path.join(root,name)});
 const watch=page=>{page.on('pageerror',e=>log.push(e.message));page.on('console',m=>{if(m.type()==='error')log.push(m.text());});return page;};
-// Simulated Claude CLI: the first answer contains a slide script that never finishes, which the
-// app must reject; the retry answer is valid. No real account is used.
-const mock=path.join(root,'mock-claude.cjs');
-await fs.writeFile(mock,`#!/usr/bin/env node
-const fs=require('fs'),counter=${JSON.stringify(path.join(root,'mock-calls.txt'))};
-// Calls the app's MCP tools the way the CLI does (JSON-RPC over HTTP with the bearer token it was given).
-const argv=process.argv.slice(2),mcp=JSON.parse(argv[argv.indexOf('--mcp-config')+1]).mcpServers.edukors;
-const rpc=(method,params)=>fetch(mcp.url,{method:'POST',headers:{...mcp.headers,'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}).then(r=>r.json());
-let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',async()=>{
-  const c=JSON.parse(input),n=(fs.existsSync(counter)?Number(fs.readFileSync(counter,'utf8')):0)+1;fs.writeFileSync(counter,String(n));
-  fs.writeFileSync(counter+'.call'+n+'.json',JSON.stringify({argv:process.argv.slice(2),attachments:c.attachments,assets:c.project.assets.map(a=>a.id)}));
-  const slides=c.project.slides.map(s=>({...s}));const target=slides.find(s=>s.id===c.selected[0])||slides[0];
-  let answer={message:'Feito pela IA',slideUpdates:slides};const origin=${JSON.stringify(new URL(env.ESF_USAGE_URL).origin)};
-  if(/Qual público/.test(c.request))answer={message:'Combinado: '+c.request.split('→ ')[1]};
-  else if(/pergunte/.test(c.request))answer={message:'Antes de começar:',questions:[{question:'Qual público?',options:['Professores','Gestores']}]};
-  else if(/rejected/.test(c.request)){
-    const tools=(await rpc('tools/list')).result.tools.map(t=>t.name).join(',');
-    const got=await rpc('tools/call',{name:'download',arguments:{url:origin+'/logo.png',path:'media/logo.png'}}),shot=await rpc('tools/call',{name:'screenshot',arguments:{url:origin+'/pagina',path:'media/pagina',width:800,height:450,delay:0}});
-    const denied=await rpc('tools/call',{name:'download',arguments:{url:origin+'/logo.png',path:'slides/x.png'}});
-    fs.writeFileSync(counter+'.mcp.json',JSON.stringify({tools,got,shot,denied}));
-    fs.mkdirSync('research',{recursive:true});fs.writeFileSync('research/fontes.md','Fonte consultada');
-    target.title='Título pela IA';target.html=target.html.replace(/<h1([^>]*)>[^<]*<\\/h1>/,'<h1$1>Título pela IA</h1><img src="asset:asset-mock-logo" alt="">');target.script='';answer.assets=[{id:'asset-mock-logo',path:'media/logo.png'}];
-  }
-  else target.script='while(true){}';
-  const out={type:'result',session_id:'mock-session',structured_output:answer,usage:{input_tokens:100,output_tokens:20,cache_read_input_tokens:5},modelUsage:{'mock-model':{contextWindow:200000}}};
-  const limits={type:'rate_limit_event',session_id:'mock-session',rate_limit_info:{status:'allowed',unifiedWindows:{five_hour:{utilization:0.42,resetsAt:Math.floor(Date.now()/1000)+7200}}}};
-  const steps=[{type:'system',subtype:'init',session_id:'mock-session',model:'mock-model'},{type:'stream_event',event:{type:'content_block_start',content_block:{type:'thinking'}}},{type:'stream_event',event:{type:'content_block_delta',delta:{type:'thinking_delta',thinking:'Vou ler as notas primeiro.'}}},{type:'stream_event',event:{type:'message_start',message:{usage:{input_tokens:1000,cache_read_input_tokens:9000}}}},{type:'stream_event',event:{type:'message_delta',usage:{output_tokens:20}}},{type:'assistant',session_id:'mock-session',message:{content:[{type:'tool_use',id:'r'+n,name:'Read',input:{file_path:process.cwd()+'/notas.md'}}]}},{type:'stream_event',event:{type:'content_block_start',content_block:{type:'tool_use',name:'StructuredOutput'}}}];
-  process.stdout.write(steps.map(x=>JSON.stringify(x)).join('\\n')+'\\n'+JSON.stringify(limits)+'\\n'+JSON.stringify(out)+'\\n');
-});`);
-await fs.chmod(mock,0o755);
 // New asks for nothing; the first save asks for the file (always .esf, lowercase) and nothing else is created next to it.
 const projectDir=path.join(root,'Minha pasta'),esf=path.join(projectDir,'Apresentacao-de-teste.esf');
 const unzip=async file=>require('fflate').unzipSync(new Uint8Array(await fs.readFile(file))),zipEntries=async file=>Object.keys(await unzip(file)),zipText=async(file,name)=>new TextDecoder().decode(require('fflate').unzipSync(new Uint8Array(await fs.readFile(file)))[name]);
@@ -328,20 +297,18 @@ try{
  await page.getByRole('radio',{name:'Português pt'}).check();
  await shot(page,'03-settings.png');
  assert.equal(await page.getByText('Reabrir apresentações',{exact:false}).count(),0,'no reopen option');
- await page.getByRole('button',{name:'Contas de IA'}).click();
- // Account cards open and close on their heading; the usage is always refreshed (no option).
- assert.equal(await page.getByLabel('Executável',{exact:true}).count(),0,'cards start closed');assert.equal(await page.getByText('a cada 30 s',{exact:false}).count(),0);
- await page.locator('.account-toggle').first().click();
- await shot(page,'03b-accounts.png');
- await page.getByText('Avançado',{exact:true}).click();
- await page.getByLabel('Executável',{exact:true}).fill(mock);
- await page.getByLabel('Executável',{exact:true}).press('Tab');
- await page.getByLabel('Diretório de configuração').fill(path.join(root,'claude-config'));
- await page.getByLabel('Diretório de configuração').press('Tab');
- assert.equal(await page.getByLabel('Conta usada pelo assistente').inputValue(),'default');
- assert.equal(await page.locator('.modal:not(.sheet)').count(),0,'editing a profile must not raise errors');assert.equal(await page.getByLabel('Modelo (opcional)').count(),0,'model is chosen in the assistant, not per account');
- assert.equal(await page.locator('.modal.sheet').getByRole('button',{name:'Templates',exact:true}).count(),0,'templates live in the New gallery');
  await page.getByRole('button',{name:'Assistente de IA',exact:true}).click();
+ // Accounts come from the AI library (here its fake provider); a new account signs in at once and, being the first, is the one in use.
+ await page.getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:'Fake AI',exact:true}).click();
+ await page.getByLabel('Nome da conta').fill('Conta de teste');await page.getByRole('button',{name:'Criar conta',exact:true}).click();
+ await page.locator('.account-card .provider-status').filter({hasText:/^Conectada/}).waitFor({timeout:30000});await shot(page,'03b-accounts.png');
+ assert.notEqual(await page.locator('.active-account select').inputValue(),'','the first account becomes the one in use');
+ assert.equal(await page.locator('.modal.sheet').getByRole('button',{name:'Templates',exact:true}).count(),0,'templates live in the New gallery');
+ // Advanced always holds the instructions, the user's MCP servers and the skills, in this order.
+ await page.locator('.assistant-advanced summary').click();
+ assert.deepEqual(await page.locator('.assistant-advanced h3').allInnerTexts(),['Instruções para o agente','Servidores MCP','Skills']);
+ await page.getByLabel('Servidores MCP',{exact:true}).fill('{oops');await page.locator('.mcp-problems').waitFor();await page.getByLabel('Servidores MCP',{exact:true}).fill('');await page.locator('.mcp-problems').waitFor({state:'detached'});
+ await page.getByText('Nenhuma skill na pasta.').waitFor();await page.getByRole('button',{name:'Abrir pasta de skills'}).click();
  await page.getByLabel('Global',{exact:true}).fill('Use frases curtas.');
  // The presentation's own prompt sits in a second tab and goes into the package (ai/system-prompt.md), not into templates.
  await page.getByRole('tab',{name:'Esta apresentação'}).click();await page.getByLabel('Esta apresentação',{exact:true}).fill('Palestra para professores.');assert.equal(await page.getByText('O agente trabalha dentro',{exact:false}).count(),0);
@@ -439,44 +406,37 @@ try{
  const presentOpened=app.waitForEvent('window');await page.getByRole('button',{name:'Apresentar',exact:true}).click();
  const present=await presentOpened;await present.locator('#track button').first().waitFor({state:'attached'});
  assert.equal(await present.locator('#top-bar,#wb,#ink').count(),0);await present.close();
- // AI flow: select the cover, ask, survive a rejected answer, apply the fix, then undo it.
- // On Windows the mock CLI (a Node script) cannot start without a shell: the request reaches it and fails to launch.
- if(!win){await page.locator('.slide-item button').first().click();
- const attachment=path.join(root,'anexo.png');await fs.copyFile(path.resolve('build/icon.png'),attachment).catch(()=>fs.writeFile(attachment,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64')));
+ // AI flow, against the library's fake provider: attach, pick a model, a change the app rejects, the web tools, a valid change
+ // applied when the turn ends, a question, sessions, undo. The fake reads its command from the request's last paragraph.
+ {await page.locator('.slide-item button').first().click();
+ const manifest=JSON.parse(await zipText(esf,'manifest.json')),cover=manifest.slides[0].id,coverHtml=await zipText(esf,manifest.slides[0].html);
+ const ask=async(text,wait)=>{const box=page.getByPlaceholder('Peça uma alteração…');await box.fill(text);await box.press('Enter');await page.locator('.chat-list').getByText(wait,{exact:false}).last().waitFor({timeout:40000});await page.locator('.composer .send').waitFor();};
+ const attachment=path.join(root,'anexo.png');await fs.copyFile(path.resolve('build/icon.png'),attachment).catch(()=>fs.writeFile(attachment,tinyPng));
  await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},attachment);
  await page.getByRole('button',{name:'Anexar arquivo'}).click();await page.locator('.context-chip.attachment').filter({hasText:'anexo.png'}).waitFor();
- await page.locator('.model-button').click();await page.getByRole('radio',{name:'Opus 5.5'}).click();await page.locator('.model-pop input[type=range]').fill('3');await page.locator('.model-button').filter({hasText:'Opus 5.5 · Alto'}).waitFor();await shot(page,'05-model.png');await page.keyboard.press('Escape');await page.locator('.model-pop').waitFor({state:'detached'});
- await page.getByPlaceholder('Peça uma alteração…').fill('Troque o título');
- await page.getByPlaceholder('Peça uma alteração…').press('Enter');
- await page.getByText('Feito pela IA').waitFor({timeout:40000});
- await page.locator('.slide-item button[aria-label$=": Título pela IA"]').waitFor();
+ await page.locator('.model-button').click();await page.getByRole('radio',{name:'Fake Deep'}).click();await page.locator('.model-pop input[type=range]').fill('3');await page.locator('.model-button').filter({hasText:'Fake Deep · Alto'}).waitFor();await shot(page,'05-model.png');await page.keyboard.press('Escape');await page.locator('.model-pop').waitFor({state:'detached'});
+ // A slide script that never finishes is rejected by the app's check; the agent is told, and nothing changes.
+ await ask('tool apply_changes '+JSON.stringify({slideUpdates:[{id:cover,script:'while(true){}'}]}),'Not applied');
+ for(const text of ['Iniciando assistente…','Sessão iniciada · Fake AI','Validando e renderizando os slides alterados…','A resposta não passou na validação; pedindo uma correção…'])await page.locator('.activity').filter({hasText:text}).first().waitFor();
+ assert.equal(await page.locator('.context-chip.attachment').count(),0,'attachments clear after sending');
+ await page.locator('.slide-item button[aria-label$=": Apresentação de teste"]').waitFor();
+ // The web tools save into the presentation folder only.
+ await ask('tool download '+JSON.stringify({url:origin+'/logo.png',path:'media/logo.png'}),'Saved media/logo.png');
+ await ask('tool screenshot '+JSON.stringify({url:origin+'/pagina',path:'media/pagina',width:800,height:450,delay:0}),'Saved media/pagina.png');
+ await ask('tool download '+JSON.stringify({url:origin+'/logo.png',path:'slides/x.png'}),'belongs to the app');
+ // A valid change: a new title and the downloaded image as an asset, applied as one step when the turn ends.
+ await ask('tool apply_changes '+JSON.stringify({message:'Feito pela IA',slideUpdates:[{id:cover,title:'Título pela IA',html:coverHtml.replace(/<h1([^>]*)>[^<]*<\/h1>/,'<h1$1>Título pela IA</h1><img src="asset:asset-mock-logo" alt="">')}],assets:[{id:'asset-mock-logo',path:'media/logo.png'}]}),'Accepted');
+ await page.locator('.slide-item button[aria-label$=": Título pela IA"]').waitFor();await page.frameLocator('.slide-canvas iframe').locator('img').waitFor({state:'attached'});
  assert.equal(await page.locator('.composer-account select').count(),1,'account picker is also available in the assistant');
- // Activity rows with details expand (reasoning text, tool input, validation problems).
- await page.locator('details.activity').filter({hasText:'Raciocinando…'}).first().locator('summary').click();await page.locator('details.activity[open] pre').filter({hasText:'Vou ler as notas primeiro.'}).waitFor();
- await page.locator('details.activity').filter({hasText:'Lendo arquivo: notas.md'}).first().locator('summary').click();await page.locator('details.activity[open] pre').filter({hasText:'file_path'}).first().waitFor();
- await page.locator('.usage-tokens').filter({hasText:'↓20'}).waitFor();assert.equal(await page.locator('.usage').filter({hasText:'Consumo desta conversa'}).count(),0);
- for(const text of ['Iniciando assistente…','Sessão iniciada · mock-model','Lendo arquivo: notas.md','Gerando os slides…','Validando e renderizando os slides alterados…','A resposta não passou na validação; pedindo uma correção…'])await page.locator('.activity').filter({hasText:text}).first().waitFor();
- assert.equal(await fs.readFile(path.join(root,'mock-calls.txt'),'utf8'),'2','the looping answer must be rejected and retried once');
- {const call=JSON.parse(await fs.readFile(path.join(root,'mock-calls.txt.call1.json'),'utf8'));const arg=k=>call.argv[call.argv.indexOf(k)+1];
-  for(const tool of ['Bash','Write','Edit','WebSearch','WebFetch','Read'])assert.ok(arg('--tools').split(',').includes(tool),tool);assert.equal(JSON.parse(arg('--settings')).sandbox.enabled,true);assert.equal(arg('--model'),'claude-opus-5-5');assert.equal(arg('--effort'),'high');assert.ok(call.argv.includes('--restricted'),'file tools confined to the folder');
-  assert.match(arg('--system-prompt'),/Use frases curtas\.[\s\S]*Palestra para professores\./);assert.ok((await zipEntries(esf)).includes('ai/system-prompt.md'));
-  assert.equal(call.attachments.length,1);assert.equal(path.basename(call.attachments[0].path),'0-anexo.png');assert.ok(call.argv.includes('--add-dir'),'outside attachment copied to an allowed folder');
-  assert.ok(call.assets.includes(call.attachments[0].assetId),'image attachment available as asset');
-  assert.equal(await page.locator('.context-chip.attachment').count(),0,'attachments clear after sending');}
- // MCP web tools save into the presentation folder only; a saved image becomes a deck asset.
- {const m=JSON.parse(await fs.readFile(path.join(root,'mock-calls.txt.mcp.json'),'utf8'));assert.equal(m.tools,'screenshot,download');
-  assert.ok(!m.got.result.isError&&!m.shot.result.isError,JSON.stringify(m));assert.ok(m.denied.result.isError,'app-owned folders are refused');
-  await page.frameLocator('.slide-canvas iframe').locator('img').waitFor({state:'attached'});}
- // The agent may ask; an option answers it and resumes the same conversation without touching the slides.
- await page.getByPlaceholder('Peça uma alteração…').fill('Melhore e pergunte o que precisar');await page.getByPlaceholder('Peça uma alteração…').press('Enter');
- await page.locator('.questions legend').filter({hasText:'Qual público?'}).waitFor({timeout:40000});
- await page.locator('.question-options button').filter({hasText:'Gestores'}).click();await shot(page,'06a-questions.png');await page.getByRole('button',{name:'Enviar respostas'}).click();
- await page.getByText('Combinado: Gestores').waitFor({timeout:40000});
+ await page.locator('.usage-tokens').waitFor();assert.equal(await page.locator('.usage').filter({hasText:'Consumo desta conversa'}).count(),0);
+ // The agent asks during its turn; an option answers it and the turn goes on.
+ const box=page.getByPlaceholder('Peça uma alteração…');await box.fill('ask');await box.press('Enter');
+ await page.locator('.questions legend').filter({hasText:'Which color?'}).waitFor({timeout:40000});
+ await page.locator('.question-options button').filter({hasText:'blue'}).click();await shot(page,'06a-questions.png');await page.getByRole('button',{name:'Enviar respostas'}).click();
+ await page.getByText('You chose blue').waitFor({timeout:40000});await page.locator('.questions .answered').waitFor();
  await page.locator('.activity').filter({hasText:'Enviando para a sessão atual…'}).first().waitFor();await page.locator('.activity').filter({hasText:'Sessão retomada'}).first().waitFor();
- assert.match(await page.locator('.context-ring').getAttribute('title'),/^5% do contexto em uso/);
- assert.equal(JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'preferences.json'),'utf8')).attachDir,root,'last attach folder remembered');await page.locator('.questions .answered').waitFor();
- await page.locator('.slide-item button[aria-label$=": Título pela IA"]').waitFor();
- await page.locator('.usage').filter({hasText:'42%'}).waitFor();await page.locator('.usage').filter({hasText:'Próxima janela'}).waitFor();
+ assert.equal(JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'preferences.json'),'utf8')).attachDir,root,'last attach folder remembered');
+ assert.match(await fs.readFile(env.ESF_EXTERNAL_LOG,'utf8'),/skills/,'the skills folder opens');
  {const handle=await page.locator('.ai-resize').boundingBox(),before=(await page.locator('.ai-sidebar').boundingBox()).width;
   await page.mouse.move(handle.x+3,handle.y+200);await page.mouse.down();await page.mouse.move(handle.x+53,handle.y+200,{steps:5});await page.mouse.up();
   // Narrowing works on any screen (CI runners have small displays that leave no room to widen).
@@ -484,12 +444,11 @@ try{
  await shot(page,'06-ai.png');
  await page.getByRole('button',{name:'Nova sessão'}).click();await page.locator('.chat-empty').waitFor();
  await page.getByRole('button',{name:'Sessões anteriores'}).click();
- await page.locator('.session-item').filter({hasText:'Troque o título'}).locator('button').first().click();
- await page.getByText('Feito pela IA').waitFor();
+ await page.locator('.session-item').filter({hasText:'tool apply_changes'}).locator('button').first().click();
+ await page.getByText('You chose blue').waitFor();
  await page.getByRole('button',{name:'Desfazer',exact:true}).click();
  await page.locator('button[aria-label$=": Apresentação de teste"]').waitFor();
  await page.getByRole('button',{name:'Desfazer',exact:false}).first().waitFor();}
- else{await page.getByPlaceholder('Peça uma alteração…').fill('Troque o título');await page.getByPlaceholder('Peça uma alteração…').press('Enter');const notice=page.locator('.chat-notice.error').first();await notice.waitFor();assert.doesNotMatch(await notice.innerText(),/only with Claude Code/,'Claude Code is not refused on Windows (the mock script itself cannot start without a shell)');}
  // The conversation is written (and marks the presentation modified) shortly after the chat changes.
  await page.locator('.statusbar .dirty').waitFor();await page.waitForTimeout(1000);
  await page.getByRole('button',{name:'Salvar',exact:true}).click();
@@ -546,14 +505,10 @@ try{
 }catch(e){for(const [i,w] of app.windows().entries())await w.screenshot({path:path.join(root,`failure-${i}.png`)}).catch(()=>{});throw e;}
 finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
 // Opening the .ESF by path (as Finder does) must open it, with its conversation, from the package alone.
-// Usage cached by the CLI in the account folder (no credentials) refreshes the bar without a request.
-await fs.mkdir(path.join(root,'claude-config'),{recursive:true});await fs.writeFile(path.join(root,'claude-config','.claude.json'),JSON.stringify({cachedUsageUtilization:{fetchedAtMs:Date.now(),utilization:{five_hour:{utilization:10,resets_at:new Date(Date.now()+3600e3).toISOString()}}}}));
 app=await launch(esf);
 try{
  const page=watch(await app.firstWindow());
- await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();await page.locator('.usage').filter({hasText:'10%'}).waitFor();
- if(!win){await fs.writeFile(keychainFlag,'');await page.evaluate(()=>window.api.invoke('limits'));await page.locator('.usage').filter({hasText:'25%'}).waitFor({timeout:35000});
- assert.ok(usageHits.includes('Bearer tok-test'),'live usage uses the account token');assert.match(await fs.readFile(path.join(root,'security-args.txt'),'utf8'),/-s Claude Code-credentials-[0-9a-f]{8}/,'per-config-dir Keychain item');assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+\.\d+$/);}
+ await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+\.\d+$/);
  if(!win){await page.locator('.workbench').click({position:{x:5,y:5}});await page.keyboard.press('End');await page.locator('.slide-item').last().and(page.locator('.selected')).waitFor();await page.keyboard.press('Home');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();
  {const ids=()=>page.locator('.slide-item').evaluateAll(l=>l.map(x=>x.dataset.id));const before=await ids();await page.keyboard.press('Meta+ArrowDown');await page.locator('.slide-item').nth(1).and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),[before[1],before[0],...before.slice(2)],'Cmd+Down moves the slide');await page.keyboard.press('Meta+ArrowUp');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),before,'Cmd+Up moves it back');}
  {const selectAll=()=>app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Editar').submenu.items.find(x=>x.label==='Selecionar tudo').click();});
@@ -561,8 +516,8 @@ try{
   await page.locator('.slide-item').first().locator('button').click();await page.locator('.slide-canvas iframe').click({position:{x:4,y:4}});await page.locator('.slide-rail.inactive').waitFor();await selectAll();await page.waitForTimeout(300);
   assert.equal(await page.evaluate(()=>getSelection().toString()),'','Cmd+A on the canvas does not select the window');assert.equal(await page.locator('.slide-item.selected').count(),1,'Cmd+A on the canvas keeps the slide selection');}}
  assert.equal(await page.locator('.tab').count(),1,'reopen + file argument must not duplicate the tab');
- if(!win){await page.getByText('Feito pela IA').waitFor();
- assert.ok((await zipText(esf,'.edukors/ai/conversations.json')).includes('Feito pela IA'),'conversations are stored in the package');}
+ await page.getByText('You chose blue').waitFor();
+ assert.ok((await zipText(esf,'.edukors/ai/conversations.json')).includes('You chose blue'),'conversations are stored in the package');
  await page.getByRole('button',{name:process.platform==='darwin'?'Mostrar no Finder':'Mostrar na pasta'}).waitFor();
  await page.locator('.statusbar button').filter({hasText:'Minha pasta'}).waitFor();
  await page.frameLocator('.slide-canvas iframe').locator('h1').filter({hasText:'Apresentação de teste'}).waitFor();
@@ -572,4 +527,4 @@ try{
  assert.equal(log.length,0,log.join('\n'));
  console.log('E2E passed:',root);
 }finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
-usageServer.close();
+webServer.close();

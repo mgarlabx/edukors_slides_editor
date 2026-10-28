@@ -20,7 +20,7 @@ Open an [issue](https://github.com/mgarlabx/edukors_slides_editor/issues) with t
    node scripts/e2e.mjs --without-legacy-canvas
    ```
 
-   The tests use simulated AI CLIs and never call a real account.
+   The tests use the AI library's fake provider and never call a real account.
 5. Default templates must stay neutral: no logos, brand names, slogans or URLs.
 
 By contributing, you agree that your contribution is licensed under the [MIT License](LICENSE).

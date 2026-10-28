@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {Deck,Preferences,Profile,Project,newDeck,defaultNames,uid,validateDeck,masterOf,slug,aiModels,aiEfforts} from '../shared/model';
+import {Deck,Preferences,Project,newDeck,defaultNames,uid,validateDeck,masterOf,slug} from '../shared/model';
 import {ProjectStore,ConflictError,atomic,exists,inside,readDeck,writeDeck} from './projects';
 import {frameShell,frameShellCsp} from '../shared/render';
 import {playerDocument} from '../shared/player';
@@ -11,11 +11,11 @@ import {normalizePollServer,pollEndpoint} from '../shared/poll';
 import {minifyJs} from './minify';
 import {captureSlides,checkSlides,createPdf,createPptx} from './exports';
 import {embedFonts} from './fonts';
-import {CancelledError,expandHome,SendOptions,liveUsage,Outcome,removedSlides} from './ai';
-import {AgentTools} from './mcp';
-import {AIProviders,probeProvider,connectAntigravity} from './providers';
-import {providers,providerOf,normalizeProfiles} from '../shared/providers';
-import {executablePath,loginCommand} from './provider-runtime';
+import {CancelledError,removedSlides} from './ai';
+import {webTools} from './mcp';
+import {Assistant,Attachment} from './assistant';
+import {bundledProviders,isAiCliError} from '@edukors/ai-cli';
+import {createFakeProvider} from '@edukors/ai-cli/testing';
 import {readFileSync,existsSync} from 'node:fs';
 import {autoUpdater} from 'electron-updater';
 app.setName('Edukors Slides Editor');
@@ -36,28 +36,38 @@ const sessionsPath=path.join(dataDir,'ai-sessions.json');
 const loadJson=(file:string)=>{try{const v=JSON.parse(readFileSync(file,'utf8'));return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}catch{return{};}};
 // Session IDs are stored per presentation+profile in userData, never in the .ESF.
 const limitsPath=path.join(dataDir,'session-limits.json'),sessionLimits:Record<string,unknown>=loadJson(limitsPath);
-const ai=new AIProviders(e=>{
-  if(e.type==='limits'&&e.profileId){sessionLimits[e.profileId]=e.limits;void atomic(limitsPath,JSON.stringify(sessionLimits)).catch(()=>{});}
-  win?.webContents.send('ai-event',e);
-},loadJson(sessionsPath),s=>{void atomic(sessionsPath,JSON.stringify(s)).catch(()=>{});});
-const aiStopped=new Set<string>(),aiProfiles=new Map<string,string>(),agentTools=new AgentTools();
+// Accounts and sessions come from the shared EDUKORS AI library; its data folder is the one every EDUKORS app uses, except
+// in development and tests. ESF_AI_FAKE (tests) is the library's fake provider CLI, run with this app's Node.
+const aiWords={pt:{allow:'Permitir',deny:'Recusar',mcpCall:(s:string,t:string)=>`Permitir que o assistente use ${t} do servidor MCP ${s}?`},en:{allow:'Allow',deny:'Deny',mcpCall:(s:string,t:string)=>`Allow the assistant to use ${t} from the MCP server ${s}?`},es:{allow:'Permitir',deny:'Rechazar',mcpCall:(s:string,t:string)=>`¿Permitir que el asistente use ${t} del servidor MCP ${s}?`}};
+const assistant=new Assistant({
+  providers:process.env.ESF_AI_FAKE?[createFakeProvider({command:{file:process.execPath,args:[process.env.ESF_AI_FAKE]},env:{ELECTRON_RUN_AS_NODE:'1'}})]:bundledProviders(),
+  // EDUKORS_AI_DATA_DIR (the library's own override) wins, so a development run can use an existing set of accounts.
+  ...localData&&!process.env.EDUKORS_AI_DATA_DIR?{dataDir:path.join(localData,'edukors-ai')}:{},sessionsFile:sessionsPath,resume:loadJson(sessionsPath),
+  get words(){return aiWords[prefs?.language||'pt'];},
+  emit:e=>{if(e.type==='limits'&&e.accountId){sessionLimits[e.accountId]=e.limits;void atomic(limitsPath,JSON.stringify(sessionLimits)).catch(()=>{});}win?.webContents.send('ai-event',e);}
+});
+const aiStopped=new Set<string>(),aiRunning=new Map<string,string>(),skillsDir=path.join(dataDir,'skills');
 const mainWords={
-  pt:{fontsEmbedded:'Fontes incorporadas:',fontsMissing:'Fontes não encontradas neste computador (o HTML usará substitutas):',exported:'Exportado',openFile:'Abrir arquivo',showFolder:'Mostrar na pasta',cancelled:'Pedido interrompido. Nenhuma alteração foi aplicada.',profile:'Configure o executável e o diretório da conta em Configurações → Contas de IA.',retry:'A resposta não passou na validação; pedindo uma correção…',invalid:'As alterações não foram aplicadas porque a validação falhou:',cancel:'Cancelar',saveAs:'Salvar como…',reopen:'Reabrir a versão externa',changed:'O arquivo .ESF foi alterado fora do aplicativo.',missing:'O arquivo .ESF foi movido ou excluído.',conflict:'Suas alterações continuam abertas. Salve em outro local ou reabra a versão do disco (descarta as alterações desta aba).'},
-  en:{fontsEmbedded:'Embedded fonts:',fontsMissing:'Fonts not found on this computer (the HTML will use fallbacks):',exported:'Exported',openFile:'Open file',showFolder:'Show in folder',cancelled:'Request stopped. No changes were applied.',profile:'Set the executable and account directory in Settings → AI accounts.',retry:'The answer failed validation; asking for a fix…',invalid:'The changes were not applied because validation failed:',cancel:'Cancel',saveAs:'Save As…',reopen:'Reopen the external version',changed:'The .ESF file was changed outside the app.',missing:'The .ESF file was moved or deleted.',conflict:'Your changes are still open. Save them elsewhere or reopen the version on disk (discards this tab’s changes).'},
-  es:{fontsEmbedded:'Fuentes incorporadas:',fontsMissing:'Fuentes no encontradas en este equipo (el HTML usará sustitutas):',exported:'Exportado',openFile:'Abrir archivo',showFolder:'Mostrar en la carpeta',cancelled:'Solicitud interrumpida. No se aplicó ningún cambio.',profile:'Configura el ejecutable y el directorio de la cuenta en Configuración → Cuentas de IA.',retry:'La respuesta no pasó la validación; solicitando una corrección…',invalid:'Los cambios no se aplicaron porque la validación falló:',cancel:'Cancelar',saveAs:'Guardar como…',reopen:'Reabrir la versión externa',changed:'El archivo .ESF se modificó fuera de la aplicación.',missing:'El archivo .ESF se movió o se eliminó.',conflict:'Tus cambios siguen abiertos. Guárdalos en otra ubicación o reabre la versión del disco (descarta los cambios de esta pestaña).'},
+  pt:{fontsEmbedded:'Fontes incorporadas:',fontsMissing:'Fontes não encontradas neste computador (o HTML usará substitutas):',exported:'Exportado',openFile:'Abrir arquivo',showFolder:'Mostrar na pasta',cancelled:'Pedido interrompido. Nenhuma alteração foi aplicada.',profile:'Escolha uma conta conectada em Configurações → Assistente de IA.',retry:'A resposta não passou na validação; pedindo uma correção…',invalid:'As alterações não foram aplicadas porque a validação falhou:',cancel:'Cancelar',saveAs:'Salvar como…',reopen:'Reabrir a versão externa',changed:'O arquivo .ESF foi alterado fora do aplicativo.',missing:'O arquivo .ESF foi movido ou excluído.',conflict:'Suas alterações continuam abertas. Salve em outro local ou reabra a versão do disco (descarta as alterações desta aba).'},
+  en:{fontsEmbedded:'Embedded fonts:',fontsMissing:'Fonts not found on this computer (the HTML will use fallbacks):',exported:'Exported',openFile:'Open file',showFolder:'Show in folder',cancelled:'Request stopped. No changes were applied.',profile:'Choose a signed-in account in Settings → AI assistant.',retry:'The answer failed validation; asking for a fix…',invalid:'The changes were not applied because validation failed:',cancel:'Cancel',saveAs:'Save As…',reopen:'Reopen the external version',changed:'The .ESF file was changed outside the app.',missing:'The .ESF file was moved or deleted.',conflict:'Your changes are still open. Save them elsewhere or reopen the version on disk (discards this tab’s changes).'},
+  es:{fontsEmbedded:'Fuentes incorporadas:',fontsMissing:'Fuentes no encontradas en este equipo (el HTML usará sustitutas):',exported:'Exportado',openFile:'Abrir archivo',showFolder:'Mostrar en la carpeta',cancelled:'Solicitud interrumpida. No se aplicó ningún cambio.',profile:'Elige una cuenta conectada en Configuración → Asistente de IA.',retry:'La respuesta no pasó la validación; solicitando una corrección…',invalid:'Los cambios no se aplicaron porque la validación falló:',cancel:'Cancelar',saveAs:'Guardar como…',reopen:'Reabrir la versión externa',changed:'El archivo .ESF se modificó fuera de la aplicación.',missing:'El archivo .ESF se movió o se eliminó.',conflict:'Tus cambios siguen abiertos. Guárdalos en otra ubicación o reabre la versión del disco (descarta los cambios de esta pestaña).'},
 };
 const outputPaths=new Set<string>();
 let exportBusy=false;
-const defaultExecutable=process.platform==='win32'?'claude.exe':path.join(os.homedir(),'.local/bin/claude');
 async function loadPreferences(){
-  const defaults:Preferences={language:'pt',profiles:[{id:'default',name:'Claude',provider:'claude',model:'',effort:'',executable:defaultExecutable,configDir:path.join(os.homedir(),'.claude')}],activeProfile:'default',recent:[]};
+  // Accounts of earlier versions (profiles pointing at CLI folders such as ~/.claude) are not carried over: the
+  // assistant uses accounts made by the AI library, which the user signs in to once.
+  const defaults:Preferences={language:'pt',recent:[]};
   try{const saved=JSON.parse(await fs.readFile(prefsPath,'utf8'));return cleanPrefs({...defaults,...saved});}catch{return defaults;}
 }
 function cleanPrefs(p:Preferences):Preferences{
-  if(!['pt','en','es'].includes(p.language)||!Array.isArray(p.profiles)||p.profiles.length>30)throw Error('Invalid preferences.');
-  const profiles=normalizeProfiles(p,expandHome);
+  if(!['pt','en','es'].includes(p.language))throw Error('Invalid preferences.');
   if(p.systemPrompt!==undefined&&(typeof p.systemPrompt!=='string'||p.systemPrompt.length>20000))throw Error('Invalid system prompt.');
-  return {language:p.language,attachDir:typeof p.attachDir==='string'&&p.attachDir.length<4096?p.attachDir:undefined,systemPrompt:p.systemPrompt||'',...normalizePollServer(p.pollServer)?{pollServer:normalizePollServer(p.pollServer)!}:{},profiles,activeProfile:profiles.some(x=>x.id===p.activeProfile)?p.activeProfile:'',recent:(p.recent||[]).filter(x=>typeof x==='string').slice(0,20)};
+  if(p.aiMcp!==undefined&&(typeof p.aiMcp!=='string'||p.aiMcp.length>100000))throw Error('Invalid MCP servers.');
+  const text=(v:unknown)=>typeof v==='string'&&v.length<=200&&!/[\r\n\0]/.test(v)?v:'';
+  const options=Object.fromEntries(Object.entries(p.aiOptions&&typeof p.aiOptions==='object'?p.aiOptions:{}).filter(([k])=>/^[\w-]{1,100}$/.test(k)).slice(0,50).map(([k,v])=>[k,{model:text(v?.model),effort:text(v?.effort)}]));
+  return {language:p.language,attachDir:typeof p.attachDir==='string'&&p.attachDir.length<4096?p.attachDir:undefined,systemPrompt:p.systemPrompt||'',...normalizePollServer(p.pollServer)?{pollServer:normalizePollServer(p.pollServer)!}:{},
+    aiAccount:text(p.aiAccount),aiOptions:options,aiMcp:p.aiMcp||'',recent:(p.recent||[]).filter(x=>typeof x==='string').slice(0,20)};
 }
 async function persist(){await atomic(prefsPath,JSON.stringify(prefs,null,2));}
 async function remember(file:string){prefs.recent=[file,...prefs.recent.filter(x=>x!==file)].slice(0,20);await persist();}
@@ -135,13 +145,6 @@ handle('bootstrap',async()=>{
 handle('menuState',(open:unknown)=>{if(deckOpen!==!!open){deckOpen=!!open;menu();}});
 handle('preferences',async(p:Preferences)=>{
   const next=cleanPrefs(p);
-  // A removed or re-pointed profile must not keep running or resume sessions of another account.
-  for(const old of prefs.profiles){
-    const now=next.profiles.find(x=>x.id===old.id);
-    if(now&&providerOf(now).id===providerOf(old).id&&now.configDir===old.configDir&&now.executable===old.executable)continue;
-    for(const [deckId,profileId] of aiProfiles)if(profileId===old.id){aiStopped.add(deckId);ai.cancel(deckId);}
-    ai.forgetProfile(old.id);delete sessionLimits[old.id];
-  }
   prefs={...next,attachDir:prefs.attachDir};await persist();menu();return prefs;
 });
 handle('open',async(file?:string)=>{
@@ -174,7 +177,7 @@ async function save(deck:Deck):Promise<Project|null>{
 // Save As writes an independent package (new ID) with the auxiliary files and conversations; the old file stays as last saved.
 async function saveAs(deck:Deck){
   validateDeck(deck);const s=store.location(deck.id);
-  if(aiProfiles.has(deck.id))throw Error('A request is already running.');
+  if(aiRunning.has(deck.id))throw Error('A request is already running.');
   const file=await chooseFile(fileOf(deck));if(!file)return null;
   // The name chosen on the first save becomes the presentation's title.
   if(!s.file){const p=await store.attach(deck.id,file,{...deck,title:path.basename(file).replace(/\.esf$/i,'')});await remember(p.path);return p;}
@@ -184,8 +187,8 @@ async function saveAs(deck:Deck){
 }
 // Closing waits for a running assistant to stop before the working folder is removed.
 async function closeProject(id:string){
-  if(aiProfiles.has(id)){aiStopped.add(id);ai.cancel(id);for(let i=0;i<100&&aiProfiles.has(id);i++)await new Promise(r=>setTimeout(r,50));}
-  await store.close(id);
+  if(aiRunning.has(id)){aiStopped.add(id);assistant.cancel(id);for(let i=0;i<100&&aiRunning.has(id);i++)await new Promise(r=>setTimeout(r,50));}
+  await assistant.closeDeck(id);await store.close(id);
 }
 handle('save',save);
 handle('saveAs',saveAs);
@@ -248,33 +251,53 @@ handle('export',async(deck:Deck,format:string)=>{
     return{path:file,project,fonts,noPollServer:format==='html'&&deck.slides.some(s=>s.poll)&&!prefs.pollServer};
   }finally{exportBusy=false;}
 });
-// The CLI keeps the account's usage (fetched by interactive sessions) in <configDir>/.claude.json; it holds no
-// credentials. Read every 30 s by the UI, it refreshes the 5-hour window between requests made here.
-async function cachedUsage(profile:Profile){
-  if(providerOf(profile).id!=='claude')return;
+// Claude Code keeps the account's usage (fetched by its interactive sessions) in <account home>/.claude.json, with no
+// credentials. Read every 30 s by the UI, it refreshes the 5-hour window between requests; Codex reports it directly.
+let changed=false;
+async function cachedUsage(accountId:string,home:string){
   try{
-    const c=JSON.parse(await fs.readFile(path.join(expandHome(profile.configDir),'.claude.json'),'utf8')).cachedUsageUtilization,w=c?.utilization?.five_hour;
+    const c=JSON.parse(await fs.readFile(path.join(home,'.claude.json'),'utf8')).cachedUsageUtilization,w=c?.utilization?.five_hour;
     const resetsAt=Date.parse(w?.resets_at);if(typeof w?.utilization!=='number'||!Number.isFinite(c.fetchedAtMs))return;
-    const old=sessionLimits[profile.id] as {updated?:number}|undefined;if(old?.updated&&old.updated>=c.fetchedAtMs)return;
-    sessionLimits[profile.id]={utilization:Math.max(0,w.utilization/100),resetsAt:Number.isFinite(resetsAt)?Math.floor(resetsAt/1000):undefined,status:'allowed',updated:c.fetchedAtMs};changed=true;
+    const old=sessionLimits[accountId] as {updated?:number}|undefined;if(old?.updated&&old.updated>=c.fetchedAtMs)return;
+    sessionLimits[accountId]={utilization:Math.max(0,w.utilization/100),resetsAt:Number.isFinite(resetsAt)?Math.floor(resetsAt/1000):undefined,status:'allowed',updated:c.fetchedAtMs};changed=true;
   }catch{}
 }
-let changed=false;
 handle('limits',async()=>{
-  changed=false;const active=prefs.profiles.find(p=>p.id===prefs.activeProfile);
-  const live=active&&providerOf(active).id==='claude'?await liveUsage(active).catch(()=>null):null;if(live&&active){sessionLimits[active.id]=live;changed=true;}
-  await Promise.all(prefs.profiles.filter(p=>!live||p!==active).map(cachedUsage));if(changed)void atomic(limitsPath,JSON.stringify(sessionLimits)).catch(()=>{});return sessionLimits;});
-handle('reveal',(file:string)=>{if(!outputPaths.has(file)&&![...store.projects.values()].some(p=>p.file===file))throw Error('Unknown path.');shell.showItemInFolder(file);});
-handle('openOutput',async(file:string)=>{if(!outputPaths.has(file))throw Error('Unknown export.');const error=await shell.openPath(file);if(error)throw Error(error);});
-handle('probe',(id:string,auth=false)=>{const p=prefs.profiles.find(x=>x.id===id);if(!p)throw Error('Profile missing.');return probeProvider(p,path.join(tempDir,'probe-'+p.id),auth);});
-handle('createProfile',async(provider:string,name:string)=>{
-  const type=providers.find(p=>p.id===provider);if(!type||typeof name!=='string'||!name.trim()||name.length>100)throw Error('Invalid account.');
-  const existing=prefs.profiles.filter(p=>providerOf(p).id===provider),id=uid('profile');
-  return{id,name:name.trim(),provider:type.id,executable:existing[0]?.executable||await executablePath(type.executable),configDir:existing.length||type.id==='agy'?path.join(dataDir,'accounts',id):expandHome(type.configDir),model:'',effort:''};
+  changed=false;const accounts=await assistant.ai.listAccounts().catch(()=>[]);
+  await Promise.all(accounts.map(async a=>{
+    if(a.providerId==='claude')return cachedUsage(a.id,a.homeDir);
+    if(a.id!==prefs.aiAccount)return;const live=await assistant.usage(a.id);if(live){sessionLimits[a.id]=live;changed=true;}
+  }));
+  if(changed)void atomic(limitsPath,JSON.stringify(sessionLimits)).catch(()=>{});return sessionLimits;
 });
-handle('accountConnect',async(id:string)=>{const p=prefs.profiles.find(x=>x.id===id);if(!p)throw Error('Profile missing.');return connectAntigravity(p,path.join(tempDir,'connect-'+p.id),url=>{void shell.openExternal(url);});});
-handle('accountLogin',async(id:string,copy=false)=>{const p=prefs.profiles.find(x=>x.id===id);if(!p)throw Error('Profile missing.');const command=loginCommand(p);if(copy)await clipboard.writeText(command);return command;});
-handle('pickExecutable',async()=>{const r=await dialog.showOpenDialog(win!,{properties:['openFile']});return r.canceled?null:r.filePaths[0];});
+handle('openOutput',async(file:string)=>{if(!outputPaths.has(file))throw Error('Unknown export.');const error=await shell.openPath(file);if(error)throw Error(error);});
+// Settings → AI assistant: the library's providers and accounts. A sign-in reports its address as a 'login' event and may
+// wait for a pasted code (aiAccountCode); cancelling aborts it.
+const signIns=new Map<string,AbortController>();
+const accountId=(id:unknown)=>{if(typeof id!=='string'||!/^[\w-]{1,100}$/.test(id))throw Error('Invalid account.');return id;};
+handle('aiProviders',()=>assistant.providers());
+handle('aiAccounts',(status=true)=>assistant.accounts(!!status));
+handle('aiAccountCreate',async(providerId:unknown,label:unknown)=>{
+  if(typeof providerId!=='string'||!(await assistant.providers()).some(p=>p.id===providerId)||typeof label!=='string'||!label.trim()||label.length>80)throw Error('Invalid account.');
+  return assistant.createAccount(providerId,label.trim());
+});
+handle('aiAccountConnect',async(id:unknown)=>{
+  const a=accountId(id),abort=new AbortController();signIns.get(a)?.abort();signIns.set(a,abort);
+  try{return await assistant.connect(a,abort.signal);}finally{if(signIns.get(a)===abort)signIns.delete(a);}
+});
+handle('aiAccountCode',(id:unknown,code:unknown)=>{if(typeof code!=='string'||code.length>4000)throw Error('Invalid code.');assistant.submitCode(accountId(id),code.trim());});
+handle('aiAccountCancel',(id:unknown)=>{signIns.get(accountId(id))?.abort();});
+handle('aiAccountLogout',async(id:unknown)=>{const a=accountId(id);await assistant.forgetAccount(a);await assistant.logout(a);});
+handle('aiAccountRename',(id:unknown,label:unknown)=>{if(typeof label!=='string'||!label.trim()||label.length>80)throw Error('Invalid account.');return assistant.renameAccount(accountId(id),label.trim());});
+// Removing an account stops what runs on it and drops its sessions; the conversations stay in the presentations.
+handle('aiAccountRemove',async(id:unknown)=>{
+  const a=accountId(id);for(const [deckId,acc] of aiRunning)if(acc===a){aiStopped.add(deckId);assistant.cancel(deckId);}
+  await assistant.removeAccount(a);delete sessionLimits[a];
+  if(prefs.aiAccount===a){prefs={...prefs,aiAccount:''};await persist();}return prefs;
+});
+handle('aiModels',(id:unknown)=>assistant.models(accountId(id)));
+handle('aiSkills',()=>assistant.skills(skillsDir));
+handle('aiSkillsFolder',async()=>{await fs.mkdir(skillsDir,{recursive:true});if(process.env.ESF_EXTERNAL_LOG)await fs.appendFile(process.env.ESF_EXTERNAL_LOG,skillsDir+'\n');else await shell.openPath(skillsDir);});
 async function reviewChanges(base:Deck,next:Deck){
   const removed=removedSlides(base,next);
   if(removed.length)return[`Deleting slides is not allowed; only the user deletes slides. Keep every existing slide in slideOrder. Missing: ${removed.map(s=>`${s.title||'untitled'} (${s.id})`).join(', ')}`];
@@ -288,9 +311,9 @@ async function reviewChanges(base:Deck,next:Deck){
   return changed.length?(await checkSlides(next,changed,tempDir)).map(e=>`${e.title} (${e.id}): ${e.message}`):[];
 }
 // Images and fonts the agent saved in the folder become deck assets under the IDs it chose.
-async function importAgentAssets(root:string,base:Deck,out:Outcome){
-  const next=out.deck!,problems:string[]=[];
-  for(const a of out.assets||[]){
+async function importAgentAssets(root:string,base:Deck,next:Deck,assets:{id:string;path:string;name?:string}[]){
+  const problems:string[]=[];
+  for(const a of assets){
     try{
       const file=await inside(root,String(a.path).replace(/^\.\//,'')),mime=assetMimes[path.extname(file).slice(1).toLowerCase()];
       if(!mime)throw Error('Unsupported resource.');if((await fs.stat(file)).size>50_000_000)throw Error('Resource exceeds 50 MB.');
@@ -303,28 +326,20 @@ async function importAgentAssets(root:string,base:Deck,out:Outcome){
   const used=JSON.stringify([next.slides,next.masters,next.layouts]);next.assets=next.assets.filter(x=>base.assets.some(b=>b.id===x.id)||used.includes('asset:'+x.id));
   return problems;
 }
-async function runAI(deck:Deck,profile:Profile,prompt:string,root:string,selected:string[],options:SendOptions={},cleanup?:string){
+// One request: the assistant runs the turn; apply_changes validates every proposal on the way (problems go back to the
+// agent to fix), and what it accepted is applied as one undo step when the turn ends.
+async function runAI(deck:Deck,account:string,prompt:string,root:string,selected:string[],options:{conversation:string;scope:string;attachments:Attachment[];readDirs:string[]},cleanup?:string){
   const emit=(e:Record<string,unknown>)=>win?.webContents.send('ai-event',{projectId:deck.id,...e});
-  const w=mainWords[prefs.language];aiStopped.delete(deck.id);aiProfiles.set(deck.id,profile.id);store.aiStart(deck.id);emit({type:'status',text:'running'});
-  const grant=await agentTools.grant(root).catch(()=>null);if(grant)options={...options,mcp:{url:grant.url,token:grant.token}};
+  const w=mainWords[prefs.language];aiStopped.delete(deck.id);aiRunning.set(deck.id,account);store.aiStart(deck.id);emit({type:'status',text:'running'});
   try{
-    let request=prompt;
-    for(let attempt=0;;attempt++){
-      const executable=await executablePath(profile.executable);if(aiStopped.has(deck.id))throw new CancelledError();
-      const out=await ai.send(deck,{...profile,executable},request,root,selected,options);
-      if(aiStopped.has(deck.id))throw new CancelledError();
-      // An answer or a question without slide changes leaves the presentation as it is.
-      if(!out.deck){emit({type:'done',text:out.message,questions:out.questions,sessionId:out.sessionId});return;}
-      emit({type:'activity',kind:'validating'});
-      const problems=[...await importAgentAssets(root,deck,out),...await reviewChanges(deck,out.deck)];
-      if(aiStopped.has(deck.id))throw new CancelledError();
-      if(!problems.length){emit({type:'done',deck:out.deck,text:out.message,questions:out.questions,sessionId:out.sessionId});return;}
-      if(attempt>=1)throw Error(w.invalid+'\n'+problems.join('\n'));
-      emit({type:'activity',kind:'fixing',body:problems.join('\n')});
-      request=`The app rejected your previous answer. Fix these problems and return the corrected slideUpdates (and slideOrder/assets when needed) relative to the current project state. Include all changes needed for the original request; the previous proposal was not applied:\n${problems.join('\n')}\n\nOriginal request: ${prompt}`;
-    }
-  }catch(e:any){emit({type:'error',text:e instanceof CancelledError?w.cancelled:String(e?.message||e)});}
-  finally{grant?.revoke();store.aiEnd(deck.id);aiProfiles.delete(deck.id);emit({type:'status',text:'idle'});if(cleanup)void fs.rm(cleanup,{recursive:true,force:true});}
+    const choice=prefs.aiOptions?.[account]||{};
+    const out=await assistant.send({deck,accountId:account,prompt,root,selected,readDirs:options.readDirs,attachments:options.attachments,conversation:options.conversation,scope:options.scope,
+      language:prefs.language,systemPrompt:prefs.systemPrompt,model:choice.model,effort:choice.effort,mcp:prefs.aiMcp,skillsDir,tools:webTools(root),
+      check:async(base,next,assets)=>[...await importAgentAssets(root,base,next,assets),...await reviewChanges(base,next)]});
+    if(aiStopped.has(deck.id))throw new CancelledError();
+    emit({type:'done',text:out.message,...out.deck?{deck:out.deck}:{}});
+  }catch(e:any){emit({type:'error',text:e instanceof CancelledError?w.cancelled:isAiCliError(e)?e.code+': '+e.message:e?.code?e.code+': '+e.message:String(e?.message||e)});}
+  finally{store.aiEnd(deck.id);aiRunning.delete(deck.id);emit({type:'status',text:'idle'});if(cleanup)void fs.rm(cleanup,{recursive:true,force:true});}
 }
 // Only files picked in the attach dialog can be sent to the agent.
 const attachable=new Set<string>();
@@ -332,14 +347,14 @@ handle('aiAttach',async(id:string)=>{
   const r=await pickFiles({properties:['openFile','multiSelections']},typeof id==='string'?id:'');if(r.canceled)return[];
   return Promise.all(r.filePaths.map(async file=>{const stat=await fs.stat(file);if(stat.size>50_000_000)throw Error('Resource exceeds 50 MB.');attachable.add(file);return{path:file,name:path.basename(file),size:stat.size};}));
 });
-handle('aiSend',async(deck:Deck,profileId:string,prompt:string,selected:string[],files:string[]=[],conversation='')=>{
+handle('aiSend',async(deck:Deck,account:string,prompt:string,selected:string[],files:string[]=[],conversation='')=>{
   if(typeof conversation!=='string'||conversation.length>100)throw Error('Invalid conversation.');
-  const p=prefs.profiles.find(x=>x.id===profileId);if(!p||!p.executable.trim())throw Error(mainWords[prefs.language].profile);
-  if(aiProfiles.has(deck.id))throw Error('A request is already running.');
+  if(typeof account!=='string'||!account||!(await assistant.ai.listAccounts()).some(a=>a.id===account))throw Error(mainWords[prefs.language].profile);
+  if(aiRunning.has(deck.id))throw Error('A request is already running.');
   validateDeck(deck);const session=store.location(deck.id),root=session.workspace;
   if(!Array.isArray(files)||files.some(f=>typeof f!=='string'||!attachable.has(f)))throw Error('Unknown attachment.');
   // Files inside the working folder are read in place; others are copied to a temporary folder the agent may read.
-  const attachments:NonNullable<SendOptions['attachments']>=[];let copyDir:string|undefined;
+  const attachments:Attachment[]=[];let copyDir:string|undefined;
   deck=structuredClone(deck);
   for(const file of files){
     const rel=path.relative(root,file);let target=file;
@@ -357,9 +372,10 @@ handle('aiSend',async(deck:Deck,profileId:string,prompt:string,selected:string[]
     if(!mime&&(await fs.stat(file)).size<=300_000){const bytes=await fs.readFile(file),text=bytes.toString('utf8');if(!bytes.includes(0)&&!text.includes('\uFFFD'))content=text;}
     attachments.push({name:path.basename(file),path:target,assetId,...content!==undefined?{content}:{}});
   }
-  void runAI(deck,p,prompt,root,selected,{language:prefs.language,conversation,systemPrompt:prefs.systemPrompt,model:p.model,effort:p.effort,attachments,addDirs:copyDir?[copyDir]:[],scope:path.basename(session.dir)},copyDir);return true;
+  void runAI(deck,account,prompt,root,selected,{conversation,attachments,readDirs:copyDir?[copyDir]:[],scope:path.basename(session.dir)},copyDir);return true;
 });
-handle('aiCancel',(id:string)=>{if(aiProfiles.has(id))aiStopped.add(id);ai.cancel(id);});
+handle('aiCancel',(id:string)=>{if(aiRunning.has(id))aiStopped.add(id);assistant.cancel(id);});
+handle('aiAnswer',(id:unknown,questionId:unknown,answer:unknown)=>{if(typeof id!=='string'||typeof questionId!=='string'||typeof answer!=='string'||answer.length>20000)throw Error('Invalid answer.');assistant.answer(id,questionId,answer);});
 // Conversations go into the package (.edukors/ai/conversations.json), with no account data; the UI marks the
 // presentation as modified when it saves one.
 const projectConversation=(id:string)=>inside(store.location(id).workspace,'.edukors/ai/conversations.json',true);
@@ -399,7 +415,7 @@ function checkUpdates(){
   autoUpdater.on('error',e=>console.error('Update check failed:',e.message));
   const check=()=>void autoUpdater.checkForUpdates().catch(()=>{});check();setInterval(check,6*3600_000).unref();
 }
-app.on('before-quit',e=>{if(!allowQuit&&win&&!win.isDestroyed()){e.preventDefault();win.webContents.send('command','quit');}else{ai.dispose();agentTools.dispose();}});
+app.on('before-quit',e=>{if(!allowQuit&&win&&!win.isDestroyed()){e.preventDefault();win.webContents.send('command','quit');}else void assistant.dispose();});
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
 app.whenReady().then(async()=>{
   // The app is always light, whatever the system appearance (native controls, menus and dialogs included).

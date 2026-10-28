@@ -1,5 +1,4 @@
 import './poll.test';
-import './providers.test';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -11,11 +10,20 @@ import {zipSync,unzipSync,strToU8,strFromU8} from 'fflate';
 import {slideDocument,withMaster} from '../src/shared/render';
 import {playerDocument} from '../src/shared/player';
 import {minifyJs} from '../src/main/minify';
-import {childEnv,ClaudeProvider,CancelledError,sessionLimits,instruction,agentSettings,agentTools,toolsFor,ownedPaths,applySlideChanges,agentContext,removedSlides,sentKeys,contextDir} from '../src/main/ai';
+import {CancelledError,instruction,ownedPaths,applySlideChanges,agentContext,removedSlides,sentKeys,contextDir} from '../src/main/ai';
+import {Assistant,fiveHour,instructionsFor} from '../src/main/assistant';
+import {createFakeProvider} from '@edukors/ai-cli/testing';
 import esfSchema from '../src/shared/esf.schema.json';
 import {embedFonts} from '../src/main/fonts';
-// The AI assistant is disabled on Windows in 1.0 (no sandbox for the CLI there); these tests spawn a simulated CLI.
-const noWindowsAI={skip:process.platform==='win32'?'mock CLI scripts cannot be spawned without a shell on Windows':false};
+// The assistant against the AI library's fake provider: a real separate CLI process, no account.
+const fakeCli=path.resolve('node_modules/@edukors/ai-cli/fixtures/fake-ai.mjs');
+async function assistantFixture(){
+  const dir=await fixture(),events:any[]=[],work=path.join(dir,'files');await fs.mkdir(work);
+  const a=new Assistant({providers:[createFakeProvider({command:{file:process.execPath,args:[fakeCli]}})],dataDir:path.join(dir,'library'),sessionsFile:path.join(dir,'sessions.json'),emit:e=>events.push(e)});
+  const account=await a.createAccount('fake','Teste');await a.connect(account.id);
+  return{a,events,dir,work:await fs.realpath(work),account:account.id,[Symbol.asyncDispose]:()=>a.dispose()};
+}
+const tool=(args:unknown)=>'tool apply_changes '+JSON.stringify(args);
 const root=path.resolve('test-results/core');
 await fs.mkdir(root,{recursive:true});
 const fixture=async()=>fs.mkdtemp(path.join(root,'case-'));
@@ -170,89 +178,6 @@ test('exported player messages use English regardless of the editor language',()
   }
   const internal=playerDocument(d,{tools:false,lang:'pt'});assert.ok(internal.includes('<html lang="pt">'));assert.ok(internal.includes('Ativar animações'));
 });
-test('CLI profile environment isolates inherited auth and preserves requested config',()=>{
-  const old=process.env.ANTHROPIC_API_KEY;process.env.ANTHROPIC_API_KEY='not-a-real-key';
-  const e=childEnv({id:'a',name:'a',executable:'claude',configDir:'~/.claude-A'});
-  assert.equal(e.ANTHROPIC_API_KEY,undefined);assert.ok(e.CLAUDE_CONFIG_DIR?.endsWith(path.sep+'.claude-A'));assert.equal(e.CLAUDE_CODE_DISABLE_AUTO_MEMORY,'1');
-  if(old===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=old;
-});
-test('CLI stream parses split chunks, validates structured result and resumes by profile',noWindowsAI,async()=>{
-  const dir=await fixture(),mock=path.join(dir,'mock-cli.cjs');
-  await fs.writeFile(mock,`#!/usr/bin/env node
-let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input);process.stdout.write(JSON.stringify({type:'system',session_id:'session-a'})+'\\n');const out=JSON.stringify({type:'result',session_id:'session-a',structured_output:{message:'Done',slideUpdates:c.project.slides},usage:{input_tokens:12,output_tokens:8},total_cost_usd:0.01})+'\\n';process.stdout.write(out.slice(0,20));setTimeout(()=>process.stdout.write(out.slice(20)),15);});`);
-  await fs.chmod(mock,0o755);
-  const d=newDeck('AI');const events:any[]=[];let saved:Record<string,string>={};
-  const provider=new ClaudeProvider(e=>events.push(e),{},s=>saved=s);
-  const out=await provider.send(d,{id:'a',name:'A',executable:mock,configDir:dir},'test',dir,[d.slides[0].id]);
-  assert.equal(out.deck!.slides[0].id,d.slides[0].id);assert.equal(out.message,'Done');
-  assert.equal(provider.sessions.get(d.id+':a'),'session-a');assert.equal(saved[d.id+':a'],'session-a');
-  assert.equal(events.find(e=>e.type==='usage').input,12);
-  assert.equal(provider.busy(d.id),false,'a settled request must free the project for an immediate retry');
-  provider.forgetProfile('a');assert.equal(provider.sessions.size,0);assert.deepEqual(saved,{});
-});
-test('agent has the full CLI toolset, confined to the presentation folder',noWindowsAI,async()=>{
-  const dir=await fixture(),mock=path.join(dir,'args-cli.cjs');
-  await fs.writeFile(mock,`#!/usr/bin/env node
-require('fs').writeFileSync(${JSON.stringify(path.join(dir,'argv.json'))},JSON.stringify(process.argv.slice(2)));
-process.stdin.resume();process.stdin.on('end',()=>process.stdout.write(JSON.stringify({type:'result',structured_output:{message:'Para quem é a apresentação?',questions:[{question:'Público?',options:['Professores','Gestores'],multiSelect:false}]}})+'\\n'));`);
-  await fs.chmod(mock,0o755);
-  const d=newDeck('AI'),provider=new ClaudeProvider(()=>{});
-  const out=await provider.send(d,{id:'a',name:'A',executable:mock,configDir:dir},'x',dir,[],{mcp:{url:'http://127.0.0.1:1/mcp',token:'t'}});
-  assert.equal(out.deck,undefined,'a question changes nothing');assert.deepEqual(out.questions,[{question:'Público?',options:['Professores','Gestores'],multiSelect:false}]);
-  const argv:string[]=JSON.parse(await fs.readFile(path.join(dir,'argv.json'),'utf8')),arg=(k:string)=>argv[argv.indexOf(k)+1];
-  for(const tool of ['Bash','Write','Edit','WebSearch','WebFetch','Task'])assert.ok(arg('--tools').split(',').includes(tool),tool);
-  assert.ok(argv.includes('--restricted')&&!argv.includes('--safe-mode')&&!argv.includes('--dangerously-skip-permissions'));
-  assert.equal(arg('--permission-prompts'),'none');assert.match(arg('--allowedTools'),/mcp__edukors/);
-  assert.equal(JSON.parse(arg('--mcp-config')).mcpServers.edukors.headers.authorization,'Bearer t');
-  const settings=JSON.parse(arg('--settings')),fsRules=settings.sandbox.filesystem;
-  assert.equal(settings.sandbox.enabled,true);assert.equal(settings.sandbox.allowUnsandboxedCommands,false);assert.equal(settings.sandbox.failIfUnavailable,true);
-  assert.ok(fsRules.denyRead.includes('~'));assert.deepEqual(fsRules.allowRead,[dir]);assert.deepEqual(fsRules.allowWrite,[dir]);
-  for(const p of ownedPaths)assert.ok(fsRules.denyWrite.includes(path.join(dir,p))&&settings.permissions.deny.includes(`Write(/${path.join(dir,p)}/**)`),p);
-  assert.ok(ownedPaths.includes('manifest.json'));assert.deepEqual(agentSettings(dir,[],'darwin').sandbox!.filesystem.denyWrite.includes(dir),false,'never denies the whole folder');
-  assert.ok(agentTools.split(',').every(t=>instruction('en').includes(t)));assert.match(instruction('en'),/only on this presentation/);
-});
-test('on Windows the agent has no shell or subagents, and its file rules use POSIX paths',()=>{
-  const tools=toolsFor('win32').split(','),root='C:\\Users\\Ana\\AppData\\Roaming\\ws\\files',settings:any=agentSettings(root,[],'win32'),text=instruction('en','win32');
-  for(const t of ['Bash','Task'])assert.ok(!tools.includes(t)&&!settings.permissions.allow.includes(t)&&!text.includes(t+','),t);
-  for(const t of ['Read','Write','Edit','WebSearch','WebFetch'])assert.ok(tools.includes(t)&&text.includes(t),t);
-  assert.equal(settings.sandbox,undefined,'no sandbox to require where none exists');assert.match(text,/no shell \(Bash\)/);assert.doesNotMatch(text,/subagents \(Task\)/);
-  assert.ok(settings.permissions.deny.includes('Write(//c/Users/Ana/AppData/Roaming/ws/files/manifest.json/**)'),settings.permissions.deny[0]);
-  assert.ok(agentSettings('/Users/ana/ws',[],'darwin').permissions.deny.includes('Write(//Users/ana/ws/slides/**)'));assert.ok(toolsFor('darwin').includes('Bash'));
-});
-test('CLI activity is reported and each conversation resumes its own session',noWindowsAI,async()=>{
-  const dir=await fixture(),mock=path.join(dir,'activity-cli.cjs');
-  await fs.writeFile(mock,`#!/usr/bin/env node
-let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input),w=o=>process.stdout.write(JSON.stringify({session_id:'s-'+process.argv.length,...o})+'\\n');
-w({type:'system',subtype:'init',model:'test-model'});w({type:'stream_event',event:{type:'content_block_start',content_block:{type:'thinking'}}});
-w({type:'assistant',message:{content:[{type:'tool_use',id:'t1',name:'Read',input:{file_path:${JSON.stringify(dir)}+'/notes/a.md'}}]}});
-w({type:'assistant',message:{content:[{type:'tool_use',id:'t1',name:'Read',input:{file_path:'x'}}]}});
-w({type:'stream_event',event:{type:'content_block_start',content_block:{type:'tool_use',name:'StructuredOutput'}}});
-w({type:'stream_event',event:{type:'content_block_delta',delta:{type:'input_json_delta',partial_json:'{"slides":'}}});
-w({type:'result',structured_output:{message:'ok',slideUpdates:c.project.slides}});});`);
-  await fs.chmod(mock,0o755);
-  const d=newDeck('AI');const events:any[]=[];const provider=new ClaudeProvider(e=>events.push(e));
-  await provider.send(d,{id:'a',name:'A',executable:mock,configDir:dir},'x',dir,[],{conversation:'c-1'});
-  const kinds=events.filter(e=>e.type==='activity').map(e=>e.kind);
-  assert.deepEqual(kinds,['start','thinking','tool','writing'],'duplicate tool events are dropped');
-  assert.equal(events.find(e=>e.kind==='tool').detail,path.join('notes','a.md'),'paths inside the folder are shown relative');
-  assert.equal(events.find(e=>e.type==='progress').bytes,10);
-  assert.ok(provider.sessions.has(d.id+':c-1:a'));
-});
-test('cancelled request never yields changes, even when the CLI answers after the signal',noWindowsAI,async()=>{
-  const dir=await fixture(),mock=path.join(dir,'late-cli.cjs');
-  await fs.writeFile(mock,`#!/usr/bin/env node
-process.on('SIGINT',()=>{});let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input);setTimeout(()=>{process.stdout.write(JSON.stringify({type:'result',structured_output:{message:'late',slideUpdates:c.project.slides}})+'\\n');process.exit(0);},400);});`);
-  await fs.chmod(mock,0o755);
-  const d=newDeck('Cancel'),provider=new ClaudeProvider(()=>{});
-  const pending=provider.send(d,{id:'a',name:'A',executable:mock,configDir:dir},'test',dir,[]);
-  setTimeout(()=>provider.cancel(d.id),100);
-  await assert.rejects(pending,CancelledError);assert.equal(provider.busy(d.id),false);
-});
-test('missing CLI executable rejects without leaving the project busy',async()=>{
-  const d=newDeck('Missing'),provider=new ClaudeProvider(()=>{});
-  await assert.rejects(provider.send(d,{id:'a',name:'A',executable:'/nonexistent/claude',configDir:'/tmp'},'x',process.cwd(),[]));
-  assert.equal(provider.busy(d.id),false);
-});
 test('resources must be embedded while links may stay external',()=>{
   const d=themed('Refs'),s=d.slides[0];
   for(const html of ['<section class="slide"><img src="https://example.com/a.png"></section>','<section class="slide"><img src="images/a.png"></section>','<section class="slide" style="background:url(\'//cdn/x.jpg\')"></section>','<section class="slide"><svg><image href="pic.png"/></svg></section>']){
@@ -269,12 +194,6 @@ test('exported player stores each asset once and resolves it per slide',()=>{
   const html=playerDocument(d);
   assert.equal(html.split(data).length-1,1);assert.ok(!html.includes('aGVsbG8='),'unused assets are not exported');
   assert.ok(slideDocument(d,d.slides[0],true).includes('data:image/png;base64,'+data),'editor previews still inline');
-});
-test('rate limit events map to the 5-hour session window',()=>{
-  assert.deepEqual({...sessionLimits({status:'allowed',unifiedWindows:{five_hour:{utilization:.42,resetsAt:1800000000}}}),updated:0},{utilization:.42,resetsAt:1800000000,status:'allowed',updated:0});
-  assert.equal(sessionLimits({status:'allowed',rateLimitType:'five_hour',utilization:.9,resetsAt:1800000000})!.utilization,.9);
-  assert.equal(sessionLimits({status:'allowed',rateLimitType:'seven_day',utilization:.9}),null);
-  assert.equal(sessionLimits(null),null);
 });
 // Minimal JSON Schema check (only the keywords esf.schema.json uses) so the schema cannot drift from serialize().
 function conform(schema:any,v:any,at='$'):string[]{
@@ -410,7 +329,7 @@ test('legacy selection metadata and object styling only accept supported propert
   for(const style of [{position:'absolute'},{'z-index':'auto'},{'z-index':'1 !important'},{'text-align':'justify'},{'align-content':'space-between'},{isolation:'auto'}])assert.equal(cleanOp({...op,style}),null);
 });
 
-test('presentation system prompt lives in ai/system-prompt.md, reaches the CLI and changes only through the answer',noWindowsAI,async()=>{
+test('presentation system prompt lives in ai/system-prompt.md, reaches the agent and changes only through apply_changes',async()=>{
   const dir=await fixture(),store=newStore(),p=await store.create(await esfIn(dir),themed('Prompt'));
   const s=store.location(p.deck.id);await fs.mkdir(path.join(s.workspace,'ai'),{recursive:true});await fs.writeFile(path.join(s.workspace,'ai','notas.md'),'aux');
   p.deck.systemPrompt='# Palestra\nPúblico: professores.';
@@ -425,14 +344,10 @@ test('presentation system prompt lives in ai/system-prompt.md, reaches the CLI a
   assert.throws(()=>validateDeck({...reopened.deck,systemPrompt:'x'.repeat(20001)}),/system prompt/);
   assert.ok(ownedPaths.includes('ai/system-prompt.md'));
   assert.ok(!JSON.stringify(agentContext(reopened.deck,[])).includes('Palestra'),'sent once, in the system prompt');
-  const mock=path.join(dir,'mock-args.cjs'),argsFile=path.join(dir,'args.json');
-  await fs.writeFile(mock,`#!/usr/bin/env node
-require('fs').writeFileSync(${JSON.stringify(argsFile)},JSON.stringify(process.argv));process.stdin.on('data',()=>{});process.stdin.on('end',()=>process.stdout.write(JSON.stringify({type:'result',session_id:'s',structured_output:{message:'ok'}})+'\\n'));`);
-  await fs.chmod(mock,0o755);
-  await new ClaudeProvider(()=>{}).send(reopened.deck,{id:'a',name:'A',executable:mock,configDir:dir},'x',dir,[],{systemPrompt:'Global rule'});
-  const args:string[]=JSON.parse(await fs.readFile(argsFile,'utf8')),system=args[args.indexOf('--system-prompt')+1];
+  const system=instructionsFor('en',true,'Global rule',reopened.deck.systemPrompt);
   assert.ok(system.indexOf('Global rule')>0&&system.indexOf('Público: professores.')>system.indexOf('Global rule'),'global first, then the presentation');
 });
+
 
 test('incremental slide edits preserve untouched code and support insertion and reordering and flag deletions',()=>{
   const deck=themed('Edits');deck.slides.push(sample('cards'));
@@ -486,26 +401,60 @@ test('incremental context includes selected and unsaved edits with full authorit
   deck.slides.pop();assert.equal(agentContext(deck,[],previous).slideIndex.length,2);
 });
 
-test('provider uses incremental responses and context, but resends full state after an error',noWindowsAI,async()=>{
-  const dir=await fixture(),mock=path.join(dir,'incremental-cli.cjs');
-  await fs.writeFile(mock,`#!/usr/bin/env node
-const fs=require('node:fs');let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{const c=JSON.parse(input);fs.appendFileSync('contexts.jsonl',input+'\\n');const answer=c.request==='fail'?{is_error:true,result:'failed'}:{structured_output:{message:'Done',slideUpdates:[{...c.project.slides[0],title:'Changed'}]}};console.log(JSON.stringify({type:'result',session_id:'delta-session',...answer}));});`);
-  await fs.chmod(mock,0o755);
-  const deck=themed('Incremental');deck.slides.push(sample('cards'));
-  const provider=new ClaudeProvider(()=>{}),profile={id:'a',name:'A',executable:mock,configDir:dir},selected=[deck.slides[0].id];
-  const first=await provider.send(deck,profile,'edit',dir,selected);
-  assert.equal(first.deck!.slides[0].title,'Changed');assert.deepEqual(first.deck!.slides[1],deck.slides[1]);
-  await provider.send(first.deck!,profile,'edit',dir,selected);
-  await assert.rejects(provider.send(first.deck!,profile,'fail',dir,selected),/failed/);
-  await provider.send(first.deck!,profile,'edit',dir,selected);
-  const contexts=(await fs.readFile(path.join(dir,'contexts.jsonl'),'utf8')).trim().split('\n').map(s=>JSON.parse(s));
-  assert.deepEqual(contexts.map(c=>c.contextMode),['full','delta','delta','full']);
-  assert.deepEqual(contexts.map(c=>c.project.slides.length),[1,1,1,1]);
-  const file=JSON.parse(await fs.readFile(path.join(dir,contextDir,deck.slides[1].id+'.json'),'utf8'));assert.deepEqual(file,first.deck!.slides[1],'every slide is available to the agent as a file');
-  const restarted=new ClaudeProvider(()=>{},Object.fromEntries(provider.sessions));
-  await restarted.send(first.deck!,profile,'edit',dir,selected);
-  const last=JSON.parse((await fs.readFile(path.join(dir,'contexts.jsonl'),'utf8')).trim().split('\n').at(-1)!);
-  assert.equal(last.contextMode,'full','a restored session without a local snapshot gets full current content');
+test('the agent changes the presentation only through apply_changes, applied when the turn ends; each conversation resumes',async()=>{
+  await using f=await assistantFixture();const deck=themed('AI');deck.slides.push(sample('quote'));
+  const before=structuredClone(deck),out=await f.a.send({deck,accountId:f.account,root:f.work,selected:[deck.slides[0].id],conversation:'c-1',scope:'w',prompt:tool({message:'Feito',slideUpdates:[{id:deck.slides[0].id,title:'Novo título'}]})});
+  assert.equal(out.deck!.slides[0].title,'Novo título');assert.equal(out.deck!.slides[0].html,deck.slides[0].html,'omitted fields keep their value');assert.deepEqual(out.deck!.slides[1],deck.slides[1]);
+  assert.deepEqual(deck,before,'the request never mutates the deck it was given');assert.match(out.message,/Accepted/);
+  assert.ok(f.events.some(e=>e.type==='activity'&&e.kind==='validating')&&f.events.some(e=>e.type==='usage'&&e.input>0));
+  assert.deepEqual(f.events.filter(e=>e.type==='activity'&&['start','resume'].includes(e.kind)).map(e=>e.kind),['start']);
+  assert.ok(JSON.parse(await fs.readFile(path.join(f.dir,'sessions.json'),'utf8'))['w:'+deck.id+':c-1:'+f.account],'session saved to resume');
+  const file=JSON.parse(await fs.readFile(path.join(f.work,contextDir,deck.slides[1].id+'.json'),'utf8'));assert.deepEqual(file,deck.slides[1],'every slide is available to the agent as a file');
+  assert.equal(f.a.busy(deck.id),false);
+  const again=await f.a.send({deck:out.deck!,accountId:f.account,root:f.work,selected:[],conversation:'c-1',scope:'w',prompt:'olá'});
+  assert.match(again.message,/history 1/,'the same conversation continues');assert.equal(again.deck,undefined,'an answer without apply_changes changes nothing');
+  const third=await f.a.send({deck:out.deck!,accountId:f.account,root:f.work,selected:[],conversation:'c-1',scope:'w',prompt:tool({slideUpdates:[{id:deck.slides[0].id,title:'Outro'}]})});
+  assert.equal(third.deck?.slides[0].title,'Outro','the resumed session applies changes to the request now running');
+  const other=await f.a.send({deck:out.deck!,accountId:f.account,root:f.work,selected:[],conversation:'c-2',scope:'w',prompt:'olá'});assert.match(other.message,/history 0/,'another conversation starts its own session');
+});
+test('problems found by the app go back to the agent, and nothing is applied until it fixes them',async()=>{
+  await using f=await assistantFixture();const deck=themed('Check');
+  const out=await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:tool({slideUpdates:[{id:deck.slides[0].id,script:'while(true){}'}]}),check:async()=>['Slide 1: script never finishes']});
+  assert.equal(out.deck,undefined);assert.match(out.message,/Not applied[\s\S]*script never finishes/);
+  assert.ok(f.events.some(e=>e.type==='activity'&&e.kind==='fixing'&&/never finishes/.test(e.body)));
+  const bad=await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:tool({slideOrder:['missing']})});assert.equal(bad.deck,undefined);assert.match(bad.message,/Invalid slide order/);
+});
+test('the agent asks; the answer reaches it and the turn goes on',async()=>{
+  await using f=await assistantFixture();const deck=themed('Ask');
+  const pending=f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'ask'});
+  for(let i=0;i<200&&!f.events.some(e=>e.type==='question');i++)await new Promise(r=>setTimeout(r,20));
+  const q=f.events.find(e=>e.type==='question');assert.deepEqual([q.text,q.options],['Which color?',['red','blue']]);
+  f.a.answer(deck.id,q.questionId,'blue');assert.match((await pending).message,/You chose blue/);
+  assert.throws(()=>f.a.answer('other-deck',q.questionId,'x'),/Unknown question/);
+});
+test('a cancelled request never yields changes and frees the presentation',async()=>{
+  await using f=await assistantFixture();const deck=themed('Cancel');
+  const pending=f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'slow'});
+  for(let i=0;i<200&&!f.events.some(e=>e.type==='text');i++)await new Promise(r=>setTimeout(r,20));
+  f.a.cancel(deck.id);await assert.rejects(pending,CancelledError);assert.equal(f.a.busy(deck.id),false);
+  await assert.rejects(f.a.send({deck,accountId:'missing',root:f.work,selected:[],prompt:'x'}));assert.equal(f.a.busy(deck.id),false,'a failed start leaves nothing busy');
+});
+test('the workspace is the presentation folder: the app owns its own files there, and the agent works in it',async()=>{
+  await using f=await assistantFixture();const deck=themed('Folder');
+  const write=await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'write nota.md texto'});assert.match(write.message,/wrote nota.md/);
+  assert.equal(await fs.readFile(path.join(f.work,'nota.md'),'utf8'),'texto');
+  for(const owned of ['slides/x.json','manifest.json','.edukors/ai/x.json'])assert.match((await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'write '+owned+' x'})).message,/protected/,owned);
+  assert.match((await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'workspace'})).message,/web=true shell=true protected=8/);
+  assert.match(instruction('en',false),/no shell commands/);assert.match(instruction('en',true),/sandbox confined to that folder/);
+  for(const name of ['apply_changes','screenshot','download'])assert.match(instruction('en'),new RegExp(name));assert.match(instruction('en'),/only on this presentation/);
+});
+test('removing an account forgets its sessions; the 5-hour window comes from the provider usage',async()=>{
+  await using f=await assistantFixture();const deck=themed('Forget');
+  await f.a.send({deck,accountId:f.account,root:f.work,selected:[],conversation:'c',prompt:'olá'});
+  await f.a.removeAccount(f.account);assert.deepEqual(JSON.parse(await fs.readFile(path.join(f.dir,'sessions.json'),'utf8')),{});
+  assert.deepEqual((await f.a.accounts()).length,0);
+  assert.deepEqual({...fiveHour({windows:[{name:'seven_day',used:.1},{name:'five_hour',used:.42,resetsAt:new Date(1800000000e3).toISOString()}],observedAt:''})!,updated:0},{utilization:.42,resetsAt:1800000000,status:'allowed',updated:0});
+  assert.equal(fiveHour({windows:[{name:'seven_day',used:.9}],observedAt:''}),null);
 });
 
 test('imported layouts persist their master binding and CSS; invalid bindings/resources are rejected',async()=>{
