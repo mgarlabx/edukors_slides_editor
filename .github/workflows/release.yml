@@ -79,7 +79,11 @@ jobs:
         run: node scripts/package.mjs --no-bump ${{ matrix.args }} $BUILDER_ARGS
       - name: Check universal Mac executable
         if: runner.os == 'macOS'
-        run: lipo -verify_arch x86_64 arm64 "release/mac-universal/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor"
+        # lipo -verify_arch takes one architecture (a second one is read as an input file): list them and look for both.
+        run: |
+          archs=" $(lipo -archs "release/mac-universal/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor") "
+          echo "Architectures:$archs"
+          [[ "$archs" == *" x86_64 "* && "$archs" == *" arm64 "* ]]
       - name: Check signature and notarization
         if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
         run: |
