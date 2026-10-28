@@ -30,7 +30,11 @@ publish:
 
 mac:
   category: public.app-category.productivity
-  target: [dmg, zip]
+  target:
+    - target: dmg
+      arch: [universal]
+    - target: zip
+      arch: [universal]
   artifactName: Edukors-Slides-Editor-${version}-mac-${arch}.${ext}
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
@@ -47,7 +51,11 @@ dmg:
   artifactName: Edukors-Slides-Editor-${version}-mac-${arch}.${ext}
 
 win:
-  target: [nsis, appx]
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: appx
+      arch: [x64]
   artifactName: Edukors-Slides-Editor-${version}-setup.${ext}
 # Microsoft Store package (MSIX), one per architecture; the Store signs it. Identity from Partner Center → Product identity.
 # Tiles in build/appx/ come from scripts/raster-icon.swift. Uploaded by hand to Partner Center, not to GitHub Releases.
@@ -65,7 +73,11 @@ nsis:
   perMachine: false
 
 linux:
-  target: [AppImage, deb, rpm]
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
   category: Office
   executableName: edukors-slides-editor
   synopsis: Desktop editor for HTML presentations

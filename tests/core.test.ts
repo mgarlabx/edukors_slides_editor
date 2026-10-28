@@ -11,11 +11,11 @@ import {zipSync,unzipSync,strToU8,strFromU8} from 'fflate';
 import {slideDocument,withMaster} from '../src/shared/render';
 import {playerDocument} from '../src/shared/player';
 import {minifyJs} from '../src/main/minify';
-import {childEnv,ClaudeProvider,CancelledError,sessionLimits,instruction,agentSettings,agentTools,ownedPaths,applySlideChanges,agentContext,removedSlides,sentKeys,contextDir} from '../src/main/ai';
+import {childEnv,ClaudeProvider,CancelledError,sessionLimits,instruction,agentSettings,agentTools,toolsFor,ownedPaths,applySlideChanges,agentContext,removedSlides,sentKeys,contextDir} from '../src/main/ai';
 import esfSchema from '../src/shared/esf.schema.json';
 import {embedFonts} from '../src/main/fonts';
 // The AI assistant is disabled on Windows in 1.0 (no sandbox for the CLI there); these tests spawn a simulated CLI.
-const noWindowsAI={skip:process.platform==='win32'?'AI assistant is disabled on Windows':false};
+const noWindowsAI={skip:process.platform==='win32'?'mock CLI scripts cannot be spawned without a shell on Windows':false};
 const root=path.resolve('test-results/core');
 await fs.mkdir(root,{recursive:true});
 const fixture=async()=>fs.mkdtemp(path.join(root,'case-'));
@@ -208,8 +208,16 @@ process.stdin.resume();process.stdin.on('end',()=>process.stdout.write(JSON.stri
   assert.equal(settings.sandbox.enabled,true);assert.equal(settings.sandbox.allowUnsandboxedCommands,false);assert.equal(settings.sandbox.failIfUnavailable,true);
   assert.ok(fsRules.denyRead.includes('~'));assert.deepEqual(fsRules.allowRead,[dir]);assert.deepEqual(fsRules.allowWrite,[dir]);
   for(const p of ownedPaths)assert.ok(fsRules.denyWrite.includes(path.join(dir,p))&&settings.permissions.deny.includes(`Write(/${path.join(dir,p)}/**)`),p);
-  assert.ok(ownedPaths.includes('manifest.json'));assert.deepEqual(agentSettings(dir).sandbox.filesystem.denyWrite.includes(dir),false,'never denies the whole folder');
+  assert.ok(ownedPaths.includes('manifest.json'));assert.deepEqual(agentSettings(dir,[],'darwin').sandbox!.filesystem.denyWrite.includes(dir),false,'never denies the whole folder');
   assert.ok(agentTools.split(',').every(t=>instruction('en').includes(t)));assert.match(instruction('en'),/only on this presentation/);
+});
+test('on Windows the agent has no shell or subagents, and its file rules use POSIX paths',()=>{
+  const tools=toolsFor('win32').split(','),root='C:\\Users\\Ana\\AppData\\Roaming\\ws\\files',settings:any=agentSettings(root,[],'win32'),text=instruction('en','win32');
+  for(const t of ['Bash','Task'])assert.ok(!tools.includes(t)&&!settings.permissions.allow.includes(t)&&!text.includes(t+','),t);
+  for(const t of ['Read','Write','Edit','WebSearch','WebFetch'])assert.ok(tools.includes(t)&&text.includes(t),t);
+  assert.equal(settings.sandbox,undefined,'no sandbox to require where none exists');assert.match(text,/no shell \(Bash\)/);assert.doesNotMatch(text,/subagents \(Task\)/);
+  assert.ok(settings.permissions.deny.includes('Write(//c/Users/Ana/AppData/Roaming/ws/files/manifest.json/**)'),settings.permissions.deny[0]);
+  assert.ok(agentSettings('/Users/ana/ws',[],'darwin').permissions.deny.includes('Write(//Users/ana/ws/slides/**)'));assert.ok(toolsFor('darwin').includes('Bash'));
 });
 test('CLI activity is reported and each conversation resumes its own session',noWindowsAI,async()=>{
   const dir=await fixture(),mock=path.join(dir,'activity-cli.cjs');

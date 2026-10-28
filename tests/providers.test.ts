@@ -16,8 +16,8 @@ const profile=(dir:string,provider:Profile['provider']='codex',id='one'):Profile
 // Protocol tests inject a launcher; the production orchestrator always uses the OS sandbox.
 const direct:Launch=async(p,args,cwd)=>spawn(process.execPath,[p.executable,...args],{cwd,env:providerEnv(p),detached:true,stdio:['pipe','pipe','pipe']});
 const mock=async(dir:string,code:string)=>fs.writeFile(path.join(dir,'mock.cjs'),code);
-const noWindowsAI={skip:process.platform==='win32'?'AI assistant is disabled on Windows':false};
-test('AI assistant is refused on Windows before any process starts',{skip:process.platform!=='win32'&&'Windows only'},async()=>{
+const noWindowsAI={skip:process.platform==='win32'?'other providers are disabled on Windows':false};
+test('on Windows only Claude Code is offered: other providers are refused before any process starts',{skip:process.platform!=='win32'&&'Windows only'},async()=>{
   const launch:Launch=async()=>{throw Error('must not launch');},ai=new AIProviders(()=>{},{},()=>{},launch),p=profile(os.tmpdir());
   await assert.rejects(ai.send(newDeck('x'),p,'x',os.tmpdir(),[]),{message:windowsAI});await assert.rejects(probeProvider(p,os.tmpdir(),false,launch),{message:windowsAI});
 });

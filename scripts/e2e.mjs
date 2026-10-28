@@ -440,7 +440,7 @@ try{
  const present=await presentOpened;await present.locator('#track button').first().waitFor({state:'attached'});
  assert.equal(await present.locator('#top-bar,#wb,#ink').count(),0);await present.close();
  // AI flow: select the cover, ask, survive a rejected answer, apply the fix, then undo it.
- // The AI assistant is disabled on Windows in 1.0: the request is refused with a clear message.
+ // On Windows the mock CLI (a Node script) cannot start without a shell: the request reaches it and fails to launch.
  if(!win){await page.locator('.slide-item button').first().click();
  const attachment=path.join(root,'anexo.png');await fs.copyFile(path.resolve('build/icon.png'),attachment).catch(()=>fs.writeFile(attachment,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64')));
  await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},attachment);
@@ -489,7 +489,7 @@ try{
  await page.getByRole('button',{name:'Desfazer',exact:true}).click();
  await page.locator('button[aria-label$=": Apresentação de teste"]').waitFor();
  await page.getByRole('button',{name:'Desfazer',exact:false}).first().waitFor();}
- else{await page.getByPlaceholder('Peça uma alteração…').fill('Troque o título');await page.getByPlaceholder('Peça uma alteração…').press('Enter');await page.getByText('The AI assistant is not available on Windows in this version.').first().waitFor();}
+ else{await page.getByPlaceholder('Peça uma alteração…').fill('Troque o título');await page.getByPlaceholder('Peça uma alteração…').press('Enter');const notice=page.locator('.chat-notice.error').first();await notice.waitFor();assert.doesNotMatch(await notice.innerText(),/only with Claude Code/,'Claude Code is not refused on Windows (the mock script itself cannot start without a shell)');}
  // The conversation is written (and marks the presentation modified) shortly after the chat changes.
  await page.locator('.statusbar .dirty').waitFor();await page.waitForTimeout(1000);
  await page.getByRole('button',{name:'Salvar',exact:true}).click();
