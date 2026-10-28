@@ -11,6 +11,8 @@ const tools=[
   {name:'screenshot',description:'Opens a web page in a hidden browser window and saves a PNG capture in the presentation folder.',inputSchema:{type:'object',properties:{url:{type:'string'},path:target,width:{type:'integer',minimum:320,maximum:3840,default:1600},height:{type:'integer',minimum:240,maximum:2160,default:900},fullPage:{type:'boolean',default:false},delay:{type:'integer',minimum:0,maximum:15000,default:1500,description:'Milliseconds to wait after loading.'}},required:['url','path']}},
   {name:'download',description:'Downloads a file from the web (http/https, up to 50 MB) into the presentation folder.',inputSchema:{type:'object',properties:{url:{type:'string'},path:target},required:['url','path']}},
 ];
+// Paths the agent reads back are relative and in POSIX form on every system, as it writes them.
+const rel=(root:string,file:string)=>path.relative(root,file).split(path.sep).join('/');
 const webUrl=(u:unknown)=>{const url=new URL(String(u));if(!/^https?:$/.test(url.protocol))throw Error('Only http and https URLs.');return url.href;};
 async function destination(root:string,rel:unknown,ext?:string){
   let p=String(rel||'').replace(/^\.\//,'');if(ext&&!p.toLowerCase().endsWith(ext))p+=ext;
@@ -28,7 +30,7 @@ async function screenshot(root:string,a:any){
     await new Promise(r=>setTimeout(r,Math.min(15000,Math.max(0,a.delay??1500))));
     if(a.fullPage){const h=Number(await win.webContents.executeJavaScript('document.documentElement.scrollHeight').catch(()=>height));win.setContentSize(width,Math.min(16000,Math.max(height,h||height)));await new Promise(r=>setTimeout(r,500));}
     const png=(await win.webContents.capturePage()).toPNG();await atomic(file,png);
-    return`Saved ${path.relative(root,file)} (${win.getContentSize().join('x')}, ${Math.round(png.length/1024)} KB) from ${win.webContents.getURL()}.`;
+    return`Saved ${rel(root,file)} (${win.getContentSize().join('x')}, ${Math.round(png.length/1024)} KB) from ${win.webContents.getURL()}.`;
   }finally{win.destroy();}
 }
 async function download(root:string,a:any){
@@ -36,7 +38,7 @@ async function download(root:string,a:any){
   const r=await fetch(url,{signal:AbortSignal.timeout(60000),redirect:'follow'});if(!r.ok)throw Error('HTTP '+r.status);
   if(Number(r.headers.get('content-length'))>50_000_000)throw Error('Resource exceeds 50 MB.');
   const bytes=Buffer.from(await r.arrayBuffer());if(bytes.length>50_000_000)throw Error('Resource exceeds 50 MB.');
-  await atomic(file,bytes);return`Saved ${path.relative(root,file)} (${r.headers.get('content-type')||'unknown type'}, ${Math.round(bytes.length/1024)} KB).`;
+  await atomic(file,bytes);return`Saved ${rel(root,file)} (${r.headers.get('content-type')||'unknown type'}, ${Math.round(bytes.length/1024)} KB).`;
 }
 export function webTools(root:string):ToolDefinition[]{
   const run:Record<string,(root:string,a:any)=>Promise<string>>={screenshot,download};
