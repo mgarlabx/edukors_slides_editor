@@ -339,6 +339,19 @@ button.app-wordmark{border:0;background:none;padding:0;border-radius:var(--radiu
 .account-login{padding:12px;background:var(--panel-2);border-radius:var(--radius);margin-bottom:16px}
 .account-login p,.account-result{color:var(--muted);overflow-wrap:anywhere}
 .account-login pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--fs-sm);margin:8px 0}
+.account-login input{width:100%;margin:6px 0 10px}
+.account-login form label{display:block}
+.account-login small{display:block;color:var(--muted);margin:-4px 0 10px}
+.assistant-advanced{margin:16px 0 8px}
+.assistant-advanced summary{cursor:pointer;font-weight:600;font-size:var(--fs-h3)}
+.assistant-advanced section{margin:20px 0}
+.assistant-advanced h3{margin:0 0 6px;font-size:var(--fs-base)}
+.assistant-advanced p{color:var(--muted)}
+.assistant-advanced textarea.code{display:block;width:100%;margin:8px 0;padding:12px;font-size:var(--fs-sm);resize:vertical}
+.mcp-problems{color:var(--error);font-size:var(--fs-sm);margin:4px 0;padding-left:18px}
+.skill-list{margin:8px 0;padding-left:18px}
+.skill-list li{margin:4px 0;color:var(--muted)}
+.skill-list strong{color:var(--text)}
 .provider-create{max-width:850px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
 .provider-create h2{margin:0 0 16px}
 .provider-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:20px}

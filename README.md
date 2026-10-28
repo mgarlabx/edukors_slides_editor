@@ -2,7 +2,7 @@
 
 Desktop editor for HTML presentations. Each slide is a small HTML/CSS/JS document; the main output is a **single HTML file** that opens offline in any current browser. PDF and PPTX are available as supporting static exports.
 
-Most of the creation and formatting work can be delegated to an **AI assistant** (Claude Code or another agent CLI you already use) in a side panel. The interface is available in English, Portuguese and Spanish.
+Most of the creation and formatting work can be delegated to an **AI assistant** (Claude Code or Codex, the CLI you already use) in a side panel. The interface is available in English, Portuguese and Spanish.
 
 The repository also contains the **interactive questions server** in [`server/poll/`](server/poll/README.md): PHP + MySQL, ready for anyone to host their own and point the app to it.
 
@@ -92,19 +92,18 @@ API contract, installation and data retention: [server/poll/README.md](server/po
 
 ### AI assistant
 
-Uses the Claude Code CLI already installed and signed in. In **Settings → AI accounts**, enter the executable (e.g. `~/.local/bin/claude`) and one configuration directory per account (e.g. `~/.claude-A`, `~/.claude-B`). The app does not store credentials: authentication stays with the CLI (`CLAUDE_CONFIG_DIR`).
+The assistant runs on the **Claude Code** or **Codex** CLI you have installed, through the shared EDUKORS AI library ([`@edukors/ai-cli`](https://github.com/mgarlabx/edukors_ai_cli)). In **Settings → AI assistant**, add an account, give it a name and sign in: the browser opens, and if it does not, the address is shown (Claude may ask you to paste back the code it shows). Accounts are the library's own and are shared by every EDUKORS app on this computer; your personal `~/.claude` and `~/.codex` sign-ins are never used or changed. The app stores no credentials, and none go into the `.ESF`. Choose the account in use there or in the assistant; model and effort are kept per account.
 
-The agent has the Claude Code tools available in the Terminal — Bash, reading/creating/editing files, web search, reading web pages, subagents — plus two from the app: **page capture** (PNG) and file **download**. There are only two restrictions: (1) it reads and writes only in the presentation's workspace (the extracted contents of the `.ESF`) and its subfolders (commands run in the Claude Code sandbox, without network access; the web goes through the dedicated tools) and (2) it only works on the presentation. When something is ambiguous, it asks: the options appear in the chat and you just click (or answer in writing). Files it saves (screenshots, downloaded images, charts, research) go into their own folders, such as `media/`, only while the presentation is open: only the images and fonts imported and used in the slides go into the `.ESF`; the app's own files (`manifest.json`, `master/`, `layouts/`, `slides/`, `images/`, `fonts/`, `.edukors/`) change only through the structured answer, which the app validates (structure, embedded resources and rendering of the changed slides); if validation fails, it asks for **one** correction and, if the error persists, applies nothing. Every applied change can be undone.
+The agent works in the presentation's workspace (the extracted contents of the `.ESF`) with its provider's own tools — reading and writing files, web search and reading web pages, and commands where a sandbox confines them — plus three from the app: **apply_changes**, the only way it changes slides, masters, layouts and the presentation's system prompt; **page capture** (PNG); and file **download**. It reads and writes only in that folder and its subfolders, never in the app's own files (`manifest.json`, `masters/`, `layouts/`, `slides/`, `images/`, `fonts/`, `.edukors/`), and it only works on the presentation. `apply_changes` validates each proposal (structure, embedded resources and rendering of the changed slides) and sends the problems back to the agent to fix; what it accepts is applied when the turn ends, as one step you can undo. When something is ambiguous, the agent asks: the options appear in the chat and you click one (or answer in writing). Files it saves (screenshots, downloaded images, charts, research) live in their own folders, such as `media/`, only while the presentation is open: only the images and fonts used in the slides go into the `.ESF`.
 
-The assistant's footer shows how much of the subscription's 5-hour window is left and when the next window starts, from the `rate_limit_event` that Claude Code emits with each request (last value kept per account). Before the first request it shows "not available".
+| | Files and web | Commands | Confined by |
+| --- | --- | --- | --- |
+| Claude Code | macOS, Windows, Linux | macOS, Linux (needs `bubblewrap`) | Claude Code's restricted mode and its sandbox |
+| Codex | macOS | macOS | the macOS sandbox |
 
-### AI accounts and providers
+**Advanced** holds the **instructions for the agent** (global, and for this presentation, saved in the `.ESF` as `ai/system-prompt.md`), your own **MCP servers** (the `.mcp.json` format; every call asks for your permission) and the **skills** folder (each skill a folder with a `SKILL.md`; no other skill is enabled).
 
-In **Settings → Add account**, choose Claude Code, Codex, Kimi, Kiro, OpenCode or Antigravity, give it a name and create the account. A provider can be used more than once; each new account gets its own authentication directory. Existing Claude profiles are preserved. Model and effort are saved per account, and the active account can be chosen in the assistant.
-
-Install the corresponding CLI and use **Connect**. The editor provides the login command to run in Terminal; **Advanced** lets you choose the executable and directory. Antigravity uses the official ACP server `agy_acp_server.par` with `localharness_external` in the same folder, and opens the Google login from the editor. See the [installation used by T3 Code](https://github.com/pingdotgg/t3code/blob/main/docs/user/providers-antigravity.md). The regular `agy` executable does not replace that server.
-
-Claude and Codex have their own adapters; Kimi, Kiro, OpenCode and Antigravity use ACP. The new processes are confined by the macOS sandbox. Credentials are not written to the ESF. Model discovery depends on what each CLI reports; an ID can also be entered manually.
+The assistant's footer shows how much of the account's 5-hour window is used and when the next window starts, as the provider reports it. Before the first report it shows "not available".
 
 ## Development
 
@@ -130,7 +129,7 @@ Releases: set `version` in `package.json`, commit, then push a tag `vX.Y.Z` (or 
 
 Public installer copies use `Edukors-Slides-Editor-mac.dmg`, `Edukors-Slides-Editor-windows.exe`, and `Edukors-Slides-Editor-linux.{AppImage,deb}` (x64). Versioned originals, ZIPs, blockmaps and updater metadata retain their names. The download page prefers these public copies and falls back to the older versioned assets, including separate Mac architectures.
 
-The tests use **simulated** AI CLIs; no real account is called. Test outputs and data go to `test-results/` (`ESF_DATA_DIR` isolates the preferences). The Electron tests run with hidden windows; set `ESF_SHOW=1` to see them.
+The tests use the AI library's **fake provider**, a separate CLI process; no real account is called. Test outputs and data go to `test-results/` (`ESF_DATA_DIR` isolates the preferences). The Electron tests run with hidden windows; set `ESF_SHOW=1` to see them.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
@@ -145,7 +144,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 | `src/main/package.ts` | `.ESF` ZIP format: reading, validation, limits, extraction and atomic writing |
 | `src/main/projects.ts` | Sessions (file + internal area), saving, conflicts, recovery, path confinement |
 | `src/main/exports.ts` | Static capture, PDF and PPTX |
-| `src/main/ai.ts` | Claude Code provider (profiles, streaming, sessions, cancellation) |
+| `src/main/ai.ts` | The agent's instructions, applying its changes, the context it gets |
+| `src/main/assistant.ts` | The assistant through the EDUKORS AI library: accounts, sessions, `apply_changes`, questions |
+| `src/main/mcp.ts` | The agent's web tools: page capture and download |
 | `src/main/index.ts` | Electron process: window, menus, IPC, AI orchestration |
 | `src/ui/` | React interface, `pt`/`en`/`es` catalogs |
 | `src/shared/poll.ts` | Interactive questions: configuration, collection controller and presenter key |
@@ -155,8 +156,8 @@ Editor previews are loaded through the internal `esf-frame:` scheme, with their 
 
 ## Known limitations
 
-- **Windows:** the AI assistant is disabled in 1.0. Its commands must run inside a sandbox confined to the presentation folder, and the sandbox used on macOS and Linux does not exist on native Windows. Editing, presenting and exporting work normally.
-- **Linux:** the AI assistant requires `bubblewrap` (`bwrap`).
+- **Windows:** the AI assistant works with Claude Code only, without running commands (native Windows has no sandbox to confine them). Editing, presenting and exporting work normally.
+- **Linux:** the AI assistant works with Claude Code; its commands require `bubblewrap` (`bwrap`). Codex is offered on macOS only.
 - The app is not in the Mac App Store, Snap Store or Flathub: their sandboxes do not allow running the AI CLIs installed by the user.
 - Opening an `.esf` by double-click is not covered by the automated tests; the same code path is tested through a command-line argument.
 - PDF and PPTX exports are images (one per slide); PPTX has been validated as OOXML but still needs testing in PowerPoint and LibreOffice.

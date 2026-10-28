@@ -21,36 +21,38 @@ export interface Deck {
 // path: the .ESF the user sees (never the app's private working folder). pending: the save left out files the
 // assistant was still writing, so the presentation stays modified.
 export interface Project { path: string; deck: Deck; recovered?: boolean; pending?: boolean }
-export interface Profile { id: string; name: string; executable: string; configDir: string; provider?:import('./providers').ProviderId; model?:string; effort?:string }
 export interface Preferences {
-  language: Language; profiles: Profile[]; recent: string[]; activeProfile: string;
+  language: Language; recent: string[];
+  // The AI library's account the assistant uses (accounts live in the shared EDUKORS registry, not here).
+  aiAccount?: string;
+  // Model and effort chosen in the assistant, per account; empty uses the provider's default.
+  aiOptions?: Record<string, {model?: string; effort?: string}>;
+  // The user's MCP servers, as the JSON text typed in Settings ({"mcpServers":{...}} or the bare object).
+  aiMcp?: string;
   // Last folder used to attach or insert files (kept by the main process).
   attachDir?: string;
   // Extra instructions appended to the agent's built-in system prompt in every presentation.
   systemPrompt?: string;
-  // Model ID and effort chosen in the assistant sidebar; empty uses the CLI default.
-  aiModel?: string; aiEffort?: string;
   // Base URL of the interactive questions service (self-hostable); empty means none (no default).
   pollServer?: string;
 }
-// Only the latest version of each model family is offered.
-export const aiModels = [{id:'',name:''},{id:'claude-fable-5-1',name:'Fable 5.1'},{id:'claude-opus-5-5',name:'Opus 5.5'},{id:'claude-sonnet-5-5',name:'Sonnet 5.5'},{id:'claude-haiku-5-5',name:'Haiku 5.5'}] as const;
-export const aiEfforts = ['', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export interface Template { id: string; title: string }
 export interface AIEvent {
-  projectId: string; type: 'text' | 'done' | 'error' | 'usage' | 'status' | 'limits' | 'activity' | 'progress' | 'thought';
+  projectId: string; type: 'text' | 'done' | 'error' | 'usage' | 'status' | 'limits' | 'activity' | 'progress' | 'thought' | 'question' | 'login';
   // activity: what the CLI is doing (start, thinking, tool, writing, retry, validating, fixing), body is what its row expands to;
   // thought: reasoning text appended to the last activity; progress: bytes and output tokens of the answer so far.
   kind?: string; tool?: string; detail?: string; body?: string; bytes?: number; tokens?: number;
-  profileId?: string; limits?: SessionLimits;
+  accountId?: string; limits?: SessionLimits;
+  // question: one question the agent (or a call to the user's MCP server) puts to the user, answered by aiAnswer.
+  questionId?: string; options?: string[];
+  // login: the address a sign-in offers; acceptsCode when the page ends with a code to paste back.
+  url?: string; acceptsCode?: boolean;
   text?: string; deck?: Deck; input?: number; output?: number; cache?: number;
   cost?: number; sessionId?: string;
   // usage: tokens in the session's context after the last main-thread call, and the model's context window.
   context?: number; window?: number;
-  // done: questions the agent asks before (or instead of) changing the slides.
-  questions?: {question: string; options: string[]; multiSelect?: boolean}[];
 }
-// Subscription session window (5 h) as reported by the CLI's rate_limit_event.
+// Subscription session window (5 h) as the provider reports it.
 export interface SessionLimits { utilization: number; resetsAt?: number; status: string; updated: number }
 export const uid = (prefix = 's') => `${prefix}-${crypto.randomUUID()}`;
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]!));
