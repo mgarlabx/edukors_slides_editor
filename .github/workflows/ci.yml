@@ -29,6 +29,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Electron downloads its binary on first use, with no time limit: a stalled download used to hang the
+      # end-to-end step until the job timed out. Here it gets its own short limit and one more try.
+      - name: Electron binary
+        id: electron
+        timeout-minutes: 4
+        continue-on-error: true
+        run: node -e "require('electron')"
+      - name: Electron binary (second try)
+        if: steps.electron.outcome == 'failure'
+        timeout-minutes: 4
+        run: node -e "require('electron')"
       - name: Linux display and Electron sandbox
         if: runner.os == 'Linux'
         run: |
