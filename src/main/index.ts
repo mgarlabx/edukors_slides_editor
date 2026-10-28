@@ -41,7 +41,8 @@ const limitsPath=path.join(dataDir,'session-limits.json'),sessionLimits:Record<s
 const aiWords={pt:{allow:'Permitir',deny:'Recusar',mcpCall:(s:string,t:string)=>`Permitir que o assistente use ${t} do servidor MCP ${s}?`},en:{allow:'Allow',deny:'Deny',mcpCall:(s:string,t:string)=>`Allow the assistant to use ${t} from the MCP server ${s}?`},es:{allow:'Permitir',deny:'Rechazar',mcpCall:(s:string,t:string)=>`¿Permitir que el asistente use ${t} del servidor MCP ${s}?`}};
 const assistant=new Assistant({
   providers:process.env.ESF_AI_FAKE?[createFakeProvider({command:{file:process.execPath,args:[process.env.ESF_AI_FAKE]},env:{ELECTRON_RUN_AS_NODE:'1'}})]:bundledProviders(),
-  ...localData?{dataDir:path.join(localData,'edukors-ai')}:{},sessionsFile:sessionsPath,resume:loadJson(sessionsPath),
+  // EDUKORS_AI_DATA_DIR (the library's own override) wins, so a development run can use an existing set of accounts.
+  ...localData&&!process.env.EDUKORS_AI_DATA_DIR?{dataDir:path.join(localData,'edukors-ai')}:{},sessionsFile:sessionsPath,resume:loadJson(sessionsPath),
   get words(){return aiWords[prefs?.language||'pt'];},
   emit:e=>{if(e.type==='limits'&&e.accountId){sessionLimits[e.accountId]=e.limits;void atomic(limitsPath,JSON.stringify(sessionLimits)).catch(()=>{});}win?.webContents.send('ai-event',e);}
 });
