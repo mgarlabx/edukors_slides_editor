@@ -44,13 +44,18 @@ img{max-width:100%;max-height:640px;object-fit:contain}[data-step]{transition:op
  const {zipSync,strToU8}=require('fflate'),dir=path.join(env.ESF_DATA_DIR,'templates','essencial');await fs.mkdir(dir,{recursive:true});
  await fs.writeFile(path.join(dir,'template.ESF'),zipSync(Object.fromEntries([['manifest.json',strToU8(JSON.stringify(manifest))],...Object.entries(files).map(([k,v])=>[k,strToU8(v)])])));
  await fs.writeFile(path.join(dir,'template.json'),JSON.stringify({title:'Essencial'}));}
+// Progress on stdout, so a run that stops shows where (the CI step has a time limit).
+const started=Date.now(),step=label=>console.log(`[e2e ${((Date.now()-started)/1000).toFixed(1)} s] ${label}`);
+step('launch');
 let app=await launch();
 try{
  const page=watch(await app.firstWindow());
  // Startup shows an empty workspace; New and Recent open as modals from the File menu or the toolbar.
+ step("Startup shows an empty workspace; New and Recent open as modals from t…");
  await page.locator('.empty-desk').waitFor();assert.equal(await page.locator('.modal,.tabs,.template-card').count(),0,'nothing but the empty workspace');assert.equal(await page.locator('.toolbar button').count(),4,'only the File section and Settings');assert.match(await page.locator('.statusbar .app-version').innerText(),/^v\d+\.\d+\.\d+$/,'version shown without a presentation');await shot(page,'00-empty.png');
  // Native menu: without a presentation, only what works on the empty workspace stays enabled.
  // Slides / slide master is a segmented control; the old toggle button is emulated by clicking the other view.
+ step("Native menu: without a presentation, only what works on the empty work…");
  const viewToggle=()=>({click:async()=>{const bar=page.locator('.toolbar'),master=bar.getByRole('tab',{name:'Slide mestre',exact:true});await(await master.getAttribute('aria-selected')==='true'?bar.getByRole('tab',{name:'Slides',exact:true}):master).click();}});
  const menuEnabled=()=>app.evaluate(({Menu})=>Object.fromEntries(Menu.getApplicationMenu().items.flatMap(m=>m.submenu.items.filter(x=>x.label).map(x=>[m.label+'/'+x.label,x.enabled]))));
  {const m=await menuEnabled();for(const k of ['Arquivo/Salvar','Arquivo/Fechar aba','Arquivo/Exportar…','Slides/Novo slide','Editar/Excluir','Inserir/Texto','Apresentação/Apresentar','Apresentação/Slide mestre','Visualizar/Assistente de IA'])assert.equal(m[k],false,k+' disabled');
@@ -79,11 +84,13 @@ try{
  assert.ok(toolbarBox.y<tabsBox.y,'toolbar above the tabs');
  await page.locator('.app-header .app-wordmark img.app-logo').waitFor();
  // The logo opens edukors.org in the browser.
+ step("The logo opens edukors.org in the browser.");
  await page.locator('.app-wordmark').click();{let text='';for(let i=0;i<40&&!text;i++){text=await fs.readFile(env.ESF_EXTERNAL_LOG,'utf8').catch(()=>'');if(!text)await page.waitForTimeout(50);}assert.equal(text,'https://edukors.org\n');}assert.equal(await page.locator('.provider-badge').count(),0);
  await page.frameLocator('.slide-canvas iframe').locator('h1').filter({hasText:'Apresentação de teste'}).waitFor();
  await page.getByRole('button',{name:'Novo slide',exact:true}).click();await page.locator('.layout-pick .template-card').first().waitFor();await shot(page,'01a-layouts.png');await page.locator('.layout-pick .template-card').filter({hasText:'Cartões'}).dblclick();
  await page.waitForFunction(()=>document.querySelectorAll('.slide-item').length===2);
  // Slide master view: bases and layouts have separate tabs; the canvas edits the selected item.
+ step("Slide master view: bases and layouts have separate tabs; the canvas ed…");
  {const toggle=viewToggle(),c=page.frameLocator('.slide-canvas iframe'),ready=()=>c.locator('html[data-esf-ready=true]').waitFor();
   // It opens on the layout of the current slide.
   await toggle.click();await page.locator('.master-rail .layout-item.selected button[aria-label="Cartões"]').waitFor();
@@ -112,6 +119,7 @@ try{
   await page.waitForFunction(()=>document.querySelectorAll('.slide-item').length===2);await ready();assert.equal(await c.locator('.esf-master').count(),0,'undo restores the master');
   await page.locator('.slide-item').nth(1).locator('button').click();}
  // Layout objects are locked on the slides, like the master's, and a change to the layout reaches every slide that uses it.
+ step("Layout objects are locked on the slides, like the master's, and a chan…");
  {const c=page.frameLocator('.slide-canvas iframe'),toggle=viewToggle(),ready=()=>c.locator('html[data-esf-ready=true]').waitFor();
   await page.locator('.slide-item').first().locator('button').click();await toggle.click();await page.locator('.master-rail .layout-item.selected button[aria-label="Capa"]').waitFor();await c.locator('h1').waitFor();await ready();
   await page.getByRole('button',{name:'Inserir texto',exact:true}).click();await c.locator('[data-manual=text][contenteditable]').waitFor();await page.keyboard.type('Faixa do layout');await page.keyboard.press('Escape');
@@ -124,6 +132,7 @@ try{
   assert.equal(await c.locator('[data-manual]').count(),0,'undo removes it from the layout and the slides');
   await page.locator('.slide-item').nth(1).locator('button').click();await ready();}
  // Masters and layouts are added, renamed in place and deleted in the slide master view; at least one of each remains.
+ step("Masters and layouts are added, renamed in place and deleted in the sli…");
  {const toggle=viewToggle(),rail=page.locator('.master-rail');
   await toggle.click();await rail.locator('.layout-item.selected button[aria-label="Cartões"]').waitFor();
   await page.getByRole('button',{name:'Novo layout',exact:true}).click();await rail.locator('.layout-item.selected button[aria-label="Layout 4"]').waitFor();
@@ -151,9 +160,11 @@ try{
   await page.getByRole('button',{name:'Desfazer',exact:true}).click();await page.locator('.statusbar .layout-name').filter({hasText:'Cartões'}).waitFor();
   await c.locator('html[data-esf-ready=true]').waitFor();}
  // Direct editing on the canvas: a click puts the caret in the text, Esc commits it (one undo step); there is no content form.
+ step("Direct editing on the canvas: a click puts the caret in the text, Esc …");
  const canvas=page.frameLocator('.slide-canvas iframe'),readyCanvas=()=>canvas.locator('html[data-esf-ready=true]').waitFor(),inner=loc=>loc.evaluate(el=>el.innerHTML.replace(/ data-esf-[\w-]+="[^"]*"/g,'')),caretEnd=el=>{const r=document.createRange();r.selectNodeContents(el);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);};
  assert.equal(await page.getByRole('button',{name:'Editar conteúdo'}).count(),0,'no content form');
  // A click before the new frame is ready lands on the iframe element of the window instead.
+ step("A click before the new frame is ready lands on the iframe element of t…");
  await readyCanvas();await canvas.locator('h2').first().click();await canvas.locator('h2[contenteditable]').waitFor();
  await canvas.locator('h2').first().evaluate(el=>getSelection().selectAllChildren(el));await page.keyboard.type('Aprender fazendo');await page.keyboard.press('Escape');
  await canvas.locator('h2').filter({hasText:'Aprender fazendo'}).waitFor();
@@ -161,12 +172,14 @@ try{
  if(!process.argv.includes('--without-legacy-canvas')){
  // Inside a card (a visible box) the first click selects the card, the second goes down to the text and edits it.
  // Enter is a new line (<br>); the edited text keeps the layout field.
+ step("Inside a card (a visible box) the first click selects the card, the se…");
  await canvas.locator('[data-field="body0"]').click();await canvas.locator('[data-esf-ui=sel]:visible').waitFor();assert.equal(await canvas.locator('[contenteditable]').count(),0,'card selected, not edited');
  await canvas.locator('[data-field="body0"]').click();await canvas.locator('[data-field="body0"][contenteditable]').waitFor();await canvas.locator('[data-field="body0"]').evaluate(el=>getSelection().selectAllChildren(el));
  await page.keyboard.type('Linha X');await page.keyboard.press('Enter');await page.keyboard.type('Linha Y');await page.keyboard.press('Escape');
  await canvas.locator('[data-field="body0"]').filter({hasText:'Linha Y'}).waitFor();
  assert.equal(await inner(canvas.locator('[data-field="body0"]')),'Linha X<br>Linha Y');
  // Dragging moves an element with the CSS translate property, in slide units; Delete removes the selected element.
+ step("Dragging moves an element with the CSS translate property, in slide un…");
  {await readyCanvas();await page.keyboard.down('Alt');const box=await canvas.locator('h2').first().boundingBox();await page.mouse.move(box.x+20,box.y+2);await page.mouse.down();await page.mouse.move(box.x+120,box.y+2+60,{steps:6});await page.mouse.up();
   await page.keyboard.up('Alt');await canvas.locator('h2[style*="translate"]').waitFor();
   const moved=await canvas.locator('h2').first().boundingBox();assert.ok(Math.abs(moved.x-box.x-100)<3&&Math.abs(moved.y-box.y-60)<3,`moved ${box.x},${box.y} → ${moved.x},${moved.y}`);}
@@ -176,12 +189,14 @@ try{
  for(let i=0;i<3;i++)await page.getByRole('button',{name:'Desfazer',exact:true}).click();
  await canvas.locator('h2:not([style])').filter({hasText:'Aprender fazendo'}).waitFor();await canvas.locator('[data-field="body0"]').filter({hasText:'Adicione uma breve explicação.'}).waitFor();
  // Selection band (press on empty space): objects fully inside are selected; dragging one moves them all, as one undo step.
+ step("Selection band (press on empty space): objects fully inside are select…");
  {await readyCanvas();const cards=await canvas.locator('.cards').boundingBox();await page.mouse.move(cards.x-8,cards.y+cards.height+12);await page.mouse.down();await page.mouse.move(cards.x+cards.width+8,cards.y-8,{steps:6});await page.mouse.up();
   assert.equal(await canvas.locator('[data-esf-ui=sel]:visible').count(),3,'band selects the three cards');await shot(page,'02b-multi.png');assert.equal(await canvas.locator('[contenteditable]').count(),0);
   const card=await canvas.locator('.card').nth(1).boundingBox();await page.mouse.move(card.x+card.width/2,card.y+12);await page.mouse.down();await page.mouse.move(card.x+card.width/2+40,card.y+52,{steps:5});await page.mouse.up();
   await canvas.locator('.card[style*="translate"]').nth(2).waitFor();assert.equal(await canvas.locator('h2[style]').count(),0,'title not moved');assert.equal(await canvas.locator('[data-esf-ui=sel]:visible').count(),3,'selection kept after the change');
   await page.getByRole('button',{name:'Desfazer',exact:true}).click();await canvas.locator('.card').first().waitFor();assert.equal(await canvas.locator('.card[style]').count(),0);}
  // Gesture regressions: cancellation restores the DOM, Shift locks an axis, Alt bypasses snapping.
+ step("Gesture regressions: cancellation restores the DOM, Shift locks an axi…");
  {await page.keyboard.press('Escape');await canvas.locator('.card').first().click({position:{x:12,y:12}});
   const card=canvas.locator('.card').first(),box=await card.boundingBox(),start=await card.getAttribute('style');
   await page.mouse.move(box.x+12,box.y+12);await page.mouse.down();await page.mouse.move(box.x+82,box.y+65,{steps:5});
@@ -205,17 +220,20 @@ try{
   await page.getByRole('button',{name:'Desfazer',exact:true}).click();await canvas.locator('.card:not([style])').nth(2).waitFor();
  }
  // Shift+click adds objects; Delete removes the whole selection.
+ step("Shift+click adds objects; Delete removes the whole selection.");
  await canvas.locator('.card').nth(0).click({position:{x:12,y:12}});await canvas.locator('.card').nth(2).click({position:{x:12,y:12},modifiers:['Shift']});
  assert.equal(await canvas.locator('[data-esf-ui=sel]:visible').count(),2);await page.keyboard.press('Delete');
  await canvas.locator('.card').nth(1).waitFor({state:'detached'});assert.equal(await canvas.locator('.card').count(),1);
  await page.getByRole('button',{name:'Desfazer',exact:true}).click();await canvas.locator('.card').nth(2).waitFor();
  // Slide without data-field (as written by the AI): each visible text block is editable; <br> stays a new line and inline formatting (colors, bold) is kept.
+ step("Slide without data-field (as written by the AI): each visible text blo…");
  await app.evaluate(({clipboard},slide)=>clipboard.writeText(JSON.stringify({format:'esf-slides',deckId:'other',slides:[slide],assets:[],masterCss:'',masterHtml:''})),{id:'raw',title:'Sem marcação',layoutId:'blank',html:'<section class="slide"><h2>Sem   marcação</h2><p>Linha A<br>Linha <b>B</b> <span style="color: rgb(204, 0, 0);">vermelha</span></p></section>',css:'',script:'',staticHtml:'',notes:''});
  await page.locator('.rail-tools').getByRole('button',{name:'Colar',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.slide-item').length===3);
  await readyCanvas();await canvas.locator('p').filter({hasText:'Linha A'}).click();await canvas.locator('p[contenteditable]').evaluate(caretEnd);await page.keyboard.type(' fim');await page.keyboard.press('Escape');
  await canvas.locator('p').filter({hasText:'fim'}).waitFor();
  {const html=await inner(canvas.locator('p'));assert.match(html,/^Linha A<br>Linha <b>B<\/b> <span style="color: rgb\(204, 0, 0\);">vermelha( fim)?<\/span>( fim)?$/,html);assert.ok(!/contenteditable/.test(html),html);}
  // Image without a layout slot: free on the current slide, selected, removable with Delete; Delete only removes slides when the rail has focus.
+ step("Image without a layout slot: free on the current slide, selected, remo…");
  {const image=path.join(root,'imagem.png');await fs.writeFile(image,tinyPng);await app.evaluate(({dialog},file)=>{globalThis.__open=dialog.showOpenDialog;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},image);
   await page.getByRole('button',{name:'Colar imagem',exact:true}).click();await canvas.locator('img[style*="absolute"]').waitFor({state:'attached'});
   assert.equal(await page.locator('.slide-item').count(),3,'no new slide for the image');await app.evaluate(({dialog})=>{dialog.showOpenDialog=globalThis.__open;});
@@ -238,6 +256,7 @@ try{
  await page.locator('.slide-item button').nth(2).click();await page.locator('.rail-tools').getByRole('button',{name:'Excluir',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.slide-item').length===2);
  await page.locator('.slide-item button').nth(1).click();await canvas.locator('h2').filter({hasText:'Aprender fazendo'}).waitFor();
  // Images nested in styled/data-field wrappers, inline SVG and CSS backgrounds all expose resize handles on the first click.
+ step("Images nested in styled/data-field wrappers, inline SVG and CSS backgr…");
  {const data='data:image/png;base64,'+tinyPng.toString('base64');
   const html=`<section class="slide"><div data-field="picture" style="position:absolute;left:100px;top:200px;background:#ddd;padding:20px"><img id="nested-image" data-field="photo" src="${data}" style="width:240px;height:160px"></div><svg id="vector-image" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:500px;top:200px;width:240px;height:160px" viewBox="0 0 240 160"><rect width="240" height="160" fill="blue"/></svg><div id="background-image" style="position:absolute;left:900px;top:200px;width:240px;height:160px;background-image:url('${data}');background-size:cover"></div><p id="text-box" style="position:absolute;left:100px;top:520px;width:600px;font-size:32px;margin:0">Uma caixa de texto que quebra em linhas</p></section>`;
   await app.evaluate(({clipboard},slide)=>clipboard.writeText(JSON.stringify({format:'esf-slides',deckId:'other',slides:[slide],assets:[],masterCss:'',masterHtml:''})),{id:'resize-fixture',title:'Resize fixtures',layoutId:'blank',html,css:'div[data-esf-ui]{display:none!important}',script:'',staticHtml:'',notes:''});
@@ -299,21 +318,25 @@ try{
  assert.equal(await page.getByText('Reabrir apresentações',{exact:false}).count(),0,'no reopen option');
  await page.getByRole('button',{name:'Assistente de IA',exact:true}).click();
  // Accounts come from the AI library (here its fake provider); a new account signs in at once and, being the first, is the one in use.
+ step("Accounts come from the AI library (here its fake provider); a new acco…");
  await page.getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:'Fake AI',exact:true}).click();
  await page.getByLabel('Nome da conta').fill('Conta de teste');await page.getByRole('button',{name:'Criar conta',exact:true}).click();
  await page.locator('.account-card .provider-status').filter({hasText:/^Conectada/}).waitFor({timeout:30000});await shot(page,'03b-accounts.png');
  assert.notEqual(await page.locator('.active-account select').inputValue(),'','the first account becomes the one in use');
  assert.equal(await page.locator('.modal.sheet').getByRole('button',{name:'Templates',exact:true}).count(),0,'templates live in the New gallery');
  // Advanced always holds the instructions, the user's MCP servers and the skills, in this order.
+ step("Advanced always holds the instructions, the user's MCP servers and the…");
  await page.locator('.assistant-advanced summary').click();
  assert.deepEqual(await page.locator('.assistant-advanced h3').allInnerTexts(),['Instruções para o agente','Servidores MCP','Skills']);
  await page.getByLabel('Servidores MCP',{exact:true}).fill('{oops');await page.locator('.mcp-problems').waitFor();await page.getByLabel('Servidores MCP',{exact:true}).fill('');await page.locator('.mcp-problems').waitFor({state:'detached'});
  await page.getByText('Nenhuma skill na pasta.').waitFor();await page.getByRole('button',{name:'Abrir pasta de skills'}).click();
  await page.getByLabel('Global',{exact:true}).fill('Use frases curtas.');
  // The presentation's own prompt sits in a second tab and goes into the package (ai/system-prompt.md), not into templates.
+ step("The presentation's own prompt sits in a second tab and goes into the p…");
  await page.getByRole('tab',{name:'Esta apresentação'}).click();await page.getByLabel('Esta apresentação',{exact:true}).fill('Palestra para professores.');assert.equal(await page.getByText('O agente trabalha dentro',{exact:false}).count(),0);
  assert.equal(await page.locator('.toolbar').count(),1,'settings open as a modal over the editor');await page.locator('.modal.sheet').getByRole('button',{name:'Fechar',exact:true}).click();await page.locator('.modal.sheet').waitFor({state:'detached'});
  // Templates: saved from the File menu, renamed and deleted in the New gallery.
+ step("Templates: saved from the File menu, renamed and deleted in the New ga…");
  await app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Arquivo').submenu.items.find(x=>x.label==='Salvar como template…').click();});
  {const input=page.getByLabel('Nome do template');assert.equal(await input.inputValue(),'Apresentacao-de-teste');await input.fill('Meu modelo');await input.press('Enter');}await page.locator('.toast').filter({hasText:'Template salvo'}).waitFor();
  const templateDirs=async()=>(await fs.readdir(path.join(env.ESF_DATA_DIR,'templates'))).filter(x=>!x.startsWith('.')&&x!=='essencial');
@@ -340,17 +363,20 @@ try{
  const at=(slide,step)=>player.waitForFunction(([a,b])=>document.body.dataset.slide===a&&(!b||document.body.dataset.step===b),[slide,step]);
  await at('1/2');assert.equal(await player.locator('html').getAttribute('lang'),'en');assert.match(await player.locator('#credit').innerText(),/^Made with Edukors Slides Editor/);assert.equal(await player.locator('#motion-enable').innerText(),'Enable animations');
  // Hot corners are the corners of the slide stage, as in the reference player.
+ step("Hot corners are the corners of the slide stage, as in the reference pl…");
  const corner=async top=>{const b=await player.locator('#stage').boundingBox();await player.mouse.move(b.x+6,top?b.y+6:b.y+b.height-6);};
  await player.mouse.click(1000,380);await at('2/2','0/3');                 // click on the right half of the slide
  await player.keyboard.press('ArrowRight');await at('2/2','1/3');
  await player.keyboard.press('ArrowLeft');await player.keyboard.press('ArrowLeft');await at('1/2');
  await player.keyboard.press('End');await at('2/2');
  // Bottom dock opens from the hot corner; hovering a dot shows a real preview of that slide.
+ step("Bottom dock opens from the hot corner; hovering a dot shows a real pre…");
  await corner(false);await player.locator('#track button').first().hover();
  await player.locator('#preview.on .frame iframe:not([hidden])').waitFor();
  await player.frameLocator('#preview .frame iframe:not([hidden])').locator('h1').filter({hasText:'Apresentação de teste'}).waitFor();
  await shot(player,'05a-player-preview.png');
  // Pen draws on the ink layer; the whiteboard keeps objects and stores the session in this browser.
+ step("Pen draws on the ink layer; the whiteboard keeps objects and stores th…");
  await player.mouse.move(640,380);await player.keyboard.press('p');
  assert.equal(await player.evaluate(()=>document.documentElement.dataset.tool),'pen');
  await player.mouse.move(500,300);await player.mouse.down();await player.mouse.move(700,420,{steps:8});await player.mouse.up();
@@ -359,12 +385,14 @@ try{
  await player.mouse.move(400,300);await player.mouse.down();await player.mouse.move(600,350,{steps:6});await player.mouse.up();
  await player.waitForFunction(()=>{try{return Object.keys(localStorage).filter(k=>k.startsWith('esf-session:')).some(k=>JSON.parse(localStorage.getItem(k)).whiteboard.items.length===1);}catch{return false;}});
  // One infinite board: scrolling moves the view, and what is drawn next lands further down the board.
+ step("One infinite board: scrolling moves the view, and what is drawn next l…");
  await player.mouse.move(640,380);await player.mouse.wheel(0,600);
  await player.mouse.move(400,300);await player.mouse.down();await player.mouse.move(600,350,{steps:6});await player.mouse.up();
  await player.waitForFunction(()=>{try{return Object.keys(localStorage).filter(k=>k.startsWith('esf-session:')).some(k=>{const w=JSON.parse(localStorage.getItem(k)).whiteboard;return w.y>0&&w.items.length===2&&w.items[1].pts[0][1]>w.items[0].pts[0][1]+w.y-1;});}catch{return false;}});
  await shot(player,'05b-player-board.png');
  await player.keyboard.press('w');
  // Presenter panel opens in another window with every slide and the current one marked.
+ step("Presenter panel opens in another window with every slide and the curre…");
  const panelOpened=app.waitForEvent('window');
  await corner(true);await player.locator('#presenter-btn').click();
  const panel=await panelOpened;await panel.locator('.overview-card').nth(1).waitFor();
@@ -388,6 +416,7 @@ try{
  await page.locator('.toast').filter({hasText:'Apresentacao-de-teste.pptx'}).waitFor({timeout:30000});
  await fs.access(path.join(projectDir,'Apresentacao-de-teste.pptx'));await page.locator('.modal').waitFor({state:'detached'});
  // Native menu clipboard: copy slide 2, paste after it, then undo the paste.
+ step("Native menu clipboard: copy slide 2, paste after it, then undo the pas…");
  const menuClick=(top,item)=>app.evaluate(({Menu},[top,item])=>{Menu.getApplicationMenu().items.find(x=>x.label===top).submenu.items.find(x=>x.label===item).click();},[top,item]);
  await page.locator('.slide-item button').nth(1).click();
  await menuClick('Editar','Copiar');await menuClick('Editar','Colar');
@@ -396,6 +425,7 @@ try{
  assert.match(await page.locator('.slide-item').nth(2).locator('button').getAttribute('aria-label'),/: Aprender fazendo$/);assert.equal(await page.locator('.slide-caption').count(),0,'no caption under thumbnails');
  await menuClick('Editar','Desfazer');await page.waitForFunction(()=>document.querySelectorAll('.slide-item').length===2);
  // Reordering keeps both thumbnails rendered.
+ step("Reordering keeps both thumbnails rendered.");
  await page.locator('.slide-item button').first().click();await page.getByRole('button',{name:'Mover para baixo'}).click();
  await page.locator('.slide-item').first().locator('button[aria-label$=": Aprender fazendo"]').waitFor();
  await page.frameLocator('.slide-item:nth-child(1) iframe').locator('h2').filter({hasText:'Aprender fazendo'}).waitFor();
@@ -403,11 +433,13 @@ try{
  await page.getByRole('button',{name:'Mover para cima'}).click();
  await page.locator('.slide-item').first().locator('button[aria-label$=": Apresentação de teste"]').waitFor();
  // In-app presentation: navigation only, no annotation tools.
+ step("In-app presentation: navigation only, no annotation tools.");
  const presentOpened=app.waitForEvent('window');await page.getByRole('button',{name:'Apresentar',exact:true}).click();
  const present=await presentOpened;await present.locator('#track button').first().waitFor({state:'attached'});
  assert.equal(await present.locator('#top-bar,#wb,#ink').count(),0);await present.close();
  // AI flow, against the library's fake provider: attach, pick a model, a change the app rejects, the web tools, a valid change
  // applied when the turn ends, a question, sessions, undo. The fake reads its command from the request's last paragraph.
+ step("AI flow, against the library's fake provider: attach, pick a model, a …");
  {await page.locator('.slide-item button').first().click();
  const manifest=JSON.parse(await zipText(esf,'manifest.json')),cover=manifest.slides[0].id,coverHtml=await zipText(esf,manifest.slides[0].html);
  const ask=async(text,wait)=>{const box=page.getByPlaceholder('Peça uma alteração…');await box.fill(text);await box.press('Enter');await page.locator('.chat-list').getByText(wait,{exact:false}).last().waitFor({timeout:40000});await page.locator('.composer .send').waitFor();};
@@ -416,20 +448,24 @@ try{
  await page.getByRole('button',{name:'Anexar arquivo'}).click();await page.locator('.context-chip.attachment').filter({hasText:'anexo.png'}).waitFor();
  await page.locator('.model-button').click();await page.getByRole('radio',{name:'Fake Deep'}).click();await page.locator('.model-pop input[type=range]').fill('3');await page.locator('.model-button').filter({hasText:'Fake Deep · Alto'}).waitFor();await shot(page,'05-model.png');await page.keyboard.press('Escape');await page.locator('.model-pop').waitFor({state:'detached'});
  // A slide script that never finishes is rejected by the app's check; the agent is told, and nothing changes.
+ step("A slide script that never finishes is rejected by the app's check; the…");
  await ask('tool apply_changes '+JSON.stringify({slideUpdates:[{id:cover,script:'while(true){}'}]}),'Not applied');
  for(const text of ['Iniciando assistente…','Sessão iniciada · Fake AI','Validando e renderizando os slides alterados…','A resposta não passou na validação; pedindo uma correção…'])await page.locator('.activity').filter({hasText:text}).first().waitFor();
  assert.equal(await page.locator('.context-chip.attachment').count(),0,'attachments clear after sending');
  await page.locator('.slide-item button[aria-label$=": Apresentação de teste"]').waitFor();
  // The web tools save into the presentation folder only.
+ step("The web tools save into the presentation folder only.");
  await ask('tool download '+JSON.stringify({url:origin+'/logo.png',path:'media/logo.png'}),'Saved media/logo.png');
  await ask('tool screenshot '+JSON.stringify({url:origin+'/pagina',path:'media/pagina',width:800,height:450,delay:0}),'Saved media/pagina.png');
  await ask('tool download '+JSON.stringify({url:origin+'/logo.png',path:'slides/x.png'}),'belongs to the app');
  // A valid change: a new title and the downloaded image as an asset, applied as one step when the turn ends.
+ step("A valid change: a new title and the downloaded image as an asset, appl…");
  await ask('tool apply_changes '+JSON.stringify({message:'Feito pela IA',slideUpdates:[{id:cover,title:'Título pela IA',html:coverHtml.replace(/<h1([^>]*)>[^<]*<\/h1>/,'<h1$1>Título pela IA</h1><img src="asset:asset-mock-logo" alt="">')}],assets:[{id:'asset-mock-logo',path:'media/logo.png'}]}),'Accepted');
  await page.locator('.slide-item button[aria-label$=": Título pela IA"]').waitFor();await page.frameLocator('.slide-canvas iframe').locator('img').waitFor({state:'attached'});
  assert.equal(await page.locator('.composer-account select').count(),1,'account picker is also available in the assistant');
  await page.locator('.usage-tokens').waitFor();assert.equal(await page.locator('.usage').filter({hasText:'Consumo desta conversa'}).count(),0);
  // The agent asks during its turn; an option answers it and the turn goes on.
+ step("The agent asks during its turn; an option answers it and the turn goes…");
  const box=page.getByPlaceholder('Peça uma alteração…');await box.fill('ask');await box.press('Enter');
  await page.locator('.questions legend').filter({hasText:'Which color?'}).waitFor({timeout:40000});
  await page.locator('.question-options button').filter({hasText:'blue'}).click();await shot(page,'06a-questions.png');await page.getByRole('button',{name:'Enviar respostas'}).click();
@@ -450,15 +486,18 @@ try{
  await page.locator('button[aria-label$=": Apresentação de teste"]').waitFor();
  await page.getByRole('button',{name:'Desfazer',exact:false}).first().waitFor();}
  // The conversation is written (and marks the presentation modified) shortly after the chat changes.
+ step("The conversation is written (and marks the presentation modified) shor…");
  await page.locator('.statusbar .dirty').waitFor();await page.waitForTimeout(1000);
  await page.getByRole('button',{name:'Salvar',exact:true}).click();
  await page.locator('.statusbar .saved').waitFor();
  // Only the presentation and the conversations are saved inside the package (not the assistant's own files nor exports); no project folder appears.
+ step("Only the presentation and the conversations are saved inside the packa…");
  {const files=await unzip(esf),names=Object.keys(files);assert.ok(names.includes('.edukors/ai/conversations.json'),'conversations in the package');for(const n of ['media/logo.png','media/pagina.png','research/fontes.md','exports/Apresentacao-de-teste.pptx'])assert.ok(!names.includes(n),n+' left out of the package');
   assert.ok(!names.some(n=>/^\.edukors\/(?!ai\/conversations\.json$)/.test(n)),'no internal state in the package');
   assert.deepEqual((await fs.readdir(projectDir)).sort(),['Apresentacao-de-teste.esf','Apresentacao-de-teste.html','Apresentacao-de-teste.pdf','Apresentacao-de-teste.pptx']);}
  // Inserted text: the format bar keeps the canvas selection (its menus never take the focus) and colors only the selected word.
  // Selecting the box never moves the canvas, so a press-and-drag on a new selection moves it. Objects copy, paste and cut.
+ step("Inserted text: the format bar keeps the canvas selection (its menus ne…");
  {assert.equal(typeof await page.evaluate(()=>window.api.invoke('clipboardText')),'string','clipboard text reachable from the UI');
   const canvas=page.frameLocator('.slide-canvas iframe'),box=canvas.locator('[data-manual=text]'),menu=c=>app.evaluate(({BrowserWindow},c)=>BrowserWindow.getAllWindows()[0].webContents.send('command',c),c);
   const bar=await page.locator('.manual-toolbar').boundingBox();
@@ -505,6 +544,7 @@ try{
 }catch(e){for(const [i,w] of app.windows().entries())await w.screenshot({path:path.join(root,`failure-${i}.png`)}).catch(()=>{});throw e;}
 finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
 // Opening the .ESF by path (as Finder does) must open it, with its conversation, from the package alone.
+step('reopen the package by path');
 app=await launch(esf);
 try{
  const page=watch(await app.firstWindow());

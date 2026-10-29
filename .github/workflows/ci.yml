@@ -29,6 +29,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Electron downloads its binary on first use, with no time limit; here it gets its own short limit and one
+      # more try, so a slow download is not mistaken for a stuck test.
+      - name: Electron binary
+        id: electron
+        timeout-minutes: 4
+        continue-on-error: true
+        run: node -e "require('electron')"
+      - name: Electron binary (second try)
+        if: steps.electron.outcome == 'failure'
+        timeout-minutes: 4
+        run: node -e "require('electron')"
       - name: Linux display and Electron sandbox
         if: runner.os == 'Linux'
         run: |
@@ -45,6 +56,8 @@ jobs:
       - name: Build
         run: node scripts/build.mjs --no-bump
       - name: End-to-end
+        # About 1 minute when it works; a run that stops shows its last step in the log.
+        timeout-minutes: 10
         shell: bash
         run: |
           # Hidden windows never paint on the Linux and Windows runners (screenshots time out); nobody sees these displays.
