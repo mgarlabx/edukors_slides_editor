@@ -24,7 +24,7 @@ An exported presentation is a single file that makes **no network requests**, wi
 
 - The presenter types a key once; the server returns a 12-hour session, kept in that browser. The key itself is never stored.
 - Students answer on their phones through the server's page. Each phone gets a random identifier so it can answer only once per room; no name, e-mail or account is asked for.
-- The Edukors server (`https://edukors.org/poll`) deletes rooms and answers after 30 days. Servers run by others with the code in [`server/poll/`](server/poll/README.md) follow their own operators' policies.
+- There is no shared Edukors server: each presenter uses a server they or their institution host with the code in [`server/poll/`](server/poll/README.md), which deletes rooms and answers after 30 days by default. Each server follows its own operator's policies.
 
 ## Contact
 

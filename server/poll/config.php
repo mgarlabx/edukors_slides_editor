@@ -7,7 +7,7 @@
  * first file found wins:
  *
  * 1. the path in the EDUKORS_POLL_CONFIG environment variable;
- * 2. private/poll.config.php beside the web root (edukors.org layout);
+ * 2. private/poll.config.php beside the web root;
  * 3. private/poll.config.php beside this folder;
  * 4. poll.config.php inside this folder (only for hosts that offer no place
  *    outside the web root; PHP never prints it, but keep backups out of here).
