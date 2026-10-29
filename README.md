@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-windows.exe"><img src="https://img.shields.io/badge/Download-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
+  <a href="https://apps.microsoft.com/detail/9PHLLNHZW4Z2"><img src="https://img.shields.io/badge/Download-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows"></a>
   <a href="https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac"></a>
   <a href="https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.AppImage"><img src="https://img.shields.io/badge/Download-Linux-E95420?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux"></a>
 </p>
@@ -105,18 +105,19 @@ A presentation is a set of small web pages, one per slide, sharing a common look
 
 ## Download
 
-Choose the version for your system. The macOS version is signed and notarized by Apple.
+Choose the version for your system. The apps are notarized and approved: the macOS version is notarized by Apple, and the Windows version is approved by Microsoft and distributed through the Microsoft Store.
 
 | System | Download | Requirements |
 | --- | --- | --- |
-| **Windows** | [Edukors-Slides-Editor-windows.exe](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-windows.exe) | Windows 10 or 11, 64-bit (x64) |
+| **Windows** | [Microsoft Store](https://apps.microsoft.com/detail/9PHLLNHZW4Z2) | Windows 10 or 11, 64-bit (x64) |
+| | [Edukors-Slides-Editor-windows.exe](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-windows.exe) | The same, for schools that block the Microsoft Store |
 | **macOS** | [Edukors-Slides-Editor-mac.dmg](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-mac.dmg) | macOS 13 or later, Apple Silicon or Intel |
 | **Linux** | [Edukors-Slides-Editor-linux.AppImage](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.AppImage) | 64-bit (x64) |
 | | [Edukors-Slides-Editor-linux.deb](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.deb) | Optional, for Debian, Ubuntu, Mint and their relatives |
 
 The links always give the latest version; every version is on the [releases](https://github.com/mgarlabx/edukors_slides_editor/releases) page, and the [CHANGELOG](CHANGELOG.md) says what changed in each. Each release lists the SHA-256 checksum of every file (`SHA256SUMS.txt`) and carries a GitHub build provenance attestation (`gh attestation verify <file> -R mgarlabx/edukors_slides_editor`).
 
-**On Windows**, download the `.exe` installer. It is not code-signed yet, so Windows may show a warning: in the browser, keep the file; on the **Windows protected your PC** warning, click **More info** and then **Run anyway**. A Microsoft Store version is on the way.
+**On Windows**, it is available in the Microsoft Store: open the editor's page in the store and click **Install**. Does your school block the Microsoft Store? Download the `.exe` installer. Outside the store, Windows may still show security warnings, even though the app is approved: in the browser, keep the file; on the **Windows protected your PC** warning, click **More info** and then **Run anyway**.
 
 **On macOS**, a `.dmg` file, notarized by Apple. Open the file and drag the app into the **Applications** folder.
 
@@ -151,7 +152,7 @@ node scripts/start.mjs             # opens the editor (data in .local-data/)
 
 ## Project status
 
-The editor is young and evolving. It runs on macOS (universal: Apple Silicon and Intel), signed and notarized by Apple, on Windows (x64; the installer is not code-signed yet) and on Linux (x64).
+The editor is young and evolving. It runs on macOS (universal: Apple Silicon and Intel), signed and notarized by Apple, on Windows (x64), signed through the Microsoft Store (the installer on GitHub is not signed) and on Linux (x64).
 
 Known limitations:
 
