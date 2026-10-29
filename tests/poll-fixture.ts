@@ -6,5 +6,5 @@ deck.slides.push(newSlide(deck.layouts[0]),newSlide(deck.layouts[0]),newSlide(de
 deck.slides[1].poll={version:1,provider:'edukors',type:'tag',prompt:'Qual palavra representa esta experiência?'};
 deck.slides[2].poll={version:1,provider:'edukors',type:'post',prompt:'O que você levaria desta aula para sua prática?'};
 deck.slides[3].html='<section class="slide"><h1>Fim da atividade</h1></section>';
-export const html=playerDocument(deck,{lang:'pt',pollServer:'https://edukors.org/poll'});
+export const html=playerDocument(deck,{lang:'pt',pollServer:'https://poll.example.org'});
 export const htmlFor=(pollServer:string)=>playerDocument(deck,{lang:'pt',pollServer});

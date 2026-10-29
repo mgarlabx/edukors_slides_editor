@@ -11,7 +11,7 @@ import {applySlideChanges} from '../src/main/ai';
 import {qrRuntimeSource,qrSvg} from '../src/shared/qr';
 
 const quiz:PollConfig={version:1,provider:'edukors',type:'quiz',prompt:'Qual opção?',options:['Primeira','Segunda','Terceira']};
-const server='https://edukors.org/poll',endpoint=pollEndpoint(server),KEY='EDK-TEST-KEY1-2345';
+const server='https://poll.example.org',endpoint=pollEndpoint(server),KEY='EDK-TEST-KEY1-2345';
 // The service contract of poll/q.php: key → 12-hour token, rooms owned by the token's presenter.
 function service(){
   const calls:any[]=[],rooms=new Map<string,any>(),tokens=new Set<string>();let fail='',delay:Promise<void>|undefined,serial=0,link=(room:string)=>`${server}/r/?room=${room}`;
@@ -50,7 +50,7 @@ test('poll config is optional, bounded, persistent and independent of runtime se
   const html=playerDocument(d,{pollServer:server});assert.ok(html.includes('connect-src '+endpoint+';'));assert.ok(!html.includes('solvertank'));assert.ok(html.includes('id="poll-key"'));
   assert.ok(slideDocument(d,d.slides[0]).includes("connect-src 'none'"));assert.ok(slideDocument(d,d.slides[0],true).includes('poll-static'));
   const plain=newDeck('Offline');assert.ok(playerDocument(plain).includes("connect-src 'none'"));
-  assert.equal(Function('return '+qrRuntimeSource())()('https://edukors.org/poll/r/?room=ABC234'),qrSvg('https://edukors.org/poll/r/?room=ABC234'));
+  assert.equal(Function('return '+qrRuntimeSource())()('https://poll.example.org/r/?room=ABC234'),qrSvg('https://poll.example.org/r/?room=ABC234'));
 });
 test('self-hosted servers: addresses are normalized and each export keeps its own',()=>{
   assert.equal(normalizePollServer('https://example.org/poll/'),'https://example.org/poll');
@@ -59,16 +59,16 @@ test('self-hosted servers: addresses are normalized and each export keeps its ow
   assert.equal(normalizePollServer('http://127.0.0.1/poll'),'http://127.0.0.1/poll');
   for(const bad of ['http://example.org/poll','ftp://example.org','https://user:pw@example.org/poll','https://example.org/a;b','https://example.org/a b','javascript:alert(1)','',null,42])assert.equal(normalizePollServer(bad),null,String(bad));
   const d=newDeck('Activity');d.slides[0].poll=quiz;
-  const own=playerDocument(d,{pollServer:'https://school.example/poll/'});assert.ok(own.includes('connect-src https://school.example/poll/q.php;'));assert.ok(own.includes('"pollEndpoint":"https://school.example/poll/q.php"'));assert.ok(!own.includes('edukors.org/poll/q.php'));
+  const own=playerDocument(d,{pollServer:'https://school.example/poll/'});assert.ok(own.includes('connect-src https://school.example/poll/q.php;'));assert.ok(own.includes('"pollEndpoint":"https://school.example/poll/q.php"'));assert.ok(!own.includes('poll.example.org/q.php'));
   // There is no default server: without one (or with an invalid one) the export never reaches the network.
-  for(const pollServer of [undefined,'','not a url']){const html=playerDocument(d,{pollServer});assert.ok(html.includes("connect-src 'none';"),String(pollServer));assert.ok(html.includes('"pollEndpoint":""'));assert.ok(!html.includes('edukors.org/poll/q.php'));}
+  for(const pollServer of [undefined,'','not a url']){const html=playerDocument(d,{pollServer});assert.ok(html.includes("connect-src 'none';"),String(pollServer));assert.ok(html.includes('"pollEndpoint":""'));assert.ok(!html.includes('poll.example.org/q.php'));}
 });
 test('presenter key: asked once, only the 12-hour token is kept, expired sessions ask again',async()=>{
   const api=service(),session=store([KEY]);let s:any;const c=controller(api,session,(_,v)=>s=v);c.activate(0);
   assert.equal(api.calls.length,0);await c.action(0,'start');
   assert.deepEqual(session.asked,['new']);assert.deepEqual(api.calls.map(x=>x.proc),['auth','prepare','open','count']);
   assert.ok(!JSON.stringify(session.saved).includes(KEY),'the key is never stored');assert.match(session.value.token,/^[0-9a-f]{64}$/);assert.ok(session.value.expiresAt>Date.now()+11*3600e3);
-  assert.ok(api.calls.slice(1).every(x=>x.token===session.value.token&&!('key' in x)));assert.equal(s.phase,'open');assert.match(c.link(0),/^https:\/\/edukors\.org\/poll\/r\/\?room=R\d{5}$/);
+  assert.ok(api.calls.slice(1).every(x=>x.token===session.value.token&&!('key' in x)));assert.equal(s.phase,'open');assert.match(c.link(0),/^https:\/\/poll\.example\.org\/r\/\?room=R\d{5}$/);
   await c.action(0,'stop');assert.equal(session.asked.length,1,'a live session is reused');
   // A token near its end is not used; the presenter signs in again.
   for(const expiresAt of [Date.now()-1,Date.now()+30000]){const again=store([KEY]);again.value={token:session.value.token,expiresAt};
@@ -127,10 +127,4 @@ test('invalid counts/results are rejected and tag/post preserve service semantic
 });
 test('overlapping commands cannot prepare twice or reset an open room',async()=>{
   const api=service();let release!:()=>void;api.delay(new Promise<void>(r=>release=r));const c=controller(api,store());c.activate(0);const first=c.action(0,'start');await c.action(0,'start');assert.equal(api.calls.length,1);assert.equal(await c.leave(0),false);release();await first;api.delay();await c.action(0,'start');assert.equal(api.calls.filter(x=>x.proc==='prepare').length,1);c.dispose();
-});
-// server/poll is the source of truth; the edukors.org site gets a copy from scripts/sync-poll-server.mjs.
-test('the deployed poll server copy matches server/poll',async t=>{
-  const {pollSource,pollDiff}=await import('../scripts/poll-files.mjs'),site='../_code/public_html/poll';
-  if(!await fs.stat(site).then(()=>true,()=>false)){t.skip('no site checkout beside this repository');return;}
-  assert.deepEqual(await pollDiff(pollSource,site),[],'run node scripts/sync-poll-server.mjs (never edit the site copy by hand)');
 });

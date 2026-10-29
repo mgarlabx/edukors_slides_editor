@@ -16,7 +16,7 @@ await fs.mkdir(env.ESF_DATA_DIR,{recursive:true});await fs.writeFile(path.join(e
 const packaged=process.argv.includes('--packaged')?path.resolve('release/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor'):undefined;
 const app=await electron.launch({executablePath:packaged||require('electron'),args:packaged?[]:['.'],env,timeout:30000});
 let testPage;
-const calls=[],rooms=new Map(),tokens=new Set(),errors=[],KEY='EDK-TEST-KEY1-2345',ENDPOINT='https://edukors.org/poll/q.php';let fail='',networkDown=false,foreignRequests=0,serial=0;
+const calls=[],rooms=new Map(),tokens=new Set(),errors=[],KEY='EDK-TEST-KEY1-2345',ENDPOINT='https://poll.example.org/q.php';let fail='',networkDown=false,foreignRequests=0,serial=0;
 try{
   const editor=await app.firstWindow();editor.setDefaultTimeout(15000);await editor.locator('.empty-desk').waitFor();
   await editor.getByRole('button',{name:'Nova apresentação',exact:true}).click();await editor.locator('.template-card').filter({hasText:'Blank presentation'}).dblclick();await editor.locator('.slide-canvas iframe').waitFor();
@@ -32,7 +32,7 @@ try{
   await editor.screenshot({path:path.join(root,'00-editor.png')});
   // In-app Present: the key dialog works and accepts a paste. Playwright's Meta+V bypasses the native menu, so this
   // does not exercise the menu accelerator that index.ts intercepts with before-input-event; that needs a manual check.
-  await editor.getByRole('button',{name:'Configurações',exact:true}).click();await editor.getByRole('button',{name:'Perguntas interativas',exact:true}).click();await editor.getByLabel('Servidor das perguntas interativas',{exact:true}).fill('https://edukors.org/poll');await editor.waitForTimeout(300);await editor.keyboard.press('Escape');
+  await editor.getByRole('button',{name:'Configurações',exact:true}).click();await editor.getByRole('button',{name:'Perguntas interativas',exact:true}).click();await editor.getByLabel('Servidor das perguntas interativas',{exact:true}).fill('https://poll.example.org');await editor.waitForTimeout(300);await editor.keyboard.press('Escape');
   {const shown=app.waitForEvent('window');await editor.getByRole('button',{name:'Apresentar',exact:true}).click();const present=await shown;present.setDefaultTimeout(15000);
     const start=present.frameLocator('#stage > .frame.on').getByRole('button',{name:'Iniciar',exact:true});await start.focus();await present.keyboard.press('Space');await present.locator('#poll-key').waitFor();
     assert.equal(await present.locator('#poll-key-title').innerText(),'Chave do apresentador');await app.evaluate(({clipboard},k)=>clipboard.writeText(k),KEY);await present.locator('#poll-key-input').focus();await present.keyboard.press('Meta+V');
@@ -47,7 +47,7 @@ try{
     if(fail===b.proc)return reply(500,{error:'server_error',detail:'Internal SQL detail'});
     if(b.proc==='auth'){if(b.key!==KEY)return reply(401,{error:'invalid_key'});const token=(++serial).toString(16).padStart(64,'0');tokens.add(token);return reply(200,{data:{token,expiresAt:Date.now()+12*3600e3}});}
     if(!tokens.has(b.token))return reply(401,{error:'session_expired'});
-    if(b.proc==='prepare'){const room='R'+String(++serial).padStart(5,'0');rooms.set(room,{type:b.type,meta:b.meta,status:0,count:0,rows:[]});return reply(200,{data:{room,url:'https://edukors.org/poll/r/?room='+room}});}
+    if(b.proc==='prepare'){const room='R'+String(++serial).padStart(5,'0');rooms.set(room,{type:b.type,meta:b.meta,status:0,count:0,rows:[]});return reply(200,{data:{room,url:'https://poll.example.org/r/?room='+room}});}
     const r=rooms.get(b.room);if(!r)return reply(404,{error:'room_not_found'});
     if(b.proc==='open')r.status=1;if(b.proc==='close')r.status=0;
     return reply(200,{data:b.proc==='count'?{responses:r.count,status:r.status}:b.proc==='results'?r.rows:b.proc==='export'?{type:r.type,meta:r.meta,rows:r.answers||[]}:'ok'});
@@ -68,7 +68,7 @@ try{
   await app.evaluate(({clipboard},k)=>clipboard.writeText('  '+k+'\n'),KEY);await page.click('#poll-key-paste');await page.waitForFunction(k=>document.getElementById('poll-key-input').value===k,KEY,{timeout:3000}).catch(async()=>{throw Error('paste failed: '+await page.evaluate(()=>navigator.clipboard.readText().then(t=>'read '+JSON.stringify(t),e=>String(e))));});
   await page.fill('#poll-key-input','EDK-WRONG');await page.click('#poll-key-ok');await page.locator('#poll-key-error').filter({hasText:'Key not recognized'}).waitFor();assert.equal(rooms.size,0);
   await page.fill('#poll-key-input',KEY);await page.click('#poll-key-ok');await active().locator('.poll-status').filter({hasText:'Receiving responses'}).waitFor();assert.equal(await keyDialog.isVisible(),false);
-  const stored=await page.evaluate(()=>({...localStorage}));assert.ok(!JSON.stringify(stored).includes(KEY),'the key is never stored');const sessionValue=JSON.parse(stored['esf-poll-session:v1:https://edukors.org/poll/q.php']);assert.match(sessionValue.token,/^[0-9a-f]{64}$/);assert.ok(sessionValue.expiresAt>Date.now()+11*3600e3);
+  const stored=await page.evaluate(()=>({...localStorage}));assert.ok(!JSON.stringify(stored).includes(KEY),'the key is never stored');const sessionValue=JSON.parse(stored['esf-poll-session:v1:https://poll.example.org/q.php']);assert.match(sessionValue.token,/^[0-9a-f]{64}$/);assert.ok(sessionValue.expiresAt>Date.now()+11*3600e3);
   const first=calls.find(c=>c.proc==='prepare'),r=[...rooms.values()][0];assert.equal(first.meta,4);assert.equal(first.type,'quiz');assert.equal(calls.filter(c=>c.proc==='auth').length,2);assert.ok(await active().locator('.poll-qr svg').count());assert.equal(await active().locator('.poll-qr.is-blurred').count(),0);assert.equal(await active().locator('.poll-lock').getAttribute('aria-pressed'),'true');
   r.count=12;r.rows=[{response:'0',responses:'6'},{response:'1',responses:'4'},{response:'2',responses:'2'}];
   await active().locator('.poll-count').filter({hasText:'12'}).waitFor();
@@ -96,8 +96,8 @@ try{
   await page.waitForTimeout(600);assert.deepEqual(await refresh.evaluate(el=>{const a=getComputedStyle(el,'::after');return[a.content,a.opacity];}),['"Refresh results"','1']);await page.screenshot({path:path.join(root,'02b-tooltip.png'),animations:'disabled'});
   // Frame scripts still cannot fetch, and the player cannot reach arbitrary destinations.
   assert.equal(await page.evaluate(()=>fetch('https://example.com/test').then(()=>true,()=>false)),false);assert.equal(foreignRequests,0);
-  assert.equal(await active().locator('.esf-poll').evaluate(()=>fetch('https://edukors.org/poll/q.php').then(()=>true,()=>false)),false);
-  assert.equal(await page.evaluate(()=>fetch('https://edukors.org/poll/r/r.php').then(()=>true,()=>false)),false);
+  assert.equal(await active().locator('.esf-poll').evaluate(()=>fetch('https://poll.example.org/q.php').then(()=>true,()=>false)),false);
+  assert.equal(await page.evaluate(()=>fetch('https://poll.example.org/r/r.php').then(()=>true,()=>false)),false);
   assert.equal(await page.evaluate(()=>fetch('https://www.solvertank.tech/solverpoll/q_app.php').then(()=>true,()=>false)),false);
   await page.keyboard.press('ArrowRight');await active().locator('h2').filter({hasText:'Qual palavra'}).waitFor();assert.equal(calls.filter(c=>c.proc==='prepare').length,1);
   await active().getByRole('button',{name:'Start',exact:true}).focus();await page.keyboard.press('Space');await active().locator('.poll-status').filter({hasText:'Receiving responses'}).waitFor();assert.equal(await keyDialog.isVisible(),false,'a live session is reused');const tag=rooms.get(calls.at(-1).room);tag.count=8;tag.rows=[{response:'Aprendizagem',responses:'4'},{response:'Colaboração',responses:'3'},{response:'<img src=x onerror=alert(1)>',responses:'1'}];
@@ -105,7 +105,7 @@ try{
   await shot('03-word-cloud.png');await button('Show frequencies').click();assert.equal(await active().locator('.poll-frequency').count(),3);
   await page.keyboard.press('ArrowRight');await active().locator('h2').filter({hasText:'O que você'}).waitFor();
   // A session past its 12 hours is not used: the key is asked again.
-  await page.evaluate(()=>{const k='esf-poll-session:v1:https://edukors.org/poll/q.php',v=JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify({...v,expiresAt:Date.now()-1}));});
+  await page.evaluate(()=>{const k='esf-poll-session:v1:https://poll.example.org/q.php',v=JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify({...v,expiresAt:Date.now()-1}));});
   await button('Start').click();await keyDialog.waitFor();await page.fill('#poll-key-input',KEY);await page.click('#poll-key-ok');await active().locator('.poll-status').filter({hasText:'Receiving responses'}).waitFor();
   const post=rooms.get(calls.at(-1).room);post.count=60;post.rows=[{response:'Aprender exige espaço para experimentar.'},{response:'<script>window.pollInjected=true</script>'}];
   // Failed close does not claim the room is closed or expose server diagnostics.

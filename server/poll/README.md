@@ -22,7 +22,7 @@ that file to use your own.
 ## Install
 
 1. Copy this folder to your server, e.g. `https://example.org/poll/`.
-2. Create a database (`edukors_poll` on edukors.org) and apply the schema:
+2. Create a database (for example `edukors_poll`) and apply the schema:
 
    ```sh
    mysql -u <user> -p <database> < sql/poll.sql
@@ -31,7 +31,7 @@ that file to use your own.
 3. Copy `poll.config.example.php` to `private/poll.config.php` **outside the web
    root** and fill in the credentials. `config.php` looks for, in order:
    - the file named in the `EDUKORS_POLL_CONFIG` environment variable;
-   - `../../private/poll.config.php` (the edukors.org layout, beside `public_html`);
+   - `../../private/poll.config.php` (beside the web root, such as `public_html`);
    - `../private/poll.config.php`;
    - `poll.config.php` in this folder (last resort for hosts with nothing outside the web root).
 

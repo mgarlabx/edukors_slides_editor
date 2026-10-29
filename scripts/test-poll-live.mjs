@@ -1,5 +1,5 @@
 // Explicit opt-in smoke test against a deployed poll service:
-//   ESF_POLL_KEY=EDK-… [ESF_POLL_SERVER=https://edukors.org/poll] node scripts/e2e.mjs --poll-live
+//   ESF_POLL_SERVER=https://your-server/poll ESF_POLL_KEY=EDK-… node scripts/e2e.mjs --poll-live
 // Presenter calls run in a file:// page (origin null, real CORS); student answers go from Node, like a phone.
 // Creates new rooms with synthetic answers (the service deletes rooms after 30 days). Nothing existing is touched.
 import {_electron as electron} from 'playwright';
@@ -8,8 +8,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {randomBytes} from 'node:crypto';
-const key=process.env.ESF_POLL_KEY,server=(process.env.ESF_POLL_SERVER||'https://edukors.org/poll').replace(/\/+$/,'');
-if(!key){console.error('Set ESF_POLL_KEY to a presenter key of '+server);process.exit(1);}
+const key=process.env.ESF_POLL_KEY,server=(process.env.ESF_POLL_SERVER||'').replace(/\/+$/,'');
+if(!server||!key){console.error('Set ESF_POLL_SERVER to your server and ESF_POLL_KEY to one of its presenter keys.');process.exit(1);}
 const require=createRequire(import.meta.url),root=path.resolve('test-results/poll-live-'+Date.now());await fs.mkdir(root,{recursive:true});
 const file=path.join(root,'probe.html');await fs.writeFile(file,'<!doctype html><meta charset="utf-8"><title>Poll file probe</title><h1>Poll file://</h1>');
 const env={...process.env,ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;

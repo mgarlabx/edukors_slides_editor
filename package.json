@@ -1,7 +1,7 @@
 {
   "name": "edukors-slides-editor",
   "productName": "Edukors Slides Editor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Desktop HTML presentation editor",
   "author": {
@@ -30,7 +30,6 @@
     "test:poll": "node scripts/e2e.mjs --poll",
     "test:poll:server": "node scripts/e2e.mjs --poll-server",
     "test:poll:live": "node scripts/e2e.mjs --poll-live",
-    "sync:poll": "node scripts/sync-poll-server.mjs",
     "package": "node scripts/package.mjs"
   },
   "devDependencies": {
