@@ -28,7 +28,8 @@ for(const lang of ['pt','en','es']){
   const app=await electron.launch({executablePath:require('electron'),args:['.',file],env,timeout:60000});
   try{
     const page=await app.firstWindow(),command=name=>app.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('command',name),name);
-    await app.evaluate(({BrowserWindow},[w,h])=>{const win=BrowserWindow.getAllWindows()[0];win.setContentSize(w,h);win.center();},[width,height]);
+    // Windows keeps a window inside its work area (no taskbar, no frame): full screen gives the whole 1920×1080 display.
+    await app.evaluate(({BrowserWindow},[w,h,full])=>{const win=BrowserWindow.getAllWindows()[0];if(full)win.setFullScreen(true);else{win.setContentSize(w,h);win.center();}},[width,height,visible]);await page.waitForTimeout(1500);
     const shot=async name=>{await settle(page);await page.screenshot({path:path.join(root,name)});const s=await page.evaluate(()=>[innerWidth,innerHeight]);console.log(`${lang}/${name}: ${s.join('×')}`);};
     const slide=async n=>{await page.locator('.slide-item button').nth(n).click();await page.locator('.slide-canvas iframe').waitFor();};
     await page.locator('.tab').first().waitFor();await page.locator('.chat-list').getByText(sample.sampleDeck(lang).title,{exact:false}).count();
@@ -44,10 +45,10 @@ for(const lang of ['pt','en','es']){
     // 5. The exported HTML, presenting the cards slide.
     const html=path.join(root,'presentation.html');await fs.writeFile(html,sample.exportedHtml(deck));
     const opened=app.waitForEvent('window');
-    await app.evaluate(({BrowserWindow},[file,w,h,show])=>{const win=new BrowserWindow({useContentSize:true,width:w,height:h,show});win.loadFile(file);},[html,width,height,visible]);
+    await app.evaluate(({BrowserWindow},[file,w,h,show])=>{const win=new BrowserWindow({useContentSize:true,width:w,height:h,show,fullscreen:show});win.loadFile(file);},[html,width,height,visible]);
     // The cards slide, with its three cards revealed (each is a step).
     const player=await opened;await player.waitForLoadState('load');await player.waitForTimeout(1000);for(let i=0;i<4;i++){await player.keyboard.press('ArrowRight');await player.waitForTimeout(500);}await player.waitForTimeout(2000);
-    await player.screenshot({path:path.join(root,'05-presenting.png')});console.log(`${lang}/05-presenting.png`);
+    await player.screenshot({path:path.join(root,'05-presenting.png')});console.log(`${lang}/05-presenting.png: ${(await player.evaluate(()=>[innerWidth,innerHeight])).join('×')}`);
   }finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
 }
 console.log('Store screenshots in',out);
