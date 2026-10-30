@@ -1,6 +1,6 @@
 name: Release
 
-# A tag vX.Y.Z (or vX.Y.Z-rc.N, a pre-release) builds, signs and stages the installers in a draft release.
+# A tag vX.Y.Z (or vX.Y.Z-rc.N, a pre-release) builds, signs and publishes the installers in a release, at once.
 # package.json must already hold X.Y.Z; the tag's pre-release suffix is applied only inside the build.
 # Pull requests that touch packaging, and runs by hand (Actions → Release → Run workflow), build the installers too,
 # without signing secrets or publishing: a run by hand gives store.yml a new package of package.json's version.
@@ -144,7 +144,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           pre=""; if [ "${{ needs.check.outputs.prerelease }}" = true ]; then pre="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" files/* -R "$GITHUB_REPOSITORY" --draft $pre --verify-tag \
+          gh release create "$GITHUB_REF_NAME" files/* -R "$GITHUB_REPOSITORY" $pre --verify-tag \
             --title "Edukors Slides Editor ${{ needs.check.outputs.version }}" --generate-notes
 
   # The Windows package to the Microsoft Store (store.yml). It waits for all the builds (a job cannot wait on one leg
