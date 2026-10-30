@@ -24,7 +24,8 @@ function inline(text:string,onLink:Link):React.ReactNode[]{
 }
 const cells=(row:string)=>row.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
 export function Markdown({text,onLink,title=true}:{text:string;onLink:Link;title?:boolean}){
-  const blocks=text.trim().split(/\n\s*\n/);
+  // A Windows checkout may give the texts CRLF line ends, and `.` does not match \r.
+  const blocks=text.replace(/\r\n?/g,'\n').trim().split(/\n\s*\n/);
   return <div className="help-text">{blocks.map((b,i)=>{
     const h=/^(#{1,3}) (.*)$/.exec(b);
     if(h)return h[1].length===1?title?<h1 key={i}>{h[2]}</h1>:null:h[1].length===2?<h2 key={i}>{h[2]}</h2>:<h3 key={i}>{h[2]}</h3>;
