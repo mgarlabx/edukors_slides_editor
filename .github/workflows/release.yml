@@ -102,7 +102,7 @@ jobs:
             release/latest*.yml
           if-no-files-found: error
           retention-days: 7
-      - name: Microsoft Store packages (uploaded by hand to Partner Center)
+      - name: Microsoft Store package (sent to Partner Center by the store job)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -144,3 +144,15 @@ jobs:
           pre=""; if [ "${{ needs.check.outputs.prerelease }}" = true ]; then pre="--prerelease"; fi
           gh release create "$GITHUB_REF_NAME" files/* -R "$GITHUB_REPOSITORY" --draft $pre --verify-tag \
             --title "Edukors Slides Editor ${{ needs.check.outputs.version }}" --generate-notes
+
+  # The Windows package to the Microsoft Store (store.yml). It waits for all the builds (a job cannot wait on one leg
+  # of the matrix) but goes ahead whatever became of the others. Final versions only: a pre-release's package would
+  # carry the same X.Y.Z.0 as the final one.
+  store:
+    needs: [check, build]
+    if: always() && needs.check.result == 'success' && github.ref_type == 'tag' && needs.check.outputs.prerelease == 'false'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/store.yml
+    secrets: inherit

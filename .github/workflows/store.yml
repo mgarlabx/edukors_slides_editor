@@ -1,0 +1,89 @@
+# The Microsoft Store: the .appx the release's Windows job made, sent to Partner Center with the Microsoft Store
+# Developer CLI (msstore) as a new submission of the app (Store ID 9PHLLNHZW4Z2). The listing stays as it is; only
+# the package changes. Same flow as the Graph Editor's.
+#
+# The release workflow calls it once the builds are through. By hand (Actions → Microsoft Store → Run workflow) it
+# either checks that the credentials reach Partner Center, or sends the package of an earlier Release run.
+#
+# With the repository variable STORE_AUTO_SUBMIT set to "true" it is submitted for certification right away;
+# otherwise it is left as a draft submission in Partner Center ("Submit for certification" by hand).
+#
+# It needs four repository secrets (the Graph Editor's Entra application, "GitHub Actions - Edukors Store"):
+# PARTNER_CENTER_TENANT_ID, PARTNER_CENTER_SELLER_ID, PARTNER_CENTER_CLIENT_ID and PARTNER_CENTER_CLIENT_SECRET.
+# Without them, it says so and does nothing.
+name: Microsoft Store
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      check_only:
+        description: Only check that the credentials reach Partner Center
+        type: boolean
+        default: true
+      run_id:
+        description: The Release run whose store-msix artifact is sent (when not only checking)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PRODUCT_ID: 9PHLLNHZW4Z2
+
+jobs:
+  submit:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      TENANT: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+      SELLER: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+      CLIENT: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+      SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+      CHECK_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.check_only }}
+      COMMIT: ${{ vars.STORE_AUTO_SUBMIT == 'true' }}
+    steps:
+      - id: ready
+        run: |
+          if [ -z "$TENANT" ] || [ -z "$SELLER" ] || [ -z "$CLIENT" ] || [ -z "$SECRET" ]; then
+            echo "::notice::the PARTNER_CENTER_* secrets are not set: nothing is sent to the Microsoft Store"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$CHECK_ONLY" != "true" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -z "${{ inputs.run_id }}" ]; then
+            echo "::error::give the run_id of the Release run whose package is to be sent"; exit 1
+          fi
+
+      # The package of this release's run, or of the run given by hand.
+      - if: steps.ready.outputs.go == 'true' && env.CHECK_ONLY != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: store-msix
+          path: msix
+          run-id: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - if: steps.ready.outputs.go == 'true'
+        uses: microsoft/microsoft-store-apppublisher@15abd1c50fcc164b19cb240fb04ef3c49bf715a2 # v1.1
+
+      - if: steps.ready.outputs.go == 'true'
+        run: |
+          msstore reconfigure --tenantId "$TENANT" --sellerId "$SELLER" --clientId "$CLIENT" --clientSecret "$SECRET"
+          # The app, as Partner Center sees it: this fails if the credentials or the role do not reach it.
+          msstore apps get "$PRODUCT_ID"
+
+      - if: steps.ready.outputs.go == 'true' && env.CHECK_ONLY != 'true'
+        run: |
+          shopt -s nullglob; pkg=( msix/*.appx msix/*.msix )
+          [ ${#pkg[@]} -eq 1 ] || { echo "::error::expected one package in the artifact, found: ${pkg[*]}"; exit 1; }
+          echo "sending ${pkg[0]}"
+          flags=(); [ "$COMMIT" = "true" ] || flags+=(--noCommit)
+          # The CLI knows the package by the path's extension; the upload gets more than its default 100 s.
+          msstore publish "${pkg[0]}" --appId "$PRODUCT_ID" --uploadTimeout 1800 "${flags[@]}"
+          if [ "$COMMIT" = "true" ]; then echo "::notice::the package was submitted for certification in Partner Center"
+          else echo "::notice::the package is in a draft submission in Partner Center: open it and click Submit for certification"; fi
