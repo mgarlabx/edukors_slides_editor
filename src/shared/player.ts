@@ -617,14 +617,24 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
         if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();act.next();}
         if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();act.prev();}
       });
-      let shownAt=-1;
+      // On prev/next the panel scrolls so the current card stays where the previous one was.
+      let shownAt=-1,anchor=0,scrolledAt=0;
+      const sc=(onClose?root:d.scrollingElement||d.documentElement) as HTMLElement;
+      const top=(el:HTMLElement)=>el.getBoundingClientRect().top-(sc===root?root.getBoundingClientRect().top:0);
+      const follow=(from:number,to:number)=>{
+        const a=cards[from],b=cards[to];if(!b)return;
+        const busy=performance.now()-scrolledAt<700,y=a?top(a):-1;
+        if(!busy&&(!a||y+a.offsetHeight<=0||y>=sc.clientHeight)){b.scrollIntoView({block:'nearest',behavior:'smooth'});return;}
+        if(!busy)anchor=y;
+        sc.scrollTo({top:top(b)+sc.scrollTop-anchor,behavior:'smooth'});scrolledAt=performance.now();
+      };
       return{
         root,fit:fitCards,
         update(){
           const s=data.slides[cur];
           (root.querySelector('.p-status') as HTMLElement).textContent=`${W.slide} ${cur+1} ${W.of} ${N} · ${s.title} · ${W.step} ${step} ${W.of} ${total}`;
           cards.forEach((c,i)=>{c.classList.toggle('here',i===cur);c.classList.toggle('past',i<cur);c.querySelector('.jump')!.setAttribute('aria-current',i===cur?'true':'false');});
-          if(shownAt!==cur)cards[cur]?.scrollIntoView({block:'nearest',behavior:'smooth'});shownAt=cur;
+          if(shownAt!==cur)follow(shownAt,cur);shownAt=cur;
         },
         closed(){(root.querySelector('.p-status') as HTMLElement).textContent=W.closed;root.querySelectorAll('button').forEach((b:any)=>b.disabled=true);},
       };

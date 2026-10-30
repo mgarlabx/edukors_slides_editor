@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {Deck,Preferences,Project,newDeck,defaultNames,uid,validateDeck,masterOf,slug} from '../shared/model';
+import {Deck,Preferences,Project,TERMS_VERSION,newDeck,defaultNames,uid,validateDeck,masterOf,slug} from '../shared/model';
 import {ProjectStore,ConflictError,atomic,exists,inside,readDeck,writeDeck} from './projects';
 import {frameShell,frameShellCsp} from '../shared/render';
 import {playerDocument} from '../shared/player';
@@ -58,7 +58,9 @@ async function loadPreferences(){
   // Accounts of earlier versions (profiles pointing at CLI folders such as ~/.claude) are not carried over: the
   // assistant uses accounts made by the AI library, which the user signs in to once.
   const defaults:Preferences={language:'pt',recent:[]};
-  try{const saved=JSON.parse(await fs.readFile(prefsPath,'utf8'));return cleanPrefs({...defaults,...saved});}catch{return defaults;}
+  // ESF_ACCEPT_TERMS: automated runs on a fresh profile skip the terms of use (the e2e accepts them itself).
+  const accepted=(p:Preferences)=>process.env.ESF_ACCEPT_TERMS?{...p,terms:TERMS_VERSION}:p;
+  try{const saved=JSON.parse(await fs.readFile(prefsPath,'utf8'));return accepted(cleanPrefs({...defaults,...saved}));}catch{return accepted(defaults);}
 }
 function cleanPrefs(p:Preferences):Preferences{
   if(!['pt','en','es'].includes(p.language))throw Error('Invalid preferences.');
@@ -67,7 +69,7 @@ function cleanPrefs(p:Preferences):Preferences{
   const text=(v:unknown)=>typeof v==='string'&&v.length<=200&&!/[\r\n\0]/.test(v)?v:'';
   const options=Object.fromEntries(Object.entries(p.aiOptions&&typeof p.aiOptions==='object'?p.aiOptions:{}).filter(([k])=>/^[\w-]{1,100}$/.test(k)).slice(0,50).map(([k,v])=>[k,{model:text(v?.model),effort:text(v?.effort)}]));
   return {language:p.language,attachDir:typeof p.attachDir==='string'&&p.attachDir.length<4096?p.attachDir:undefined,systemPrompt:p.systemPrompt||'',...normalizePollServer(p.pollServer)?{pollServer:normalizePollServer(p.pollServer)!}:{},
-    aiAccount:text(p.aiAccount),aiOptions:options,aiMcp:p.aiMcp||'',recent:(p.recent||[]).filter(x=>typeof x==='string').slice(0,20)};
+    ...text(p.terms)?{terms:text(p.terms)}:{},aiAccount:text(p.aiAccount),aiOptions:options,aiMcp:p.aiMcp||'',recent:(p.recent||[]).filter(x=>typeof x==='string').slice(0,20)};
 }
 async function persist(){await atomic(prefsPath,JSON.stringify(prefs,null,2));}
 async function remember(file:string){prefs.recent=[file,...prefs.recent.filter(x=>x!==file)].slice(0,20);await persist();}
@@ -93,7 +95,7 @@ function menu(){
     {label:l[20],submenu:[{label:l[21],accelerator:'CmdOrCtrl+Enter',click:command('present'),enabled},sep,{label:l[24],click:command('master'),enabled}]},
     {label:l[13],submenu:[{label:l[33],accelerator:'Alt+CmdOrCtrl+0',click:command('slidePanel'),enabled},{label:l[15],accelerator:'Shift+CmdOrCtrl+A',click:command('ai'),enabled},sep,{label:l[34],accelerator:'CmdOrCtrl+=',click:command('zoomIn'),enabled},{label:l[35],accelerator:'CmdOrCtrl+-',click:command('zoomOut'),enabled},{label:l[36],accelerator:'CmdOrCtrl+0',click:command('zoomReset'),enabled},sep,{role:'togglefullscreen'},{role:'toggleDevTools'}]},
     {label:l[37],role:'windowMenu' as const,submenu:[{role:'minimize' as const},{role:'zoom' as const},sep,...Array.from({length:9},(_,i)=>({label:`${l[40]} ${i+1}`,accelerator:`CmdOrCtrl+${i+1}`,click:command('tab'+(i+1)),enabled}))]},
-    {label:l[38],role:'help' as const,submenu:[{label:l[39],click:command('website')}]}
+    {label:l[38],role:'help' as const,submenu:[{label:({pt:'Ajuda do Edukors Slides Editor',en:'Edukors Slides Editor Help',es:'Ayuda de Edukors Slides Editor'})[prefs.language],click:command('help')},{label:({pt:'Termos de uso',en:'Terms of use',es:'Términos de uso'})[prefs.language],click:command('terms')},sep,{label:l[39],click:command('website')}]}
   ]));
 }
 function handle(channel:string,fn:(...args:any[])=>any){
@@ -145,7 +147,10 @@ handle('bootstrap',async()=>{
 handle('menuState',(open:unknown)=>{if(deckOpen!==!!open){deckOpen=!!open;menu();}});
 handle('preferences',async(p:Preferences)=>{
   const next=cleanPrefs(p);
-  prefs={...next,attachDir:prefs.attachDir};await persist();menu();return prefs;
+  prefs={...next,attachDir:prefs.attachDir,terms:prefs.terms};await persist();menu();return prefs;
+});
+// The terms of use are accepted once per version (TERMS_VERSION); declining quits through 'quit'.
+handle('acceptTerms',async()=>{prefs.terms=TERMS_VERSION;await persist();return prefs;
 });
 handle('open',async(file?:string)=>{
   if(file&&!prefs.recent.includes(file))throw Error('Choose this project using the file dialog.');
@@ -404,7 +409,9 @@ handle('pollPing',async(server:unknown)=>{
   try{const r=await fetch(pollEndpoint(base),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proc:'ping'}),signal:AbortSignal.timeout(10000)});const v=await r.json().catch(()=>null);
     return v?.data?.service==='edukors-poll'?{ok:true}:{ok:false,error:'service'};}catch{return{ok:false,error:'network'};}
 });
-handle('website',()=>process.env.ESF_EXTERNAL_LOG?fs.appendFile(process.env.ESF_EXTERNAL_LOG,'https://edukors.org\n'):shell.openExternal('https://edukors.org'));
+// The site, or a link of the help texts (only https, only these hosts).
+const helpHosts=['edukors.org','github.com','apps.microsoft.com','claude.com','developers.openai.com'];
+handle('website',(page?:unknown)=>{let url='https://edukors.org';try{const u=new URL(String(page));if(page&&u.protocol==='https:'&&helpHosts.includes(u.hostname))url=u.href;}catch{}return process.env.ESF_EXTERNAL_LOG?fs.appendFile(process.env.ESF_EXTERNAL_LOG,url+'\n'):shell.openExternal(url);});
 handle('quit',()=>{allowQuit=true;if(installUpdate)autoUpdater.quitAndInstall();else app.quit();});
 // Installing goes through the renderer's quit flow first, so unsaved presentations are offered for saving.
 handle('installUpdate',()=>{installUpdate=true;win?.webContents.send('command','quit');});

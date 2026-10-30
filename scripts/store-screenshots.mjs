@@ -24,7 +24,7 @@ for(const lang of ['pt','en','es']){
   const acc=await ai.createAccount({providerId:'fake',label:account[lang]});await ai.connectAccount(acc.id);await ai.dispose();
   await fs.writeFile(path.join(data,'preferences.json'),JSON.stringify({language:lang,recent:[],aiAccount:acc.id}));
   const file=path.join(root,...sample.sampleFile(lang));await fs.mkdir(path.dirname(file),{recursive:true});const deck=await sample.writeSample(file,lang,acc.id);
-  const env={...process.env,ESF_DATA_DIR:data,ESF_AI_FAKE:fake,ESF_HIDDEN:visible?'':'1',ESF_NO_UPDATES:'1'};delete env.ELECTRON_RUN_AS_NODE;
+  const env={...process.env,ESF_ACCEPT_TERMS:'1',ESF_DATA_DIR:data,ESF_AI_FAKE:fake,ESF_HIDDEN:visible?'':'1',ESF_NO_UPDATES:'1'};delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({executablePath:require('electron'),args:['.',file],env,timeout:60000});
   try{
     const page=await app.firstWindow(),command=name=>app.evaluate(({BrowserWindow},name)=>BrowserWindow.getAllWindows()[0].webContents.send('command',name),name);

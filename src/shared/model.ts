@@ -35,7 +35,11 @@ export interface Preferences {
   systemPrompt?: string;
   // Base URL of the interactive questions service (self-hostable); empty means none (no default).
   pollServer?: string;
+  // Version of the terms of use the person accepted (absent until they do; kept by the main process).
+  terms?: string;
 }
+// Bump it when the terms of use (src/ui/help/terms-of-use*.md) change: everyone is asked to accept them again.
+export const TERMS_VERSION = '2026-10-30';
 export interface Template { id: string; title: string }
 export interface AIEvent {
   projectId: string; type: 'text' | 'done' | 'error' | 'usage' | 'status' | 'limits' | 'activity' | 'progress' | 'thought' | 'question' | 'login';

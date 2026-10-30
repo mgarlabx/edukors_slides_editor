@@ -62,7 +62,7 @@ try{
   await build({entryPoints:['tests/poll-fixture.ts'],bundle:true,platform:'node',format:'esm',outfile:path.join(root,'fixture.mjs')});
   const {htmlFor}=await import(pathToFileURL(path.join(root,'fixture.mjs')).href),file=path.join(root,'activity.html');await fs.writeFile(file,htmlFor(base));
   const fresh=execFileSync('php',[path.join(dir,'bin/newkey.php'),'Browser'],{env:{...process.env,EDUKORS_POLL_CONFIG:config},encoding:'utf8'}).match(/Key: (\S+)/)[1];
-  const env={...process.env,ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+  const env={...process.env,ESF_ACCEPT_TERMS:'1',ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({executablePath:createRequire(import.meta.url)('electron'),args:['.'],env,timeout:30000});
   try{
     const editor=await app.firstWindow();await editor.locator('.empty-desk').waitFor();

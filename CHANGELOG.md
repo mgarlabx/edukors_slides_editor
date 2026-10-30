@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- **Terms of use** (the MIT license, explained, in Portuguese, English and Spanish): the first time it opens, the editor asks you to accept them, or to decline and quit; they stay in Help. A new version of the terms asks again.
+- **Help** (icon on the toolbar, also in the Help menu): a quick guide with the first steps and the shortcuts, the full teacher's guide and the terms of use, in Portuguese, English and Spanish, with the editor's version.
+
 ## 1.1.0
 
 - **AI assistant through the shared Edukors AI library** ([`@edukors/ai-cli`](https://github.com/mgarlabx/edukors_ai_cli) 0.2.0). Claude Code and Codex, with accounts made and signed in from **Settings → AI assistant** (the browser opens; otherwise the address is shown, with a field for Claude's code) and shared with the other Edukors apps. Accounts from 1.0 are not carried over: sign in once again. Kimi, Kiro, OpenCode and Antigravity are no longer offered.

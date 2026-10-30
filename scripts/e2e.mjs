@@ -50,9 +50,25 @@ step('launch');
 let app=await launch();
 try{
  const page=watch(await app.firstWindow());
+ // A fresh profile shows the terms of use first: no close button, Esc and the menu do nothing; accepting is remembered.
+ step("Terms of use on the first run");
+ {const terms=page.getByRole('dialog',{name:'Termos de uso'});await terms.waitFor();assert.equal(await terms.getByRole('button',{name:'×'}).count(),0,'terms cannot be dismissed');
+  await page.keyboard.press('Escape');await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('command','new'));await page.waitForTimeout(200);
+  assert.equal(await page.locator('.modal').count(),1,'only the terms until they are accepted');assert.match(await terms.textContent(),/Edukors Slides Editor.*licença MIT/s);
+  await terms.getByRole('combobox',{name:'Idioma da interface'}).selectOption('en');await page.getByRole('dialog',{name:'Terms of use'}).waitFor();await page.getByRole('combobox',{name:'Interface language'}).selectOption('pt');
+  await terms.getByRole('link',{name:/github/}).click();await page.waitForTimeout(200);assert.match(await fs.readFile(env.ESF_EXTERNAL_LOG,'utf8'),/github\.com\/mgarlabx\/edukors_slides_editor/);await fs.rm(env.ESF_EXTERNAL_LOG);
+  await terms.getByRole('button',{name:'Aceito os termos'}).click();await terms.waitFor({state:'detached'});
+  assert.match(JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'preferences.json'),'utf8')).terms,/^\d{4}-\d\d-\d\d$/,'acceptance saved');
+  // Help (toolbar icon): quick guide, full guide and terms of use; Help → Terms of use opens on the terms.
+  const help=page.getByRole('dialog',{name:'Ajuda'}),tab=name=>help.getByRole('tab',{name,exact:true});
+  await page.locator('.toolbar').getByRole('button',{name:'Ajuda',exact:true}).click();await help.waitFor();assert.equal(await tab('Guia rápido').getAttribute('aria-selected'),'true');assert.match(await help.textContent(),/Atalhos.*Novo slide/s);
+  await tab('Guia completo').click();await help.getByRole('heading',{name:/Slide mestre: bases e layouts/}).waitFor();assert.ok(await help.locator('table').count()>2,'guide tables');
+  await help.getByRole('link',{name:'Edukors Slides Editor',exact:true}).click();await page.waitForTimeout(200);assert.match(await fs.readFile(env.ESF_EXTERNAL_LOG,'utf8'),/apps\.microsoft\.com\/detail\/9PHLLNHZW4Z2/);await fs.rm(env.ESF_EXTERNAL_LOG);
+  await page.keyboard.press('Escape');await help.waitFor({state:'detached'});
+  await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.flatMap(m=>m.submenu.items).find(x=>x.label==='Termos de uso').click());await help.waitFor();assert.equal(await tab('Termos de uso').getAttribute('aria-selected'),'true');assert.match(await help.textContent(),/MIT License/);await page.keyboard.press('Escape');await help.waitFor({state:'detached'});}
  // Startup shows an empty workspace; New and Recent open as modals from the File menu or the toolbar.
  step("Startup shows an empty workspace; New and Recent open as modals from t…");
- await page.locator('.empty-desk').waitFor();assert.equal(await page.locator('.modal,.tabs,.template-card').count(),0,'nothing but the empty workspace');assert.equal(await page.locator('.toolbar button').count(),4,'only the File section and Settings');assert.match(await page.locator('.statusbar .app-version').innerText(),/^v\d+\.\d+\.\d+$/,'version shown without a presentation');await shot(page,'00-empty.png');
+ await page.locator('.empty-desk').waitFor();assert.equal(await page.locator('.modal,.tabs,.template-card').count(),0,'nothing but the empty workspace');assert.equal(await page.locator('.toolbar button').count(),5,'only the File section, Settings and Help');assert.match(await page.locator('.statusbar .app-version').innerText(),/^v\d+\.\d+\.\d+$/,'version shown without a presentation');await shot(page,'00-empty.png');
  // Native menu: without a presentation, only what works on the empty workspace stays enabled.
  // Slides / slide master is a segmented control; the old toggle button is emulated by clicking the other view.
  step("Native menu: without a presentation, only what works on the empty work…");

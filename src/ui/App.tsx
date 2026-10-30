@@ -1,6 +1,6 @@
 import React,{useState,useEffect,useRef,useMemo,useLayoutEffect} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Deck,Slide,Project,Preferences,Template,Language,Asset,AIEvent,SessionLimits,Layout,newDeck,newSlide,newMaster,defaultNames,duplicateSlides,uid,layoutOf,activeMaster,masterOf,blankHtml,validateDeck} from '../shared/model';
+import {Deck,Slide,Project,Preferences,TERMS_VERSION,Template,Language,Asset,AIEvent,SessionLimits,Layout,newDeck,newSlide,newMaster,defaultNames,duplicateSlides,uid,layoutOf,activeMaster,masterOf,blankHtml,validateDeck} from '../shared/model';
 import {slideDocument} from '../shared/render';
 import {copySlides,pasteSlides,copyMasterItem,pasteMasterItems,importResources,independentObjects,joinBehavior} from '../shared/clipboard';
 import {syncLayouts,cleanLayout,relayout} from '../shared/layout';
@@ -9,6 +9,7 @@ import {insertManual,editableAt,manualElement,safeUrl,setLinkUrl,setLinkCaption,
 import {qrSvg} from '../shared/qr';
 import {PollConfig,pollWords} from '../shared/poll';
 import {PollEditor,PollServerSettings} from './PollEditor';
+import {TermsText,GuideText} from './Help';
 import {translator,T} from './i18n';
 import {AssistantSettings,AccountPicker,Login} from './AssistantSettings';
 import type {AccountView,ProviderView} from '../main/assistant';
@@ -58,6 +59,7 @@ const icons:Record<string,React.ReactNode>={
  globe:<><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></>,
  account:<><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></>,
  grid:<><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></>,
+ help:<><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.2-2.5 3.8M12 17.2h.01"/></>,
  info:<><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/></>,
  save:<><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></>,
  arrowUp:<path d="M12 19V5M6 11l6-6 6 6"/>,arrowDown:<path d="M12 5v14M18 13l-6 6-6-6"/>,
@@ -282,10 +284,11 @@ function Toolbar({t,groups,tail}:{t:T;groups:ToolGroup[];tail:React.ReactNode}){
     <div className="tool-group">{tail}</div>
   </div>;
 }
-function Modal({title,onClose,children,wide=false,sheet=false,small=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean;sheet?:boolean;small?:boolean}){
+// A fixed modal has no close button and ignores Esc (the terms of use before they are accepted).
+function Modal({title,onClose,children,wide=false,sheet=false,small=false,fixed=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean;sheet?:boolean;small?:boolean;fixed?:boolean}){
   const ref=useRef<HTMLDivElement>(null);
-  useEffect(()=>{const old=document.activeElement as HTMLElement;ref.current?.focus();const key=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose();if(e.key==='Tab'){const all=ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input,textarea,select,[tabindex="0"]');if(!all?.length)return;const first=all[0],last=all[all.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);old?.focus();};},[]);
-  return <div className="modal-shade"><div ref={ref} className={'modal'+(wide?' wide':'')+(sheet?' sheet':'')+(small?' small':'')} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}><header><h2>{title}</h2><IconButton icon="close" label={sheet?translator(document.documentElement.lang as Language)('close'):'×'} onClick={onClose}/></header>{children}</div></div>;
+  useEffect(()=>{const old=document.activeElement as HTMLElement;ref.current?.focus();const key=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!fixed)onClose();if(e.key==='Tab'){const all=ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input,textarea,select,[tabindex="0"]');if(!all?.length)return;const first=all[0],last=all[all.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);old?.focus();};},[]);
+  return <div className="modal-shade"><div ref={ref} className={'modal'+(wide?' wide':'')+(sheet?' sheet':'')+(small?' small':'')} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}><header><h2>{title}</h2>{!fixed&&<IconButton icon="close" label={sheet?translator(document.documentElement.lang as Language)('close'):'×'} onClick={onClose}/>}</header>{children}</div></div>;
 }
 // Dropdown of the format bar made of buttons that never take the focus (a native select or color input would end the
 // text edit in the canvas frame and hide its selection).
@@ -335,11 +338,18 @@ function LayoutPicker({t,deck,mode,initial,onPick,onClose}:{t:T;deck:Deck;mode:'
 // Basic colors of the palettes, with their names in the tooltips.
 const textColors=[['#ffffff','colorWhite'],['#000000','colorBlack'],['#808080','colorGray'],['#d9d9d9','colorLightGray'],['#172033','colorNavy'],['#ff0000','colorRed'],['#ffa500','colorOrange'],['#ffff00','colorYellow'],['#00b050','colorGreen'],['#0070c0','colorBlue'],['#00b0f0','colorLightBlue'],['#7030a0','colorPurple'],['#ff4fa3','colorPink'],['#8b4513','colorBrown'],['#00838f','colorTeal']] as const;
 const hexColor=(v:string)=>{const m=v.trim().replace(/^#/,'').match(/^([\da-f]{3}|[\da-f]{6})$/i);return m?'#'+(m[1].length===3?[...m[1]].map(c=>c+c).join(''):m[1]).toLowerCase():null;};
+// Help → Quick guide: what a presentation is, the first steps and the main shortcuts (keys shown for this system).
+type HelpTab='quick'|'guide'|'terms';
+const quickKeys:[string,string][]=[['⌘N','new'],['⌘O','open'],['⌘S','save'],['⇧⌘S','saveAs'],['⌘Z / ⇧⌘Z','helpUndoRedo'],['⌘C / ⌘V','helpCopyPaste'],['⌘D','duplicate'],['⌫','helpDelete'],['⌘A','helpSelectAll'],['⇧⌘N','newSlide'],['⌘↵','present'],['⌘E','export'],['⌥⌘0','slidePanel'],['⇧⌘A','openAI'],['⌘,','settings'],['Esc','helpCancel']];
+function QuickGuide({t}:{t:T}){
+  return <div className="help-text"><p>{t('helpLead')}</p><ol>{[1,2,3,4,5,6,7].map(n=><li key={n}>{t(('helpStep'+n) as any)}</li>)}</ol>
+    <h3>{t('helpShortcuts')}</h3><table><tbody>{quickKeys.map(([k,label])=><tr key={k}><td><kbd>{k.split(' / ').map(keyLabel).join(' / ')}</kbd></td><td>{t(label as any)}</td></tr>)}</tbody></table></div>;
+}
 function App(){
   const [prefs,setPrefs]=useState<Preferences>({language:'pt',recent:[]});
   const [tabs,setTabs]=useState<Tab[]>([]),[active,setActive]=useState(''),[screen,setScreen]=useState<'editor'|'empty'|'new'|'recent'|'settings'>('empty');
   const [settingsTab,setSettingsTab]=useState('general'),[promptTab,setPromptTab]=useState<'global'|'deck'>('global'),[aiOpen,setAiOpen]=useState(true),[templates,setTemplates]=useState<Template[]>([]);
-  const [selectedTemplate,setSelectedTemplate]=useState('blank'),[name,setName]=useState(''),[search,setSearch]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState(''),[update,setUpdate]=useState(''),[loading,setLoading]=useState(false),[booted,setBooted]=useState(false);
+  const [selectedTemplate,setSelectedTemplate]=useState('blank'),[name,setName]=useState(''),[search,setSearch]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState(''),[update,setUpdate]=useState(''),[loading,setLoading]=useState(false),[booted,setBooted]=useState(false),[help,setHelp]=useState<HelpTab|null>(null);
   const [exportOpen,setExportOpen]=useState(false),[format,setFormat]=useState('html'),[exportResult,setExportResult]=useState(''),[exporting,setExporting]=useState(false);
   const [pollTarget,setPollTarget]=useState<{deck:string;slide:string;poll?:PollConfig}|null>(null);
   const [layoutPick,setLayoutPick]=useState<'insert'|'change'|null>(null),[renaming,setRenaming]=useState<string|null>(null),[templateName,setTemplateName]=useState<string|null>(null),[masterView,setMasterView]=useState<string|null>(null),[closeRequest,setCloseRequest]=useState<{ids:string[];quit:boolean}|null>(null),[zoom,setZoom]=useState(100);
@@ -671,6 +681,9 @@ function App(){
     if(quit){await api.invoke('quit');return;}
     const remaining=tabsRef.current.filter(x=>!ids.includes(x.project.deck.id));setTabs(remaining);if(ids.includes(active)){setActive(remaining.at(-1)?.project.deck.id||'');if(!remaining.length)setScreen('empty');}
   }
+  const mustAccept=booted&&prefs.terms!==TERMS_VERSION;
+  const openLink=(url:string)=>void run(()=>api.invoke('website',url));
+  const acceptTerms=()=>void run(async()=>{const p=await api.invoke('acceptTerms');setPrefs(p);prefsRef.current=p;});
   const updatePrefs=(patch:Partial<Preferences>)=>{const next={...prefsRef.current,...patch};setPrefs(next);prefsRef.current=next;void run(()=>api.invoke('preferences',next));};
   // The account in use, with the model and effort chosen for it; the models are the provider's own list ('' = its default).
   const account=accounts.find(a=>a.id===prefs.aiAccount),choice=prefs.aiOptions?.[prefs.aiAccount||'']||{},activeAccount=account&&{...account,name:account.label,...choice};
@@ -710,6 +723,8 @@ function App(){
     try{const r=await api.invoke('export',deck,format);if(r){if(r.project){const p=r.project;updateTab(active,x=>({...x,project:p,dirty:!!p.pending}));setActive(p.deck.id);}setExportOpen(false);setNotice(r.noPollServer?t('pollNoServerExport'):r.fonts?.missing?.length?t('fontsMissing')+' '+r.fonts.missing.join(', '):t('exported')+': '+r.path.split(/[\\/]/).at(-1));}}finally{setExporting(false);}
   }
   commandRef.current=command=>{
+    // Until the terms of use are accepted, the menu does nothing but quit.
+    if(mustAccept&&command!=='quit')return;if(command==='help'||command==='terms'){setHelp(command==='help'?'quick':'terms');return;}
     if(command==='settings'){setScreen('settings');return;}if(command==='ai'){setAiOpen(x=>!x);return;}if(command==='slidePanel'){setRailOpen(x=>!x);return;}if(command==='website'){void run(()=>api.invoke('website'));return;}
     if(/^tab[1-9]$/.test(command)){const x=tabs[Number(command.slice(3))-1];if(x){setActive(x.project.deck.id);setScreen('editor');}return;}
     if(command==='new'){setScreen('new');return;}if(command==='saveTemplate'&&tab){setTemplateName(tab.project.path?tabTitle(tab.project.path,t):tab.project.deck.title);return;}if(command==='recent'){setScreen('recent');return;}if(command==='open'){void run(()=>open());return;}
@@ -751,7 +766,7 @@ function App(){
   useEffect(()=>{
     const key=(e:KeyboardEvent)=>{
       const editing=(e.target as Element)?.closest?.(typingField);
-      if(editing||screen!=='editor'||exportOpen||layoutPick||templateName!==null)return;
+      if(editing||screen!=='editor'||exportOpen||layoutPick||templateName!==null||mustAccept||help)return;
       // The crop box confirms (Enter) or cancels (Esc) even when the keyboard is not in the canvas frame.
       if(cropOn&&(e.key==='Enter'||e.key==='Escape')){e.preventDefault();frameCommand({type:e.key==='Enter'?'crop':'cropCancel'});return;}
       if(e.key==='Delete'||e.key==='Backspace'){
@@ -819,7 +834,7 @@ function App(){
     <header className="app-header">
       <button type="button" className="app-wordmark" title="edukors.org" aria-label="edukors.org" onClick={()=>void run(()=>api.invoke('website'))}><img className="app-logo" src={logo} alt=""/></button>
       {/* The header is the toolbar: logo, tool groups in a fixed order, then the panel toggles on the right. */}
-      <Toolbar t={t} groups={toolGroups} tail={<IconButton icon="settings" label={t('settings')} keys="⌘," onClick={()=>setScreen('settings')}/>}/>
+      <Toolbar t={t} groups={toolGroups} tail={<><IconButton icon="settings" label={t('settings')} keys="⌘," onClick={()=>setScreen('settings')}/><IconButton icon="help" label={t('help')} aria-haspopup="dialog" onClick={()=>setHelp('quick')}/></>}/>
       <div className="header-right">{tab&&<><IconButton icon="panel" label={t('slidePanel')} keys="⌥⌘0" className={railOpen?'active':undefined} aria-pressed={railOpen} onClick={()=>setRailOpen(x=>!x)}/><IconButton icon="spark" label={aiOpen?t('closeAI'):t('openAI')} keys="⇧⌘A" className={aiOpen?'active':undefined} aria-pressed={aiOpen} onClick={()=>setAiOpen(x=>!x)}/></>}</div>
     </header>
     {tabs.length>0&&<div className="tabs" role="tablist">{tabs.map(x=><div key={x.project.deck.id} className={'tab '+(x.project.deck.id===active&&screen==='editor'?'selected':'')}><button role="tab" aria-selected={x.project.deck.id===active} title={x.project.path||undefined} onClick={()=>{setActive(x.project.deck.id);setScreen('editor');}}><Icon name="file"/><span>{tabTitle(x.project.path,t)}</span>{x.dirty&&<span className="dirty-dot" role="img" aria-label={t('unsaved')}/>}</button><IconButton icon="close" label={t('closeTab')} keys="⌘W" className="icon" onClick={()=>requestClose([x.project.deck.id])}/></div>)}<IconButton icon="plus" label={t('new')} keys="⌘N" className="icon" onClick={()=>setScreen('new')}/></div>}
@@ -902,6 +917,12 @@ function App(){
     {templateName!==null&&deck&&<Modal small title={t('saveTemplate')} onClose={()=>setTemplateName(null)}><form onSubmit={e=>{e.preventDefault();const title=templateName.trim();if(!title)return;setTemplateName(null);void run(async()=>{await api.invoke('saveTemplate',{...deck,title});await refreshTemplates();setNotice(t('templateSaved'));});}}><label className="field">{t('templateName')}<input autoFocus value={templateName} maxLength={200} onChange={e=>setTemplateName(e.target.value)}/></label><footer><Button type="button" onClick={()=>setTemplateName(null)}>{t('cancel')}</Button><Button className="primary" type="submit" disabled={!templateName.trim()}>{t('save')}</Button></footer></form></Modal>}
     {update&&!notice&&<div className="toast" role="status"><Icon name="info"/>{t('updateReady').replace('{v}',update)}<button type="button" className="toast-action" onClick={()=>void run(()=>api.invoke('installUpdate'))}>{t('updateRestart')}</button><IconButton icon="close" label={t('close')} onClick={()=>setUpdate('')}/></div>}
     {notice&&<div className="toast" role="status"><Icon name="info"/>{notice}<IconButton icon="close" label={t('close')} onClick={()=>setNotice('')}/></div>}
+    {mustAccept&&<Modal wide fixed title={t('termsTitle')} onClose={()=>{}}><div className="terms-body"><TermsText lang={prefs.language} title={false} onLink={openLink}/></div>
+      <footer className="modal-actions"><select aria-label={t('language')} value={prefs.language} onChange={e=>updatePrefs({language:e.target.value as Language})}>{[['pt','Português'],['en','English'],['es','Español']].map(([code,label])=><option key={code} value={code}>{label}</option>)}</select><span className="spacer"/>
+        <Button onClick={()=>void run(()=>api.invoke('quit'))}>{t('termsDecline')}</Button><Button className="primary" autoFocus onClick={acceptTerms}>{t('termsAccept')}</Button></footer></Modal>}
+    {/* Help: quick guide, full guide and terms of use, with the version; the toolbar icon and the Help menu open it. */}
+    {help&&!mustAccept&&<Modal sheet title={t('help')} onClose={()=>setHelp(null)}><div className="help-tabs" role="tablist" aria-label={t('help')}>{(['quick','guide','terms'] as const).map(id=><button key={id} type="button" role="tab" aria-selected={help===id} onClick={()=>setHelp(id)}>{t(id==='quick'?'helpQuick':id==='guide'?'helpGuide':'termsTitle')}</button>)}<span className="help-version">Edukors Slides Editor · v{__APP_VERSION__}</span></div>
+      <div className="help-body" role="tabpanel" key={help}>{help==='quick'?<QuickGuide t={t}/>:help==='guide'?<GuideText lang={prefs.language} onLink={openLink}/>:<TermsText lang={prefs.language} onLink={openLink}/>}</div></Modal>}
     {error&&<Modal small title={t('error')} onClose={()=>setError('')}><p className="error-message">{error}</p><footer><Button className="primary" onClick={()=>setError('')}>{t('ok')}</Button></footer></Modal>}
     {pollTarget&&deck?.id===pollTarget.deck&&<Modal title={pollWords[prefs.language].title} onClose={()=>setPollTarget(null)}><PollEditor key={pollTarget.slide} initial={pollTarget.poll} lang={prefs.language} server={prefs.pollServer} onCancel={()=>setPollTarget(null)} onSave={poll=>{mutate(d=>{const target=d.slides.find(s=>s.id===pollTarget.slide);if(target){if(poll){target.poll=poll;target.title=poll.prompt.slice(0,200);}else delete target.poll;}});setManualSelection(null);canvasRange.current=null;setImageSel(false);setCropOn(false);setPollTarget(null);}}/></Modal>}
     {exportOpen&&deck&&slide&&<Modal title={t('exportTitle')} onClose={()=>{if(!exporting)setExportOpen(false);}} wide><p className="modal-subtitle">{deck.title} · {deck.slides.length} {t('slides').toLowerCase()}</p><div className="export-columns"><div><div className="format-options">{['html','pdf','pptx'].map(f=><button key={f} className={format===f?'selected':''} disabled={exporting} onClick={()=>{setFormat(f);setExportResult('');}}><Icon name="file"/><span><strong>{f.toUpperCase()} {f==='html'&&<em>{t('recommended')}</em>}</strong><small>{t((f+'Desc') as any)}</small></span><span className="radio-dot"/></button>)}</div><div className="export-info"><h3>{format.toUpperCase()}</h3><p>{format==='html'?t('htmlInfo'):t('staticInfo')}</p>{format==='html'&&['embedded','animations','tools'].map(k=><div key={k}><Icon name="check"/>{t(k as any)}</div>)}</div></div><div className="export-preview"><Preview deck={deck} slide={slide}/></div></div>{exportResult&&<div className="export-success"><span><Icon name="check"/>{t('exported')}</span><Button onClick={()=>void run(()=>api.invoke('openOutput',exportResult))}>{t('openFile')}</Button><Button onClick={()=>void run(()=>api.invoke('reveal',exportResult))}>{t('openFolder')}</Button></div>}<footer><Button disabled={exporting} onClick={()=>setExportOpen(false)}>{t('cancel')}</Button><Button className="primary" disabled={exporting} onClick={()=>void run(exportDeck)}>{exporting?t('exporting'):`${t('exportName')} ${format.toUpperCase()}`}</Button></footer></Modal>}
