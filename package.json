@@ -37,7 +37,7 @@
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "electron": "44.10.0",
+    "electron": "45.0.0",
     "electron-builder": "26.17.0",
     "electron-updater": "6.8.10",
     "esbuild": "0.25.10",
