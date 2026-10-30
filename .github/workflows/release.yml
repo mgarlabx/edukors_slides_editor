@@ -2,8 +2,10 @@ name: Release
 
 # A tag vX.Y.Z (or vX.Y.Z-rc.N, a pre-release) builds, signs and stages the installers in a draft release.
 # package.json must already hold X.Y.Z; the tag's pre-release suffix is applied only inside the build.
-# Pull requests that touch packaging build the installers too, without signing secrets or publishing.
+# Pull requests that touch packaging, and runs by hand (Actions → Release → Run workflow), build the installers too,
+# without signing secrets or publishing: a run by hand gives store.yml a new package of package.json's version.
 on:
+  workflow_dispatch:
   push:
     tags: ['v*']
   pull_request:

@@ -67,6 +67,9 @@ appx:
   applicationId: EdukorsSlidesEditor
   backgroundColor: transparent
   languages: [en-US, pt-BR, es-ES]
+  # The Store takes MSIX packages only for Windows above 10.0.17134 (1803); Electron needs Windows 10 anyway.
+  minVersion: 10.0.17763.0
+  maxVersionTested: 10.0.26100.0
   artifactName: Edukors-Slides-Editor-${version}-${arch}.${ext}
 nsis:
   oneClick: true
