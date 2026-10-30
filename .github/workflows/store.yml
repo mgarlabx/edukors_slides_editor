@@ -93,6 +93,8 @@ jobs:
         run: |
           shopt -s nullglob; pkg=( msix/*.appx msix/*.msix )
           [ ${#pkg[@]} -eq 1 ] || { echo "::error::expected one package in the artifact, found: ${pkg[*]}"; exit 1; }
+          # msstore picks its handler by the extension and knows .msix, not .appx (the same package format).
+          [[ "${pkg[0]}" == *.appx ]] && { mv "${pkg[0]}" "${pkg[0]%.appx}.msix"; pkg[0]="${pkg[0]%.appx}.msix"; }
           echo "sending ${pkg[0]}"
           flags=(); [ "$COMMIT" = "true" ] || flags+=(--noCommit)
           # The CLI knows the package by the path's extension; the upload gets more than its default 100 s.
