@@ -11,7 +11,7 @@ const require=createRequire(import.meta.url),root=path.resolve('test-results/pol
 await fs.mkdir(root,{recursive:true});
 await build({entryPoints:['tests/poll-fixture.ts'],bundle:true,platform:'node',format:'esm',outfile:path.join(root,'fixture.mjs')});
 const {html,htmlFor}=await import(pathToFileURL(path.join(root,'fixture.mjs')).href),file=path.join(root,'activity.html');await fs.writeFile(file,html);
-const env={...process.env,ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+const env={...process.env,ESF_ACCEPT_TERMS:'1',ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
 await fs.mkdir(env.ESF_DATA_DIR,{recursive:true});await fs.writeFile(path.join(env.ESF_DATA_DIR,'preferences.json'),JSON.stringify({language:'pt',profiles:[],recent:[],activeProfile:''}));
 const packaged=process.argv.includes('--packaged')?path.resolve('release/Edukors Slides Editor.app/Contents/MacOS/Edukors Slides Editor'):undefined;
 const app=await electron.launch({executablePath:packaged||require('electron'),args:packaged?[]:['.'],env,timeout:30000});

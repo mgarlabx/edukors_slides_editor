@@ -125,6 +125,8 @@ The links always give the latest version; every version is on the [releases](htt
 
 The editor needs no Node, Python or Chrome: editing, presenting and exporting work right after installing.
 
+**Help and terms of use.** The help icon on the toolbar (or the Help menu) opens a quick guide, the full [teacher's guide](src/ui/help/guide.en.md) and the [terms of use](src/ui/help/terms-of-use.en.md) (the MIT license, explained), which the editor asks you to accept the first time it opens.
+
 **Updates.** The app updates itself: it checks for a new version when it opens and every few hours, and offers to restart once one is ready, asking about unsaved presentations first.
 
 **Optional: the AI assistant.** Install [Claude Code](https://claude.com/claude-code) (`claude`) or [Codex](https://developers.openai.com/codex/cli/) (`codex`) on your computer; the editor never downloads them for you. Then, in **Settings → AI assistant**, add an account and sign in: the provider's page opens in the browser (if it does not, the editor shows the address and, for Claude, a field for the code shown after you authorize). Each account keeps its own sign-in, separate from the one you may use in a terminal, and the accounts are shared with the other Edukors apps on this computer. Under **Advanced**, the same page holds standing instructions for the assistant (for all presentations and for this one), your MCP servers (every call asks for your permission) and the skills folder. The providers and accounts are handled by the shared Edukors AI library, [`@edukors/ai-cli`](https://github.com/mgarlabx/edukors_ai_cli).

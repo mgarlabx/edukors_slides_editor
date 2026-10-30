@@ -12,7 +12,7 @@ await fs.mkdir(root,{recursive:true});
 await build({entryPoints:['tests/canvas-fixture.ts'],bundle:true,platform:'node',format:'esm',outfile:path.join(root,'fixture.mjs')});
 const {deck,readDeck,writeDeck}=await import(pathToFileURL(path.join(root,'fixture.mjs')).href);
 const file=path.join(root,'fixture.esf');await writeDeck(file,deck);
-const env={...process.env,ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:process.env.ESF_SHOW?'':'1'};delete env.ELECTRON_RUN_AS_NODE;
+const env={...process.env,ESF_ACCEPT_TERMS:'1',ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:process.env.ESF_SHOW?'':'1'};delete env.ELECTRON_RUN_AS_NODE;
 const packaged=process.env.ESF_EXECUTABLE;
 const app=await electron.launch({executablePath:packaged||require('electron'),args:packaged?[file]:['.',file],env,timeout:15000});
 try{

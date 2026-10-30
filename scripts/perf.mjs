@@ -10,7 +10,7 @@ await build({entryPoints:['tests/perf-fixture.ts'],bundle:true,platform:'node',t
 const files=JSON.parse(execFileSync(process.execPath,['test-results/perf-fixture.mjs'],{encoding:'utf8'}));
 const report={};
 for(const [count,file] of Object.entries(files)){
-  const env={...process.env,ESF_DATA_DIR:path.resolve('test-results/perf/appdata-'+count),ESF_HIDDEN:process.env.ESF_SHOW?'':'1'};delete env.ELECTRON_RUN_AS_NODE;
+  const env={...process.env,ESF_ACCEPT_TERMS:'1',ESF_DATA_DIR:path.resolve('test-results/perf/appdata-'+count),ESF_HIDDEN:process.env.ESF_SHOW?'':'1'};delete env.ELECTRON_RUN_AS_NODE;
   const app=await electron.launch({executablePath:require('electron'),args:['.',file],env,timeout:30000});
   try{
     const page=await app.firstWindow();await app.evaluate(({dialog})=>{dialog.showSaveDialog=async(_w,o)=>({canceled:false,filePath:o.defaultPath});});let t=Date.now();

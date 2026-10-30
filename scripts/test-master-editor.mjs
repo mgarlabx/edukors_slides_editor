@@ -15,7 +15,7 @@ source.masters[0].html='<div style="position:absolute;left:100px;bottom:40px">So
 source.assets=[{id:'asset-font',name:'Georgia.ttf',mime:'font/ttf',data:(await fs.readFile('/System/Library/Fonts/Supplemental/Georgia.ttf')).toString('base64')},{id:'asset-bg',name:'background.svg',mime:'image/svg+xml',data:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#eee"/></svg>').toString('base64')}];source.masters[0].css+='@font-face{font-family:ReviewFont;src:url("asset:asset-font")}#portable{font-family:ReviewFont;color:var(--ink);background-image:url("asset:asset-bg")}';
 source.slides=[newSlide(source.layouts[0]),newSlide(source.layouts[0])];source.slides[0].html=source.slides[0].html.replace('</section>','<div id="portable" data-manual="text" style="position:absolute;left:700px;top:400px;width:500px;height:100px;color:var(--ink)">Portable object</div></section>');destination.masters[0].css+='h1{color:red}.slide{background:pink}';
 const from=path.join(root,'Source.esf'),to=path.join(root,'Destination.esf');await writeDeck(from,source);await writeDeck(to,destination);
-const env={...process.env,ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+const env={...process.env,ESF_ACCEPT_TERMS:'1',ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
 const app=await electron.launch({executablePath:require('electron'),args:['.',from],env,timeout:20000});
 try{
  const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(10000);

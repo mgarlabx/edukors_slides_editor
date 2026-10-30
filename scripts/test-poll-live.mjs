@@ -12,7 +12,7 @@ const key=process.env.ESF_POLL_KEY,server=(process.env.ESF_POLL_SERVER||'').repl
 if(!server||!key){console.error('Set ESF_POLL_SERVER to your server and ESF_POLL_KEY to one of its presenter keys.');process.exit(1);}
 const require=createRequire(import.meta.url),root=path.resolve('test-results/poll-live-'+Date.now());await fs.mkdir(root,{recursive:true});
 const file=path.join(root,'probe.html');await fs.writeFile(file,'<!doctype html><meta charset="utf-8"><title>Poll file probe</title><h1>Poll file://</h1>');
-const env={...process.env,ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+const env={...process.env,ESF_ACCEPT_TERMS:'1',ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
 const app=await electron.launch({executablePath:require('electron'),args:['.'],env,timeout:30000}),report={date:new Date().toISOString(),browser:'Electron Chromium',origin:'file://',server,tests:[]};
 try{
   await app.firstWindow();const next=app.waitForEvent('window');await app.evaluate(async({BrowserWindow})=>{const w=new BrowserWindow({show:false,webPreferences:{sandbox:true,contextIsolation:true}});await w.loadURL('about:blank');});const page=await next;await page.goto(pathToFileURL(file).href);
