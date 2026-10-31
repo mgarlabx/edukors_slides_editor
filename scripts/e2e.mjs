@@ -336,7 +336,7 @@ try{
  await page.getByRole('button',{name:'Assistente de IA',exact:true}).click();
  // Accounts come from the AI library (here its fake provider); a new account signs in at once and, being the first, is the one in use.
  step("Accounts come from the AI library (here its fake provider); a new acco…");
- await page.getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:'Fake AI',exact:true}).click();
+ await page.locator('.modal.sheet').getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:'Fake AI',exact:true}).click();
  await page.getByLabel('Nome da conta').fill('Conta de teste');await page.getByRole('button',{name:'Entrar na conta',exact:true}).click();
  await page.locator('.eai-account .eai-badge').filter({hasText:/^Conectada/}).waitFor({timeout:30000});await shot(page,'03b-accounts.png');
  assert.notEqual(await page.locator('.eai-accounts select').first().inputValue(),'','the first account becomes the one in use');
@@ -463,7 +463,9 @@ try{
  const attachment=path.join(root,'anexo.png');await fs.copyFile(path.resolve('build/icon.png'),attachment).catch(()=>fs.writeFile(attachment,tinyPng));
  await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},attachment);
  await page.getByRole('button',{name:'Anexar arquivo'}).click();await page.locator('.context-chip.attachment').filter({hasText:'anexo.png'}).waitFor();
- await page.locator('.model-button').click();await page.getByRole('radio',{name:'Fake Deep'}).click();await page.locator('.model-pop input[type=range]').fill('3');await page.locator('.model-button').filter({hasText:'Fake Deep · Alto'}).waitFor();await shot(page,'05-model.png');await page.keyboard.press('Escape');await page.locator('.model-pop').waitFor({state:'detached'});
+ // A new install reviews before applying; this flow applies directly (Mode → Apply changes).
+ await page.getByRole('button',{name:/^Modo:/}).click();await page.getByRole('menuitemradio',{name:/Aplicar alterações/}).click();await page.getByRole('button',{name:'Modo: Aplicar alterações'}).waitFor();
+ await page.getByRole('button',{name:/^Modelo:/}).click();await page.getByRole('menuitemradio',{name:'Fake Deep'}).click();await page.locator('.eai-model-pop input[type=range]').fill('3');await page.locator('.eai-model .eai-chip').filter({hasText:'Fake Deep · Alto'}).waitFor();await shot(page,'05-model.png');await page.keyboard.press('Escape');await page.locator('.eai-model-pop').waitFor({state:'detached'});
  // A slide script that never finishes is rejected by the app's check; the agent is told, and nothing changes.
  step("A slide script that never finishes is rejected by the app's check; the…");
  await ask('tool apply_changes '+JSON.stringify({slideUpdates:[{id:cover,script:'while(true){}'}]}),'Not applied');
@@ -479,14 +481,13 @@ try{
  step("A valid change: a new title and the downloaded image as an asset, appl…");
  await ask('tool apply_changes '+JSON.stringify({message:'Feito pela IA',slideUpdates:[{id:cover,title:'Título pela IA',html:coverHtml.replace(/<h1([^>]*)>[^<]*<\/h1>/,'<h1$1>Título pela IA</h1><img src="asset:asset-mock-logo" alt="">')}],assets:[{id:'asset-mock-logo',path:'media/logo.png'}]}),'Accepted');
  await page.locator('.slide-item button[aria-label$=": Título pela IA"]').waitFor();await page.frameLocator('.slide-canvas iframe').locator('img').waitFor({state:'attached'});
- assert.equal(await page.locator('.composer-account select').count(),1,'account picker is also available in the assistant');
- await page.locator('.usage-tokens').waitFor();assert.equal(await page.locator('.usage').filter({hasText:'Consumo desta conversa'}).count(),0);
+ await page.locator('.eai-usage').waitFor();
  // The agent asks during its turn; an option answers it and the turn goes on.
  step("The agent asks during its turn; an option answers it and the turn goes…");
  const box=page.getByPlaceholder('Peça uma alteração…');await box.fill('ask');await box.press('Enter');
- await page.locator('.questions legend').filter({hasText:'Which color?'}).waitFor({timeout:40000});
- await page.locator('.question-options button').filter({hasText:'blue'}).click();await shot(page,'06a-questions.png');await page.getByRole('button',{name:'Enviar respostas'}).click();
- await page.getByText('You chose blue').waitFor({timeout:40000});await page.locator('.questions .answered').waitFor();
+ await page.locator('.eai-question legend').filter({hasText:'Which color?'}).waitFor({timeout:40000});
+ await page.locator('.eai-question .eai-actions button').filter({hasText:'blue'}).click();await shot(page,'06a-questions.png');await page.getByRole('button',{name:'Enviar resposta',exact:true}).click();
+ await page.getByText('You chose blue').waitFor({timeout:40000});await page.locator('.eai-question fieldset[disabled]').waitFor();
  await page.locator('.activity').filter({hasText:'Enviando para a sessão atual…'}).first().waitFor();await page.locator('.activity').filter({hasText:'Sessão retomada'}).first().waitFor();
  assert.equal(JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'preferences.json'),'utf8')).attachDir,root,'last attach folder remembered');
  assert.match(await fs.readFile(env.ESF_EXTERNAL_LOG,'utf8'),/skills/,'the skills folder opens');
@@ -495,9 +496,9 @@ try{
   // Narrowing works on any screen (CI runners have small displays that leave no room to widen).
   const after=(await page.locator('.ai-sidebar').boundingBox()).width;assert.ok(Math.abs(before-after-50)<3,`sidebar narrowed ${before}→${after}`);}
  await shot(page,'06-ai.png');
- await page.getByRole('button',{name:'Nova sessão'}).click();await page.locator('.chat-empty').waitFor();
- await page.getByRole('button',{name:'Sessões anteriores'}).click();
- await page.locator('.session-item').filter({hasText:'tool apply_changes'}).locator('button').first().click();
+ await page.getByRole('button',{name:'Nova conversa',exact:true}).click();await page.locator('.chat-empty').waitFor();
+ await page.getByRole('button',{name:'Conversas',exact:true}).click();
+ await page.locator('.eai-history-row').filter({hasText:'tool apply_changes'}).locator('button').first().click();
  await page.getByText('You chose blue').waitFor();
  await page.getByRole('button',{name:'Desfazer',exact:true}).click();
  await page.locator('button[aria-label$=": Apresentação de teste"]').waitFor();
