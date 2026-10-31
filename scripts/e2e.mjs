@@ -1,3 +1,4 @@
+if(process.argv.includes('--ai-ui')){await import('./test-ai-ui.mjs');process.exit();}
 if(process.argv.includes('--poll')){await import('./test-poll.mjs');process.exit();}
 if(process.argv.includes('--poll-server')){await import('./test-poll-server.mjs');process.exit(process.exitCode||0);}
 if(process.argv.includes('--poll-live')){await import('./test-poll-live.mjs');process.exit(process.exitCode||0);}
@@ -336,21 +337,21 @@ try{
  // Accounts come from the AI library (here its fake provider); a new account signs in at once and, being the first, is the one in use.
  step("Accounts come from the AI library (here its fake provider); a new acco…");
  await page.getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:'Fake AI',exact:true}).click();
- await page.getByLabel('Nome da conta').fill('Conta de teste');await page.getByRole('button',{name:'Criar conta',exact:true}).click();
- await page.locator('.account-card .provider-status').filter({hasText:/^Conectada/}).waitFor({timeout:30000});await shot(page,'03b-accounts.png');
- assert.notEqual(await page.locator('.active-account select').inputValue(),'','the first account becomes the one in use');
+ await page.getByLabel('Nome da conta').fill('Conta de teste');await page.getByRole('button',{name:'Entrar na conta',exact:true}).click();
+ await page.locator('.eai-account .eai-badge').filter({hasText:/^Conectada/}).waitFor({timeout:30000});await shot(page,'03b-accounts.png');
+ assert.notEqual(await page.locator('.eai-accounts select').first().inputValue(),'','the first account becomes the one in use');
  assert.equal(await page.locator('.modal.sheet').getByRole('button',{name:'Templates',exact:true}).count(),0,'templates live in the New gallery');
  // Advanced always holds the instructions, the user's MCP servers and the skills, in this order.
  step("Advanced always holds the instructions, the user's MCP servers and the…");
- await page.locator('.assistant-advanced summary').click();
- assert.deepEqual(await page.locator('.assistant-advanced h3').allInnerTexts(),['Instruções para o agente','Servidores MCP','Skills']);
+ await page.locator('.eai-advanced summary').click();
+ assert.deepEqual(await page.locator('.eai-advanced h3').allInnerTexts(),['Instruções para o assistente','Servidores MCP','Skills']);
  await page.getByLabel('Servidores MCP',{exact:true}).fill('{oops');await page.locator('.mcp-problems').waitFor();await page.getByLabel('Servidores MCP',{exact:true}).fill('');await page.locator('.mcp-problems').waitFor({state:'detached'});
- await page.getByText('Nenhuma skill na pasta.').waitFor();await page.getByRole('button',{name:'Abrir pasta de skills'}).click();
+ await page.locator('.eai-advanced section').last().getByRole('button',{name:'Atualizar',exact:true}).first().click();await page.getByText('Nenhuma skill na pasta.').waitFor();await page.getByRole('button',{name:'Abrir pasta de skills'}).click();
  await page.getByLabel('Global',{exact:true}).fill('Use frases curtas.');
  // The presentation's own prompt sits in a second tab and goes into the package (ai/system-prompt.md), not into templates.
  step("The presentation's own prompt sits in a second tab and goes into the p…");
  await page.getByRole('tab',{name:'Esta apresentação'}).click();await page.getByLabel('Esta apresentação',{exact:true}).fill('Palestra para professores.');assert.equal(await page.getByText('O agente trabalha dentro',{exact:false}).count(),0);
- assert.equal(await page.locator('.toolbar').count(),1,'settings open as a modal over the editor');await page.locator('.modal.sheet').getByRole('button',{name:'Fechar',exact:true}).click();await page.locator('.modal.sheet').waitFor({state:'detached'});
+ await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();assert.equal(await page.locator('.toolbar').count(),1,'settings open as a modal over the editor');await page.locator('.modal.sheet').getByRole('button',{name:'Fechar',exact:true}).click();await page.locator('.modal.sheet').waitFor({state:'detached'});
  // Templates: saved from the File menu, renamed and deleted in the New gallery.
  step("Templates: saved from the File menu, renamed and deleted in the New ga…");
  await app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Arquivo').submenu.items.find(x=>x.label==='Salvar como template…').click();});
@@ -561,10 +562,17 @@ try{
 finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
 // Opening the .ESF by path (as Finder does) must open it, with its conversation, from the package alone.
 step('reopen the package by path');
+const ghost=path.join(projectDir,'Sumiu.ESF');{const f=path.join(env.ESF_DATA_DIR,'preferences.json'),p=JSON.parse(await fs.readFile(f,'utf8'));p.recent=[...p.recent,ghost];await fs.writeFile(f,JSON.stringify(p));}
 app=await launch(esf);
 try{
  const page=watch(await app.firstWindow());
  await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+\.\d+$/);
+ // A recent file that is gone: "File not found" warning; Keep leaves it in the list, Remove drops it.
+ {await app.evaluate(({dialog})=>{globalThis.__boxes=[];globalThis.__answer=0;dialog.showMessageBox=async(_w,o)=>{globalThis.__boxes.push(o.message);return{response:globalThis.__answer};};});
+  const row=()=>page.locator('.recent-list button').filter({hasText:'Sumiu.ESF'});await page.getByRole('button',{name:'Recentes',exact:true}).click();await row().click();
+  for(let i=0;i<50&&!(await app.evaluate(()=>globalThis.__boxes.length));i++)await page.waitForTimeout(50);assert.deepEqual(await app.evaluate(()=>globalThis.__boxes),['Arquivo não encontrado']);assert.equal(await row().count(),1,'kept');
+  await app.evaluate(()=>{globalThis.__answer=1;});await row().click();await row().waitFor({state:'detached'});assert.ok(!JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'preferences.json'),'utf8')).recent.includes(ghost),'removed from preferences');
+  assert.equal(await page.locator('.tab').count(),1);await page.keyboard.press('Escape');await page.locator('.modal.sheet').waitFor({state:'detached'});}
  if(!win){await page.locator('.workbench').click({position:{x:5,y:5}});await page.keyboard.press('End');await page.locator('.slide-item').last().and(page.locator('.selected')).waitFor();await page.keyboard.press('Home');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();
  {const ids=()=>page.locator('.slide-item').evaluateAll(l=>l.map(x=>x.dataset.id));const before=await ids();await page.keyboard.press('Meta+ArrowDown');await page.locator('.slide-item').nth(1).and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),[before[1],before[0],...before.slice(2)],'Cmd+Down moves the slide');await page.keyboard.press('Meta+ArrowUp');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),before,'Cmd+Up moves it back');}
  {const selectAll=()=>app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Editar').submenu.items.find(x=>x.label==='Selecionar tudo').click();});

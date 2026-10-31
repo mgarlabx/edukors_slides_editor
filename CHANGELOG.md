@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3
+
+From this version on, releases are named X.Y (1.3, 1.4…).
+
+- **AI assistant, same look as the Graph editor:** accounts, service setup, model and effort, usage, conversations and questions now come from the shared Edukors interface ([`@edukors/ai-ui`](https://github.com/mgarlabx/edukors_ai_cli/tree/main/packages/ui) 0.1.4, on `@edukors/ai-cli` 0.2.2), in Portuguese, English and Spanish.
+- **Review before applying:** the assistant's changes can wait for you as a proposal, to accept or discard, or be applied directly once validated. New installs start in review; existing setups keep applying directly.
+- **Installing Claude Code or Codex:** when a service is missing, Settings shows its official guide and the install command for your system, to copy; the editor never runs it.
+- **Usage** shows the account's limit windows as the service reports them. Each conversation keeps the account it ran on. Removing an account signs it out first.
+- **Recent files:** a recent file that was moved or deleted shows "File not found", with the choice to remove it from the list.
+- **Interactive questions:** without a questions server, a presentation with questions is not exported to HTML; the export shows a warning with a shortcut to Settings (PDF and PPTX remain available).
+
 ## 1.2.0
 
 - **Terms of use** (the MIT license, explained, in Portuguese, English and Spanish): the first time it opens, the editor asks you to accept them, or to decline and quit; they stay in Help. A new version of the terms asks again.

@@ -25,6 +25,7 @@ export interface Preferences {
   language: Language; recent: string[];
   // The AI library's account the assistant uses (accounts live in the shared EDUKORS registry, not here).
   aiAccount?: string;
+  aiMode?: "ask"|"auto";
   // Model and effort chosen in the assistant, per account; empty uses the provider's default.
   aiOptions?: Record<string, {model?: string; effort?: string}>;
   // The user's MCP servers, as the JSON text typed in Settings ({"mcpServers":{...}} or the bare object).
@@ -46,11 +47,12 @@ export interface AIEvent {
   // activity: what the CLI is doing (start, thinking, tool, writing, retry, validating, fixing), body is what its row expands to;
   // thought: reasoning text appended to the last activity; progress: bytes and output tokens of the answer so far.
   kind?: string; tool?: string; detail?: string; body?: string; bytes?: number; tokens?: number;
-  accountId?: string; limits?: SessionLimits;
+  accountId?: string; limits?: SessionLimits; accountUsage?: {windows?:{name:string;used:number;resetsAt?:string}[];observedAt:string};
   // question: one question the agent (or a call to the user's MCP server) puts to the user, answered by aiAnswer.
   questionId?: string; options?: string[];
   // login: the address a sign-in offers; acceptsCode when the page ends with a code to paste back.
   url?: string; acceptsCode?: boolean;
+  review?:boolean;
   text?: string; deck?: Deck; input?: number; output?: number; cache?: number;
   cost?: number; sessionId?: string;
   // usage: tokens in the session's context after the last main-thread call, and the model's context window.
