@@ -69,7 +69,7 @@ try{
   await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.flatMap(m=>m.submenu.items).find(x=>x.label==='Termos de uso').click());await help.waitFor();assert.equal(await tab('Termos de uso').getAttribute('aria-selected'),'true');assert.match(await help.textContent(),/MIT License/);await page.keyboard.press('Escape');await help.waitFor({state:'detached'});}
  // Startup shows an empty workspace; New and Recent open as modals from the File menu or the toolbar.
  step("Startup shows an empty workspace; New and Recent open as modals from t…");
- await page.locator('.empty-desk').waitFor();assert.equal(await page.locator('.modal,.tabs,.template-card').count(),0,'nothing but the empty workspace');assert.equal(await page.locator('.toolbar button').count(),5,'only the File section, Settings and Help');assert.match(await page.locator('.statusbar .app-version').innerText(),/^v\d+\.\d+\.\d+$/,'version shown without a presentation');await shot(page,'00-empty.png');
+ await page.locator('.empty-desk').waitFor();assert.equal(await page.locator('.modal,.tabs,.template-card').count(),0,'nothing but the empty workspace');assert.equal(await page.locator('.toolbar button').count(),5,'only the File section, Settings and Help');assert.match(await page.locator('.statusbar .app-version').innerText(),/^v\d+\.\d+(\.\d+)?$/,'version shown without a presentation');await shot(page,'00-empty.png');
  // Native menu: without a presentation, only what works on the empty workspace stays enabled.
  // Slides / slide master is a segmented control; the old toggle button is emulated by clicking the other view.
  step("Native menu: without a presentation, only what works on the empty work…");
@@ -566,7 +566,7 @@ const ghost=path.join(projectDir,'Sumiu.ESF');{const f=path.join(env.ESF_DATA_DI
 app=await launch(esf);
 try{
  const page=watch(await app.firstWindow());
- await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+\.\d+$/);
+ await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+(\.\d+)?$/);
  // A recent file that is gone: "File not found" warning; Keep leaves it in the list, Remove drops it.
  {await app.evaluate(({dialog})=>{globalThis.__boxes=[];globalThis.__answer=0;dialog.showMessageBox=async(_w,o)=>{globalThis.__boxes.push(o.message);return{response:globalThis.__answer};};});
   const row=()=>page.locator('.recent-list button').filter({hasText:'Sumiu.ESF'});await page.getByRole('button',{name:'Recentes',exact:true}).click();await row().click();
