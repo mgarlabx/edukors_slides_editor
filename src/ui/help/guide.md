@@ -111,7 +111,7 @@ O clipe 📎 anexa arquivos (textos, PDFs, imagens) para ele usar. Quando o pedi
 
 **Inserir → Pergunta interativa** transforma o slide numa pergunta ao vivo: **múltipla escolha**, **nuvem de palavras** ou **resposta aberta**. No HTML exportado, você desbloqueia a pergunta com a sua chave de apresentador, a plateia lê o QR code e responde pelo celular, e os resultados aparecem como barras, nuvem ou lista, com download em CSV.
 
-As respostas passam por um servidor de perguntas que **você ou a sua instituição hospedam** (PHP e MySQL, com guia de instalação no [repositório](https://github.com/mgarlabx/edukors_slides_editor)). Informe o endereço em **Configurações → Perguntas interativas** e use **Testar conexão**. Sem servidor, a exportação avisa e a pergunta diz que falta o servidor.
+As respostas passam por um servidor de perguntas que **você ou a sua instituição hospedam** (PHP e MySQL, com guia de instalação no [repositório](https://github.com/mgarlabx/edukors_slides_editor)). Informe o endereço em **Configurações → Perguntas interativas** e use **Testar conexão**. Sem servidor, a apresentação com perguntas não pode ser exportada em HTML: o diálogo de exportação mostra um aviso com o atalho para as configurações (PDF e PPTX continuam disponíveis).
 
 ## 9. Apresentar e exportar
 

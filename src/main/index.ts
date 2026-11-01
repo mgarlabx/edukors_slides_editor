@@ -48,19 +48,19 @@ const assistant=new Assistant({
 });
 const aiStopped=new Set<string>(),aiRunning=new Map<string,string>(),skillsDir=path.join(dataDir,'skills');
 const mainWords={
-  pt:{fontsEmbedded:'Fontes incorporadas:',fontsMissing:'Fontes não encontradas neste computador (o HTML usará substitutas):',exported:'Exportado',openFile:'Abrir arquivo',showFolder:'Mostrar na pasta',cancelled:'Pedido interrompido. Nenhuma alteração foi aplicada.',profile:'Escolha uma conta conectada em Configurações → Assistente de IA.',retry:'A resposta não passou na validação; pedindo uma correção…',invalid:'As alterações não foram aplicadas porque a validação falhou:',cancel:'Cancelar',saveAs:'Salvar como…',reopen:'Reabrir a versão externa',changed:'O arquivo .ESF foi alterado fora do aplicativo.',missing:'O arquivo .ESF foi movido ou excluído.',conflict:'Suas alterações continuam abertas. Salve em outro local ou reabra a versão do disco (descarta as alterações desta aba).'},
-  en:{fontsEmbedded:'Embedded fonts:',fontsMissing:'Fonts not found on this computer (the HTML will use fallbacks):',exported:'Exported',openFile:'Open file',showFolder:'Show in folder',cancelled:'Request stopped. No changes were applied.',profile:'Choose a signed-in account in Settings → AI assistant.',retry:'The answer failed validation; asking for a fix…',invalid:'The changes were not applied because validation failed:',cancel:'Cancel',saveAs:'Save As…',reopen:'Reopen the external version',changed:'The .ESF file was changed outside the app.',missing:'The .ESF file was moved or deleted.',conflict:'Your changes are still open. Save them elsewhere or reopen the version on disk (discards this tab’s changes).'},
-  es:{fontsEmbedded:'Fuentes incorporadas:',fontsMissing:'Fuentes no encontradas en este equipo (el HTML usará sustitutas):',exported:'Exportado',openFile:'Abrir archivo',showFolder:'Mostrar en la carpeta',cancelled:'Solicitud interrumpida. No se aplicó ningún cambio.',profile:'Elige una cuenta conectada en Configuración → Asistente de IA.',retry:'La respuesta no pasó la validación; solicitando una corrección…',invalid:'Los cambios no se aplicaron porque la validación falló:',cancel:'Cancelar',saveAs:'Guardar como…',reopen:'Reabrir la versión externa',changed:'El archivo .ESF se modificó fuera de la aplicación.',missing:'El archivo .ESF se movió o se eliminó.',conflict:'Tus cambios siguen abiertos. Guárdalos en otra ubicación o reabre la versión del disco (descarta los cambios de esta pestaña).'},
+  pt:{notFound:'Arquivo não encontrado',notFoundDetail:'Deseja remover este arquivo da lista de recentes?',removeRecent:'Remover da lista',keepRecent:'Manter',fontsEmbedded:'Fontes incorporadas:',fontsMissing:'Fontes não encontradas neste computador (o HTML usará substitutas):',exported:'Exportado',openFile:'Abrir arquivo',showFolder:'Mostrar na pasta',cancelled:'Pedido interrompido. Nenhuma alteração foi aplicada.',profile:'Escolha uma conta conectada em Configurações → Assistente de IA.',retry:'A resposta não passou na validação; pedindo uma correção…',invalid:'As alterações não foram aplicadas porque a validação falhou:',cancel:'Cancelar',saveAs:'Salvar como…',reopen:'Reabrir a versão externa',changed:'O arquivo .ESF foi alterado fora do aplicativo.',missing:'O arquivo .ESF foi movido ou excluído.',conflict:'Suas alterações continuam abertas. Salve em outro local ou reabra a versão do disco (descarta as alterações desta aba).'},
+  en:{notFound:'File not found',notFoundDetail:'Do you want to remove this file from the recent files list?',removeRecent:'Remove from list',keepRecent:'Keep',fontsEmbedded:'Embedded fonts:',fontsMissing:'Fonts not found on this computer (the HTML will use fallbacks):',exported:'Exported',openFile:'Open file',showFolder:'Show in folder',cancelled:'Request stopped. No changes were applied.',profile:'Choose a signed-in account in Settings → AI assistant.',retry:'The answer failed validation; asking for a fix…',invalid:'The changes were not applied because validation failed:',cancel:'Cancel',saveAs:'Save As…',reopen:'Reopen the external version',changed:'The .ESF file was changed outside the app.',missing:'The .ESF file was moved or deleted.',conflict:'Your changes are still open. Save them elsewhere or reopen the version on disk (discards this tab’s changes).'},
+  es:{notFound:'Archivo no encontrado',notFoundDetail:'¿Desea quitar este archivo de la lista de recientes?',removeRecent:'Quitar de la lista',keepRecent:'Mantener',fontsEmbedded:'Fuentes incorporadas:',fontsMissing:'Fuentes no encontradas en este equipo (el HTML usará sustitutas):',exported:'Exportado',openFile:'Abrir archivo',showFolder:'Mostrar en la carpeta',cancelled:'Solicitud interrumpida. No se aplicó ningún cambio.',profile:'Elige una cuenta conectada en Configuración → Asistente de IA.',retry:'La respuesta no pasó la validación; solicitando una corrección…',invalid:'Los cambios no se aplicaron porque la validación falló:',cancel:'Cancelar',saveAs:'Guardar como…',reopen:'Reabrir la versión externa',changed:'El archivo .ESF se modificó fuera de la aplicación.',missing:'El archivo .ESF se movió o se eliminó.',conflict:'Tus cambios siguen abiertos. Guárdalos en otra ubicación o reabre la versión del disco (descarta los cambios de esta pestaña).'},
 };
 const outputPaths=new Set<string>();
 let exportBusy=false;
 async function loadPreferences(){
   // Accounts of earlier versions (profiles pointing at CLI folders such as ~/.claude) are not carried over: the
   // assistant uses accounts made by the AI library, which the user signs in to once.
-  const defaults:Preferences={language:'pt',recent:[]};
+  const defaults:Preferences={language:'pt',recent:[],aiMode:'ask'};
   // ESF_ACCEPT_TERMS: automated runs on a fresh profile skip the terms of use (the e2e accepts them itself).
   const accepted=(p:Preferences)=>process.env.ESF_ACCEPT_TERMS?{...p,terms:TERMS_VERSION}:p;
-  try{const saved=JSON.parse(await fs.readFile(prefsPath,'utf8'));return accepted(cleanPrefs({...defaults,...saved}));}catch{return accepted(defaults);}
+  try{const saved=JSON.parse(await fs.readFile(prefsPath,'utf8'));return accepted(cleanPrefs({...defaults,...saved,aiMode:saved.aiMode??(saved.aiAccount?'auto':'ask')}));}catch{return accepted(defaults);}
 }
 function cleanPrefs(p:Preferences):Preferences{
   if(!['pt','en','es'].includes(p.language))throw Error('Invalid preferences.');
@@ -69,7 +69,7 @@ function cleanPrefs(p:Preferences):Preferences{
   const text=(v:unknown)=>typeof v==='string'&&v.length<=200&&!/[\r\n\0]/.test(v)?v:'';
   const options=Object.fromEntries(Object.entries(p.aiOptions&&typeof p.aiOptions==='object'?p.aiOptions:{}).filter(([k])=>/^[\w-]{1,100}$/.test(k)).slice(0,50).map(([k,v])=>[k,{model:text(v?.model),effort:text(v?.effort)}]));
   return {language:p.language,attachDir:typeof p.attachDir==='string'&&p.attachDir.length<4096?p.attachDir:undefined,systemPrompt:p.systemPrompt||'',...normalizePollServer(p.pollServer)?{pollServer:normalizePollServer(p.pollServer)!}:{},
-    ...text(p.terms)?{terms:text(p.terms)}:{},aiAccount:text(p.aiAccount),aiOptions:options,aiMcp:p.aiMcp||'',recent:(p.recent||[]).filter(x=>typeof x==='string').slice(0,20)};
+    ...text(p.terms)?{terms:text(p.terms)}:{},aiAccount:text(p.aiAccount),aiMode:p.aiMode==='ask'?'ask':p.aiMode==='auto'?'auto':p.aiAccount?'auto':'ask',aiOptions:options,aiMcp:p.aiMcp||'',recent:(p.recent||[]).filter(x=>typeof x==='string').slice(0,20)};
 }
 async function persist(){await atomic(prefsPath,JSON.stringify(prefs,null,2));}
 async function remember(file:string){prefs.recent=[file,...prefs.recent.filter(x=>x!==file)].slice(0,20);await persist();}
@@ -154,6 +154,11 @@ handle('acceptTerms',async()=>{prefs.terms=TERMS_VERSION;await persist();return 
 });
 handle('open',async(file?:string)=>{
   if(file&&!prefs.recent.includes(file))throw Error('Choose this project using the file dialog.');
+  // A recent file that is gone: warn and offer to drop it from the list (the UI gets the new preferences).
+  if(file&&!await exists(file)){const w=mainWords[prefs.language];
+    const r=await dialog.showMessageBox(win!,{type:'warning',message:w.notFound,detail:file+'\n\n'+w.notFoundDetail,buttons:[w.keepRecent,w.removeRecent],defaultId:1,cancelId:0});
+    if(r.response===1){prefs.recent=prefs.recent.filter(x=>x!==file);await persist();menu();}
+    return{missing:true,prefs};}
   if(!file){const r=await dialog.showOpenDialog(win!,{properties:['openFile'],filters:[{name:'Edukors Slides Editor',extensions:['esf','ESF']}]});if(r.canceled)return null;file=r.filePaths[0];}
   return openProject(file);
 });
@@ -239,6 +244,8 @@ handle('export',async(deck:Deck,format:string)=>{
   if(!['html','pdf','pptx'].includes(format))throw Error('Unsupported export.');
   if(exportBusy)throw Error('An export is already running.');
   validateDeck(deck);
+  // Interactive questions need a server to work in the exported file: no HTML with questions without one.
+  if(format==='html'&&deck.slides.some(s=>s.poll)&&!prefs.pollServer)return{noPollServer:true};
   // The default place is next to the .ESF: a new presentation is saved first.
   let project:Project|undefined;
   if(!store.location(deck.id).file){const p=await save(deck);if(!p)return null;deck=p.deck;project=p;}
@@ -253,37 +260,21 @@ handle('export',async(deck:Deck,format:string)=>{
     else {const images=await captureSlides(deck,tempDir);bytes=format==='pdf'?await createPdf(images,tempDir):createPptx(images,deck.title);}
     await atomic(file,bytes);outputPaths.add(file);
     // No alert when done: only fonts missing on this Mac are reported, in the editor.
-    return{path:file,project,fonts,noPollServer:format==='html'&&deck.slides.some(s=>s.poll)&&!prefs.pollServer};
+    return{path:file,project,fonts};
   }finally{exportBusy=false;}
 });
-// Claude Code keeps the account's usage (fetched by its interactive sessions) in <account home>/.claude.json, with no
-// credentials. Read every 30 s by the UI, it refreshes the 5-hour window between requests; Codex reports it directly.
-let changed=false;
-async function cachedUsage(accountId:string,home:string){
-  try{
-    const c=JSON.parse(await fs.readFile(path.join(home,'.claude.json'),'utf8')).cachedUsageUtilization,w=c?.utilization?.five_hour;
-    const resetsAt=Date.parse(w?.resets_at);if(typeof w?.utilization!=='number'||!Number.isFinite(c.fetchedAtMs))return;
-    const old=sessionLimits[accountId] as {updated?:number}|undefined;if(old?.updated&&old.updated>=c.fetchedAtMs)return;
-    sessionLimits[accountId]={utilization:Math.max(0,w.utilization/100),resetsAt:Number.isFinite(resetsAt)?Math.floor(resetsAt/1000):undefined,status:'allowed',updated:c.fetchedAtMs};changed=true;
-  }catch{}
-}
-handle('limits',async()=>{
-  changed=false;const accounts=await assistant.ai.listAccounts().catch(()=>[]);
-  await Promise.all(accounts.map(async a=>{
-    if(a.providerId==='claude')return cachedUsage(a.id,a.homeDir);
-    if(a.id!==prefs.aiAccount)return;const live=await assistant.usage(a.id);if(live){sessionLimits[a.id]=live;changed=true;}
-  }));
-  if(changed)void atomic(limitsPath,JSON.stringify(sessionLimits)).catch(()=>{});return sessionLimits;
-});
+// Legacy five-hour endpoint retained for older clients; normalized usage is used by the UI.
+handle('limits',async()=>sessionLimits);
+handle('aiUsage',async(id:unknown)=>assistant.ai.readUsage(accountId(id)));
 handle('openOutput',async(file:string)=>{if(!outputPaths.has(file))throw Error('Unknown export.');const error=await shell.openPath(file);if(error)throw Error(error);});
 // Settings → AI assistant: the library's providers and accounts. A sign-in reports its address as a 'login' event and may
 // wait for a pasted code (aiAccountCode); cancelling aborts it.
 const signIns=new Map<string,AbortController>();
 const accountId=(id:unknown)=>{if(typeof id!=='string'||!/^[\w-]{1,100}$/.test(id))throw Error('Invalid account.');return id;};
-handle('aiProviders',()=>assistant.providers());
+handle('aiProviders',(refresh=false)=>assistant.providers(!!refresh));
 handle('aiAccounts',(status=true)=>assistant.accounts(!!status));
 handle('aiAccountCreate',async(providerId:unknown,label:unknown)=>{
-  if(typeof providerId!=='string'||!(await assistant.providers()).some(p=>p.id===providerId)||typeof label!=='string'||!label.trim()||label.length>80)throw Error('Invalid account.');
+  if(typeof providerId!=='string'||!(await assistant.providers()).some(p=>p.id===providerId&&p.workspace)||typeof label!=='string'||!label.trim()||label.length>80)throw Error('Invalid account.');
   return assistant.createAccount(providerId,label.trim());
 });
 handle('aiAccountConnect',async(id:unknown)=>{
@@ -297,7 +288,7 @@ handle('aiAccountRename',(id:unknown,label:unknown)=>{if(typeof label!=='string'
 // Removing an account stops what runs on it and drops its sessions; the conversations stay in the presentations.
 handle('aiAccountRemove',async(id:unknown)=>{
   const a=accountId(id);for(const [deckId,acc] of aiRunning)if(acc===a){aiStopped.add(deckId);assistant.cancel(deckId);}
-  await assistant.removeAccount(a);delete sessionLimits[a];
+  await assistant.logout(a).catch(()=>undefined);await assistant.removeAccount(a);delete sessionLimits[a];
   if(prefs.aiAccount===a){prefs={...prefs,aiAccount:''};await persist();}return prefs;
 });
 handle('aiModels',(id:unknown)=>assistant.models(accountId(id)));
@@ -337,12 +328,12 @@ async function runAI(deck:Deck,account:string,prompt:string,root:string,selected
   const emit=(e:Record<string,unknown>)=>win?.webContents.send('ai-event',{projectId:deck.id,...e});
   const w=mainWords[prefs.language];aiStopped.delete(deck.id);aiRunning.set(deck.id,account);store.aiStart(deck.id);emit({type:'status',text:'running'});
   try{
-    const choice=prefs.aiOptions?.[account]||{};
-    const out=await assistant.send({deck,accountId:account,prompt,root,selected,readDirs:options.readDirs,attachments:options.attachments,conversation:options.conversation,scope:options.scope,
+    const choice=prefs.aiOptions?.[account]||{},review=prefs.aiMode==='ask';
+    const out=await assistant.send({deck,accountId:account,prompt,root,selected,readDirs:options.readDirs,attachments:options.attachments,conversation:options.conversation,scope:options.scope,review,
       language:prefs.language,systemPrompt:prefs.systemPrompt,model:choice.model,effort:choice.effort,mcp:prefs.aiMcp,skillsDir,tools:webTools(root),
       check:async(base,next,assets)=>[...await importAgentAssets(root,base,next,assets),...await reviewChanges(base,next)]});
     if(aiStopped.has(deck.id))throw new CancelledError();
-    emit({type:'done',text:out.message,...out.deck?{deck:out.deck}:{}});
+    emit({type:'done',text:out.message,review,...out.deck?{deck:out.deck}:{}});
   }catch(e:any){emit({type:'error',text:e instanceof CancelledError?w.cancelled:isAiCliError(e)?e.code+': '+e.message:e?.code?e.code+': '+e.message:String(e?.message||e)});}
   finally{store.aiEnd(deck.id);aiRunning.delete(deck.id);emit({type:'status',text:'idle'});if(cleanup)void fs.rm(cleanup,{recursive:true,force:true});}
 }

@@ -19,16 +19,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      name: ${{ steps.v.outputs.name }}
       prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: v
         run: |
           pkg=$(node -p "require('./package.json').version")
-          if [ "$GITHUB_REF_TYPE" != tag ]; then echo "version=$pkg" >> "$GITHUB_OUTPUT"; echo "prerelease=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          tag="${GITHUB_REF_NAME#v}"; base="${tag%%-*}"
-          if [ "$base" != "$pkg" ]; then echo "::error::Tag $GITHUB_REF_NAME does not match package.json ($pkg)"; exit 1; fi
-          echo "version=$tag" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" != tag ]; then echo "version=$pkg" >> "$GITHUB_OUTPUT"; echo "name=$pkg" >> "$GITHUB_OUTPUT"; echo "prerelease=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Releases are named X.Y (tag v1.3); package.json keeps the semver X.Y.0 that npm and the updater need.
+          tag="${GITHUB_REF_NAME#v}"; base="${tag%%-*}"; suffix="${tag#"$base"}"
+          case "$base" in *.*.*) full="$base" ;; *.*) full="$base.0" ;; *) full="$base" ;; esac
+          if [ "$full" != "$pkg" ]; then echo "::error::Tag $GITHUB_REF_NAME does not match package.json ($pkg)"; exit 1; fi
+          echo "version=$full$suffix" >> "$GITHUB_OUTPUT"
+          echo "name=$tag" >> "$GITHUB_OUTPUT"
           if [ "$tag" != "$base" ]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
 
   build:
@@ -145,7 +149,7 @@ jobs:
         run: |
           pre=""; if [ "${{ needs.check.outputs.prerelease }}" = true ]; then pre="--prerelease"; fi
           gh release create "$GITHUB_REF_NAME" files/* -R "$GITHUB_REPOSITORY" $pre --verify-tag \
-            --title "Edukors Slides Editor ${{ needs.check.outputs.version }}" --generate-notes
+            --title "Edukors Slides Editor ${{ needs.check.outputs.name }}" --generate-notes
 
   # The Windows package to the Microsoft Store (store.yml). It waits for all the builds (a job cannot wait on one leg
   # of the matrix) but goes ahead whatever became of the others. Final versions only: a pre-release's package would

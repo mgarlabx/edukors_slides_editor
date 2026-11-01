@@ -111,7 +111,7 @@ The paper clip 📎 attaches files (texts, PDFs, images) for it to use. When a r
 
 **Insert → Interactive question** turns the slide into a live question: **multiple choice**, **word cloud** or **open answer**. In the exported HTML, you unlock the question with your presenter key, the audience scans the QR code and answers on their phones, and the results appear as bars, a cloud or a list, with a CSV download.
 
-The answers go through a questions server that **you or your institution host** (PHP and MySQL, with an installation guide in the [repository](https://github.com/mgarlabx/edukors_slides_editor)). Enter its address in **Settings → Interactive questions** and use **Test connection**. Without a server, exporting warns you and the question says the server is missing.
+The answers go through a questions server that **you or your institution host** (PHP and MySQL, with an installation guide in the [repository](https://github.com/mgarlabx/edukors_slides_editor)). Enter its address in **Settings → Interactive questions** and use **Test connection**. Without a server, a presentation with questions cannot be exported to HTML: the export dialog shows a warning with a shortcut to the settings (PDF and PPTX remain available).
 
 ## 9. Present and export
 

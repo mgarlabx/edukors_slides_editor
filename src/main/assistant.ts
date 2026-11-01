@@ -8,12 +8,12 @@ import {atomic} from './projects';
 // presentation's working folder (a library workspace: the provider's own file, web and, where a sandbox confines them,
 // command tools), the app's tools (apply_changes, screenshot, download) and questions. No Electron here, so it runs in tests.
 
-export interface ProviderView {id:string;name:string;installUrl?:string;detection:Detection;workspace:boolean;shell:boolean}
-export interface AccountView {id:string;providerId:string;label:string;status?:AccountStatus;error?:string}
+export interface ProviderView {id:string;name:string;installUrl?:string;detection:Detection;workspace:boolean;shell:boolean;usage:boolean}
+export interface AccountView {id:string;providerId:string;label:string;status?:AccountStatus;error?:string;supported?:boolean}
 export interface Attachment {name:string;path:string;assetId?:string;content?:string}
 export interface AssistantRequest {
   deck:Deck;accountId:string;prompt:string;root:string;selected:string[];readDirs?:string[];attachments?:Attachment[];
-  conversation?:string;scope?:string;language?:string;systemPrompt?:string;model?:string;effort?:string;mcp?:string;skillsDir?:string;
+  review?:boolean;conversation?:string;scope?:string;language?:string;systemPrompt?:string;model?:string;effort?:string;mcp?:string;skillsDir?:string;
   // The app's own tools besides apply_changes (screenshot and download in the app).
   tools?:ToolDefinition[];
   // Imports the files the agent listed as assets and reviews the changed deck (structure, rendering); returns the problems.
@@ -56,25 +56,26 @@ export class Assistant {
     this.ai=createAiCli({appId:'slides',providers:o.providers,...o.dataDir?{dataDir:o.dataDir}:{}});this.resume={...o.resume};
   }
   private emit(e:Omit<AIEvent,'projectId'>&{projectId?:string}){this.o.emit({projectId:'',...e} as AIEvent);}
-  private persist(){void atomic(this.o.sessionsFile,JSON.stringify(this.resume)).catch(()=>{});}
+  private saving:Promise<void>=Promise.resolve();
+  private persist(){const snapshot=JSON.stringify(this.resume);this.saving=this.saving.then(()=>atomic(this.o.sessionsFile,snapshot)).catch(()=>{});return this.saving;}
 
   // Settings: the providers this app offers (a provider must confine a workspace here) and the accounts of those providers.
-  async providers():Promise<ProviderView[]>{
+  async providers(refresh=false):Promise<ProviderView[]>{
     const out:ProviderView[]=[];
-    for(const p of this.o.providers){const detection=await this.ai.detect(p.id),c=p.capabilities(detection);if(!c.workspace)continue;out.push({id:p.id,name:p.displayName,...p.installUrl?{installUrl:p.installUrl}:{},detection,workspace:c.workspace,shell:c.workspaceShell});}
+    for(const p of this.o.providers){const detection=await this.ai.detect(p.id,{refresh}),c=p.capabilities(detection);out.push({id:p.id,name:p.displayName,...p.installUrl?{installUrl:p.installUrl}:{},detection,workspace:c.workspace,shell:c.workspaceShell,usage:c.usage});}
     return out;
   }
   async accounts(withStatus=true):Promise<AccountView[]>{
-    const offered=new Set((await this.providers()).map(p=>p.id));
-    return Promise.all((await this.ai.listAccounts()).filter(a=>offered.has(a.providerId)).map(async a=>{
-      const view:AccountView={id:a.id,providerId:a.providerId,label:a.label};if(!withStatus)return view;
+    const offered=new Set((await this.providers()).filter(p=>p.workspace).map(p=>p.id));
+    return Promise.all((await this.ai.listAccounts()).map(async a=>{
+      const view:AccountView={id:a.id,providerId:a.providerId,label:a.label,supported:offered.has(a.providerId)};if(!withStatus)return view;
       try{view.status=await this.ai.accountStatus(a.id);}catch(e:any){view.error=e?.code||String(e?.message||e);}return view;}));
   }
   createAccount(providerId:string,label:string){return this.ai.createAccount({providerId,label});}
   connect(id:string,signal?:AbortSignal){return this.ai.connectAccount(id,{onLogin:p=>this.emit({type:'login',accountId:id,url:p.url,acceptsCode:p.acceptsCode}),...signal?{signal}:{}});}
   submitCode(id:string,code:string){return this.ai.submitLoginCode(id,code);}
   logout(id:string){return this.ai.logoutAccount(id);}
-  async removeAccount(id:string){await this.forgetAccount(id);await this.ai.removeAccount(id);}
+  async removeAccount(id:string){await this.forgetAccount(id);await this.ai.removeAccount(id,{deleteData:true});}
   renameAccount(id:string,label:string){return this.ai.renameAccount(id,label);}
   models(id:string):Promise<ModelInfo[]>{return this.ai.listModels(id);}
   async usage(id:string){const u=await this.ai.readUsage(id).catch(()=>null);return u?fiveHour(u):null;}
@@ -97,7 +98,7 @@ export class Assistant {
     const off=session.on(e=>this.relay(deckId,e));this.open.set(deckId,{key,setup,session,off});
     const provider=this.o.providers.find(p=>p.id===session.providerId)?.displayName;
     this.emit({projectId:deckId,type:'activity',kind:this.resume[key]?'resume':'start',...provider?{detail:provider}:{}});
-    if(session.resumeId&&this.resume[key]!==session.resumeId){this.resume[key]=session.resumeId;this.persist();}
+    if(session.resumeId&&this.resume[key]!==session.resumeId){this.resume[key]=session.resumeId;await this.persist();}
     return session;
   }
   // Library events become the sidebar's: streamed text, activity rows, questions, tokens and the 5-hour window.
@@ -110,7 +111,7 @@ export class Assistant {
       case 'toolStarted':if(e.tool!=='apply_changes')emit({type:'activity',kind:'tool',tool:e.tool.replace(/^mcp__edukors__/,'')});break;
       case 'question':emit({type:'question',questionId:e.questionId,text:e.prompt,...e.options?{options:e.options}:{}});break;
       case 'usageUpdated':{const u=e.usage;if(u.inputTokens!==undefined||u.outputTokens!==undefined)emit({type:'usage',input:u.inputTokens,output:u.outputTokens,cache:u.cachedInputTokens,cost:u.costUsd});
-        const limits=fiveHour(u);if(limits)this.emit({projectId:deckId,type:'limits',accountId:e.accountId,limits});break;}
+        const limits=fiveHour(u);this.emit({projectId:deckId,type:'limits',accountId:e.accountId,accountUsage:u,...limits?{limits}:{}});break;}
     }
   }
   // A question of the app's own (allowing a call to the user's MCP server), answered like the agent's.
@@ -135,13 +136,13 @@ export class Assistant {
     try{
       await writeContext(r.root,r.deck);
       const providers=await this.providers(),account=(await this.ai.listAccounts()).find(a=>a.id===r.accountId),shell=!!providers.find(p=>p.id===account?.providerId)?.shell;
-      const instructions=instructionsFor(r.language||'pt',shell,r.systemPrompt,r.deck.systemPrompt);
+      const instructions=instructionsFor(r.language||'pt',shell,r.systemPrompt,r.deck.systemPrompt)+(r.review?'\nThe application will show your changes as a proposal for user approval after this turn. Describe the proposal; do not claim it is already applied.':'');
       const session=await this.session(r,key,instructions,[this.applyTool(r.deck.id),...r.tools||[]]);turn.session=session;
       if(turn.stopped)throw new CancelledError();
       // Context first, the person's words last: the request reads as what they asked.
       const previous=this.sent.get(key),context=JSON.stringify({selected:r.selected,attachments:r.attachments||[],...agentContext(r.deck,r.selected,previous)});
       const result=await session.send(`<presentation>\n${context}\n</presentation>\n\n${r.prompt}`,{requestId:turn.requestId});
-      if(session.resumeId&&this.resume[key]!==session.resumeId){this.resume[key]=session.resumeId;this.persist();}
+      if(session.resumeId&&this.resume[key]!==session.resumeId){this.resume[key]=session.resumeId;await this.persist();}
       if(turn.stopped||result.status==='cancelled')throw new CancelledError();
       if(result.status==='failed'){this.sent.delete(key);const err=Object.assign(Error(result.error?.message||'The provider failed.'),{code:result.error?.code});throw err;}
       this.sent.set(key,sentKeys(turn.next||r.deck));
@@ -172,7 +173,7 @@ export class Assistant {
     for(const [deckId,open] of [...this.open])if(open.key.endsWith(':'+accountId))await this.closeDeck(deckId);
     let changed=false;for(const key of Object.keys(this.resume))if(key.endsWith(':'+accountId)){delete this.resume[key];changed=true;}
     for(const key of [...this.sent.keys()])if(key.endsWith(':'+accountId))this.sent.delete(key);
-    if(changed)this.persist();
+    if(changed)await this.persist();
   }
-  async dispose(){for(const id of [...this.turns.keys()])this.cancel(id);await this.ai.dispose();}
+  async dispose(){for(const id of [...this.turns.keys()])this.cancel(id);await this.ai.dispose();await this.saving;}
 }

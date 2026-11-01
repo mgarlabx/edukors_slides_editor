@@ -1,3 +1,4 @@
+if(process.argv.includes('--ai-ui')){await import('./test-ai-ui.mjs');process.exit();}
 if(process.argv.includes('--poll')){await import('./test-poll.mjs');process.exit();}
 if(process.argv.includes('--poll-server')){await import('./test-poll-server.mjs');process.exit(process.exitCode||0);}
 if(process.argv.includes('--poll-live')){await import('./test-poll-live.mjs');process.exit(process.exitCode||0);}
@@ -68,7 +69,7 @@ try{
   await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.flatMap(m=>m.submenu.items).find(x=>x.label==='Termos de uso').click());await help.waitFor();assert.equal(await tab('Termos de uso').getAttribute('aria-selected'),'true');assert.match(await help.textContent(),/MIT License/);await page.keyboard.press('Escape');await help.waitFor({state:'detached'});}
  // Startup shows an empty workspace; New and Recent open as modals from the File menu or the toolbar.
  step("Startup shows an empty workspace; New and Recent open as modals from t…");
- await page.locator('.empty-desk').waitFor();assert.equal(await page.locator('.modal,.tabs,.template-card').count(),0,'nothing but the empty workspace');assert.equal(await page.locator('.toolbar button').count(),5,'only the File section, Settings and Help');assert.match(await page.locator('.statusbar .app-version').innerText(),/^v\d+\.\d+\.\d+$/,'version shown without a presentation');await shot(page,'00-empty.png');
+ await page.locator('.empty-desk').waitFor();assert.equal(await page.locator('.modal,.tabs,.template-card').count(),0,'nothing but the empty workspace');assert.equal(await page.locator('.toolbar button').count(),5,'only the File section, Settings and Help');assert.match(await page.locator('.statusbar .app-version').innerText(),/^v\d+\.\d+(\.\d+)?$/,'version shown without a presentation');await shot(page,'00-empty.png');
  // Native menu: without a presentation, only what works on the empty workspace stays enabled.
  // Slides / slide master is a segmented control; the old toggle button is emulated by clicking the other view.
  step("Native menu: without a presentation, only what works on the empty work…");
@@ -335,22 +336,22 @@ try{
  await page.getByRole('button',{name:'Assistente de IA',exact:true}).click();
  // Accounts come from the AI library (here its fake provider); a new account signs in at once and, being the first, is the one in use.
  step("Accounts come from the AI library (here its fake provider); a new acco…");
- await page.getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:'Fake AI',exact:true}).click();
- await page.getByLabel('Nome da conta').fill('Conta de teste');await page.getByRole('button',{name:'Criar conta',exact:true}).click();
- await page.locator('.account-card .provider-status').filter({hasText:/^Conectada/}).waitFor({timeout:30000});await shot(page,'03b-accounts.png');
- assert.notEqual(await page.locator('.active-account select').inputValue(),'','the first account becomes the one in use');
+ await page.locator('.modal.sheet').getByRole('button',{name:'Adicionar conta',exact:true}).click();await page.getByRole('radio',{name:'Fake AI',exact:true}).click();
+ await page.getByLabel('Nome da conta').fill('Conta de teste');await page.getByRole('button',{name:'Entrar na conta',exact:true}).click();
+ await page.locator('.eai-account .eai-badge').filter({hasText:/^Conectada/}).waitFor({timeout:30000});await shot(page,'03b-accounts.png');
+ assert.notEqual(await page.locator('.eai-accounts select').first().inputValue(),'','the first account becomes the one in use');
  assert.equal(await page.locator('.modal.sheet').getByRole('button',{name:'Templates',exact:true}).count(),0,'templates live in the New gallery');
  // Advanced always holds the instructions, the user's MCP servers and the skills, in this order.
  step("Advanced always holds the instructions, the user's MCP servers and the…");
- await page.locator('.assistant-advanced summary').click();
- assert.deepEqual(await page.locator('.assistant-advanced h3').allInnerTexts(),['Instruções para o agente','Servidores MCP','Skills']);
+ await page.locator('.eai-advanced summary').click();
+ assert.deepEqual(await page.locator('.eai-advanced h3').allInnerTexts(),['Instruções para o assistente','Servidores MCP','Skills']);
  await page.getByLabel('Servidores MCP',{exact:true}).fill('{oops');await page.locator('.mcp-problems').waitFor();await page.getByLabel('Servidores MCP',{exact:true}).fill('');await page.locator('.mcp-problems').waitFor({state:'detached'});
- await page.getByText('Nenhuma skill na pasta.').waitFor();await page.getByRole('button',{name:'Abrir pasta de skills'}).click();
+ await page.locator('.eai-advanced section').last().getByRole('button',{name:'Atualizar',exact:true}).first().click();await page.getByText('Nenhuma skill na pasta.').waitFor();await page.getByRole('button',{name:'Abrir pasta de skills'}).click();
  await page.getByLabel('Global',{exact:true}).fill('Use frases curtas.');
  // The presentation's own prompt sits in a second tab and goes into the package (ai/system-prompt.md), not into templates.
  step("The presentation's own prompt sits in a second tab and goes into the p…");
  await page.getByRole('tab',{name:'Esta apresentação'}).click();await page.getByLabel('Esta apresentação',{exact:true}).fill('Palestra para professores.');assert.equal(await page.getByText('O agente trabalha dentro',{exact:false}).count(),0);
- assert.equal(await page.locator('.toolbar').count(),1,'settings open as a modal over the editor');await page.locator('.modal.sheet').getByRole('button',{name:'Fechar',exact:true}).click();await page.locator('.modal.sheet').waitFor({state:'detached'});
+ await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();assert.equal(await page.locator('.toolbar').count(),1,'settings open as a modal over the editor');await page.locator('.modal.sheet').getByRole('button',{name:'Fechar',exact:true}).click();await page.locator('.modal.sheet').waitFor({state:'detached'});
  // Templates: saved from the File menu, renamed and deleted in the New gallery.
  step("Templates: saved from the File menu, renamed and deleted in the New ga…");
  await app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Arquivo').submenu.items.find(x=>x.label==='Salvar como template…').click();});
@@ -462,7 +463,9 @@ try{
  const attachment=path.join(root,'anexo.png');await fs.copyFile(path.resolve('build/icon.png'),attachment).catch(()=>fs.writeFile(attachment,tinyPng));
  await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},attachment);
  await page.getByRole('button',{name:'Anexar arquivo'}).click();await page.locator('.context-chip.attachment').filter({hasText:'anexo.png'}).waitFor();
- await page.locator('.model-button').click();await page.getByRole('radio',{name:'Fake Deep'}).click();await page.locator('.model-pop input[type=range]').fill('3');await page.locator('.model-button').filter({hasText:'Fake Deep · Alto'}).waitFor();await shot(page,'05-model.png');await page.keyboard.press('Escape');await page.locator('.model-pop').waitFor({state:'detached'});
+ // A new install reviews before applying; this flow applies directly (Mode → Apply changes).
+ await page.getByRole('button',{name:/^Modo:/}).click();await page.getByRole('menuitemradio',{name:/Aplicar alterações/}).click();await page.getByRole('button',{name:'Modo: Aplicar alterações'}).waitFor();
+ await page.getByRole('button',{name:/^Modelo:/}).click();await page.getByRole('menuitemradio',{name:'Fake Deep'}).click();await page.locator('.eai-model-pop input[type=range]').fill('3');await page.locator('.eai-model .eai-chip').filter({hasText:'Fake Deep · Alto'}).waitFor();await shot(page,'05-model.png');await page.keyboard.press('Escape');await page.locator('.eai-model-pop').waitFor({state:'detached'});
  // A slide script that never finishes is rejected by the app's check; the agent is told, and nothing changes.
  step("A slide script that never finishes is rejected by the app's check; the…");
  await ask('tool apply_changes '+JSON.stringify({slideUpdates:[{id:cover,script:'while(true){}'}]}),'Not applied');
@@ -478,14 +481,13 @@ try{
  step("A valid change: a new title and the downloaded image as an asset, appl…");
  await ask('tool apply_changes '+JSON.stringify({message:'Feito pela IA',slideUpdates:[{id:cover,title:'Título pela IA',html:coverHtml.replace(/<h1([^>]*)>[^<]*<\/h1>/,'<h1$1>Título pela IA</h1><img src="asset:asset-mock-logo" alt="">')}],assets:[{id:'asset-mock-logo',path:'media/logo.png'}]}),'Accepted');
  await page.locator('.slide-item button[aria-label$=": Título pela IA"]').waitFor();await page.frameLocator('.slide-canvas iframe').locator('img').waitFor({state:'attached'});
- assert.equal(await page.locator('.composer-account select').count(),1,'account picker is also available in the assistant');
- await page.locator('.usage-tokens').waitFor();assert.equal(await page.locator('.usage').filter({hasText:'Consumo desta conversa'}).count(),0);
+ await page.locator('.eai-usage').waitFor();
  // The agent asks during its turn; an option answers it and the turn goes on.
  step("The agent asks during its turn; an option answers it and the turn goes…");
  const box=page.getByPlaceholder('Peça uma alteração…');await box.fill('ask');await box.press('Enter');
- await page.locator('.questions legend').filter({hasText:'Which color?'}).waitFor({timeout:40000});
- await page.locator('.question-options button').filter({hasText:'blue'}).click();await shot(page,'06a-questions.png');await page.getByRole('button',{name:'Enviar respostas'}).click();
- await page.getByText('You chose blue').waitFor({timeout:40000});await page.locator('.questions .answered').waitFor();
+ await page.locator('.eai-question legend').filter({hasText:'Which color?'}).waitFor({timeout:40000});
+ await page.locator('.eai-question .eai-actions button').filter({hasText:'blue'}).click();await shot(page,'06a-questions.png');await page.getByRole('button',{name:'Enviar resposta',exact:true}).click();
+ await page.getByText('You chose blue').waitFor({timeout:40000});await page.locator('.eai-question fieldset[disabled]').waitFor();
  await page.locator('.activity').filter({hasText:'Enviando para a sessão atual…'}).first().waitFor();await page.locator('.activity').filter({hasText:'Sessão retomada'}).first().waitFor();
  assert.equal(JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'preferences.json'),'utf8')).attachDir,root,'last attach folder remembered');
  assert.match(await fs.readFile(env.ESF_EXTERNAL_LOG,'utf8'),/skills/,'the skills folder opens');
@@ -494,9 +496,9 @@ try{
   // Narrowing works on any screen (CI runners have small displays that leave no room to widen).
   const after=(await page.locator('.ai-sidebar').boundingBox()).width;assert.ok(Math.abs(before-after-50)<3,`sidebar narrowed ${before}→${after}`);}
  await shot(page,'06-ai.png');
- await page.getByRole('button',{name:'Nova sessão'}).click();await page.locator('.chat-empty').waitFor();
- await page.getByRole('button',{name:'Sessões anteriores'}).click();
- await page.locator('.session-item').filter({hasText:'tool apply_changes'}).locator('button').first().click();
+ await page.getByRole('button',{name:'Nova conversa',exact:true}).click();await page.locator('.chat-empty').waitFor();
+ await page.getByRole('button',{name:'Conversas',exact:true}).click();
+ await page.locator('.eai-history-row').filter({hasText:'tool apply_changes'}).locator('button').first().click();
  await page.getByText('You chose blue').waitFor();
  await page.getByRole('button',{name:'Desfazer',exact:true}).click();
  await page.locator('button[aria-label$=": Apresentação de teste"]').waitFor();
@@ -561,10 +563,17 @@ try{
 finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
 // Opening the .ESF by path (as Finder does) must open it, with its conversation, from the package alone.
 step('reopen the package by path');
+const ghost=path.join(projectDir,'Sumiu.ESF');{const f=path.join(env.ESF_DATA_DIR,'preferences.json'),p=JSON.parse(await fs.readFile(f,'utf8'));p.recent=[...p.recent,ghost];await fs.writeFile(f,JSON.stringify(p));}
 app=await launch(esf);
 try{
  const page=watch(await app.firstWindow());
- await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+\.\d+$/);
+ await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();assert.match(await page.locator('.app-version').innerText(),/^v\d+\.\d+(\.\d+)?$/);
+ // A recent file that is gone: "File not found" warning; Keep leaves it in the list, Remove drops it.
+ {await app.evaluate(({dialog})=>{globalThis.__boxes=[];globalThis.__answer=0;dialog.showMessageBox=async(_w,o)=>{globalThis.__boxes.push(o.message);return{response:globalThis.__answer};};});
+  const row=()=>page.locator('.recent-list button').filter({hasText:'Sumiu.ESF'});await page.getByRole('button',{name:'Recentes',exact:true}).click();await row().click();
+  for(let i=0;i<50&&!(await app.evaluate(()=>globalThis.__boxes.length));i++)await page.waitForTimeout(50);assert.deepEqual(await app.evaluate(()=>globalThis.__boxes),['Arquivo não encontrado']);assert.equal(await row().count(),1,'kept');
+  await app.evaluate(()=>{globalThis.__answer=1;});await row().click();await row().waitFor({state:'detached'});assert.ok(!JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'preferences.json'),'utf8')).recent.includes(ghost),'removed from preferences');
+  assert.equal(await page.locator('.tab').count(),1);await page.keyboard.press('Escape');await page.locator('.modal.sheet').waitFor({state:'detached'});}
  if(!win){await page.locator('.workbench').click({position:{x:5,y:5}});await page.keyboard.press('End');await page.locator('.slide-item').last().and(page.locator('.selected')).waitFor();await page.keyboard.press('Home');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();
  {const ids=()=>page.locator('.slide-item').evaluateAll(l=>l.map(x=>x.dataset.id));const before=await ids();await page.keyboard.press('Meta+ArrowDown');await page.locator('.slide-item').nth(1).and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),[before[1],before[0],...before.slice(2)],'Cmd+Down moves the slide');await page.keyboard.press('Meta+ArrowUp');await page.locator('.slide-item').first().and(page.locator('.selected')).waitFor();assert.deepEqual(await ids(),before,'Cmd+Up moves it back');}
  {const selectAll=()=>app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Editar').submenu.items.find(x=>x.label==='Selecionar tudo').click();});
