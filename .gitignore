@@ -24,3 +24,6 @@ poll.config.php
 .env
 .env.*
 private/
+
+PLANO_MIGRACAO_COMMON_UX.md
+migration-backups/

@@ -14,7 +14,10 @@ export async function run(){
   const switching={...d,layouts:[...d.layouts,alternate],slides:[relayout(d.slides[0],alternate),d.slides[1]]};
   check(syncLayouts(d,switching).slides[0].html.includes('>Default<'),'changing layout preserves current text even when it equals the old default');
   const original=JSON.stringify(d),doc=parse(d.slides[0].html),title=doc.querySelector('h1')!;
-  const local=applyEdits(d.slides[0],[{type:'text',index:editIndex(doc,title),html:'My <b>title</b>'}]);
+  // Layout texts are locked on the slides (02/11/2026): the canvas cannot change them...
+  check(applyEdits(d.slides[0],[{type:'text',index:editIndex(doc,title),html:'Edited on the canvas'}])===d.slides[0],'layout text is locked on the slide');
+  // ...but a field may still hold the slide's own text (the assistant, a change of layout), kept when the layout changes.
+  title.innerHTML='My <b>title</b>';const local={...d.slides[0],html:doc.body.innerHTML};
   check(JSON.stringify(d)===original,'editing a slide does not mutate masters, layouts or source');
   let edited={...d,slides:[local,d.slides[1]]};edited=syncLayouts(d,edited);
   check(edited.layouts[0].html.includes('Default')&&!edited.slides[1].html.includes('My'),'placeholder edit isolated from siblings');

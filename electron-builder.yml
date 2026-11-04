@@ -5,14 +5,20 @@ copyright: Copyright © 2026 Edukors
 directories:
   output: release
   buildResources: build
-# dist/ already bundles React, fflate and electron-updater; nothing from node_modules goes in.
+# dist/ bundles the editor (React, the slide runtime) and the main process; Edukors Common (node_modules/edukors-common-ux)
+# and its dependencies come in as production dependencies: its shell is loaded by the page and its desktop host by the
+# main process. The AI runtime runs the CLI the person installed (Claude Code, Codex), not the copy bundled in the SDK.
 files:
-  - dist/main.cjs
+  - dist/main.mjs
   - dist/preload.cjs
-  - dist/ui.js
-  - dist/ui.css
+  - dist/config.js
+  - dist/slides.js
+  - dist/slides.css
   - dist/index.html
   - package.json
+  - "!node_modules/@anthropic-ai/claude-agent-sdk-*/**"
+  - "!**/*.d.ts"
+  - "!**/*.map"
 asar: true
 npmRebuild: false
 afterPack: build/after-pack.cjs
@@ -21,6 +27,12 @@ fileAssociations:
     name: Edukors Slides Editor Presentation
     description: Edukors Slides Editor Presentation
     mimeType: application/vnd.edukors.slides+zip
+    role: Editor
+    rank: Owner
+  - ext: eslx
+    name: Edukors Slides Presentation
+    description: Edukors Slides Presentation
+    mimeType: application/vnd.edukors.slides.presentation+zip
     role: Editor
     rank: Owner
 publish:
@@ -47,6 +59,12 @@ mac:
         UTTypeTagSpecification:
           public.filename-extension: [esf, ESF]
           public.mime-type: [application/vnd.edukors.slides+zip]
+      - UTTypeIdentifier: org.edukors.slides.eslx
+        UTTypeDescription: Edukors Slides Presentation
+        UTTypeConformsTo: [public.zip-archive, public.data]
+        UTTypeTagSpecification:
+          public.filename-extension: [eslx, ESLX]
+          public.mime-type: [application/vnd.edukors.slides.presentation+zip]
 dmg:
   artifactName: Edukors-Slides-Editor-${version}-mac-${arch}.${ext}
 

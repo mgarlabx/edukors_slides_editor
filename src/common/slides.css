@@ -1,0 +1,178 @@
+/* Slides inside the shell of Edukors Common. Common's tokens (--surface, --workspace, --border, --icon, --accent, --text)
+   follow its light and dark themes; the editor's own tokens below follow the same theme attribute. Generic element
+   styles apply only inside the editor's areas, never to Common's shell. */
+:root{--panel:var(--surface);--panel-2:#f1f3f8;--canvas:var(--workspace);--border-strong:#c3c9d6;--muted:var(--icon);--accent-soft:#ececfd;--on-accent:#fff;
+  --ok:#2f9e44;--ok-soft:#e6f6ea;--warning:#c77700;--warning-soft:#fff4dd;--error:#d63939;--error-soft:#fdecec;--backdrop:rgba(10,12,20,.45);
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--fs-xs:calc(11px * var(--font-scale,1));--fs-sm:calc(12px * var(--font-scale,1));--fs-base:calc(13px * var(--font-scale,1));--fs-h3:calc(15px * var(--font-scale,1));--fs-h2:calc(17px * var(--font-scale,1));
+  --radius-sm:6px;--radius:8px;--radius-lg:12px;--shadow:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.06);--shadow-lg:0 20px 60px rgba(16,24,40,.3)}
+:root[data-theme="dark"]{--panel-2:#252932;--border-strong:#3f4553;--accent-soft:#2b2b4f;--ok-soft:#1d3324;--warning-soft:#392d18;--error-soft:#3a2124;--backdrop:rgba(0,0,0,.55)}
+:is(#slides-root,.slides-sidebar,.esf-workbench,.slides-settings-panel){color:var(--text,#263149);font-size:var(--fs-base);line-height:1.45}
+:is(#slides-root,.slides-sidebar,.esf-workbench,.slides-settings-panel) :is(button,input,textarea,select){font:inherit}
+:is(#slides-root,.slides-sidebar,.slides-settings-panel) button:not(.tool):not(.small-button):not(.template-card){cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:6px 12px;color:inherit;white-space:nowrap}
+:is(#slides-root,.slides-sidebar,.slides-settings-panel) button:not(.tool):not(.small-button):not(.template-card):hover{background:var(--panel-2)}
+:is(#slides-root,.slides-sidebar,.slides-settings-panel) button:disabled{cursor:default;opacity:.4}
+:is(#slides-root,.slides-settings-panel,.slides-sidebar) :is(input,textarea,select){height:30px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:inherit;padding:5px 8px;max-width:100%}
+:is(#slides-root,.slides-settings-panel,.esf-workbench) textarea{height:auto;resize:vertical;line-height:1.5}
+:is(#slides-root,.slides-settings-panel,.slides-sidebar) :is(input,textarea,select):focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);outline:none}
+:is(#slides-root) input:is([type=radio],[type=checkbox]){accent-color:var(--accent);width:14px;height:14px;margin:0;padding:0}
+#slides-root label{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-sm);font-weight:550}
+:is(#slides-root,.slides-settings-panel) :is(h2,h3,p){margin:0}#slides-root h2{font-size:var(--fs-h2);font-weight:600}#slides-root h3{font-size:var(--fs-h3);font-weight:600}
+:is(#slides-root,.slides-settings-panel) small{color:var(--muted)}
+.slides-contents{display:contents}
+/* Toolbar additions: Present stands out; the views (slides / slide master) are a segmented control. */
+.toolbar .tool.tool-present{width:calc(48px * var(--font-scale,1));background:var(--accent);color:var(--on-accent);border-radius:var(--radius-sm)}
+.toolbar .tool.tool-present:hover{filter:brightness(1.08)}
+.segmented-view{display:flex;gap:2px;padding:2px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius)}
+.segmented-view>.tool[aria-selected=true]{background:var(--panel);color:var(--accent);box-shadow:var(--shadow)}
+.toolbar .tool[aria-pressed=true]{color:var(--accent)}
+/* The status bar's middle: slide number and layout, or the item of the slide master. */
+.slides-status{margin:auto;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.slides-status .layout-name{background:none;border:0;padding:0 2px;font:inherit;color:var(--accent);text-decoration:underline dotted;text-underline-offset:2px;cursor:pointer}
+/* Left panel: the slide list (or the slide master). Common's panel header is replaced by the list's own caption. */
+#sidebar-panel .panel-header{display:none}
+.slides-sidebar{flex:1;min-height:0;display:flex;flex-direction:column}
+.slide-rail{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--panel)}
+/* The format bar is a fixed row while a presentation is open (Common's slot otherwise lies over the content): selecting
+   an object never moves the canvas, and the bar never covers the slide list. */
+body.slides-open .context-slot{height:auto}
+body.slides-open .context-clip{position:static;padding-bottom:0;overflow:visible}
+body.slides-open .context-slot .context-toolbar{transform:none;transition:none;box-shadow:none}
+/* Workspace: the canvas fills it. */
+body.slides-open #document-placeholder{width:100%;height:100%;max-height:none;aspect-ratio:auto;border:0;border-radius:0;box-shadow:none;background:var(--canvas);padding:0;user-select:auto}
+.esf-workbench{position:absolute;inset:0;display:flex;flex-direction:column;padding:12px 24px 0;background:var(--canvas)}
+.esf-workbench .notes-bar{margin:12px -24px 0;padding:8px 24px;background:var(--panel);border-top:1px solid var(--border)}
+.esf-workbench .notes-bar label{display:flex;flex-direction:column;font-size:var(--fs-xs);color:var(--muted);gap:4px}
+.slides-settings-panel h2,.slides-settings h2{font-size:var(--fs-h2);margin:0 0 8px}
+.slides-settings-panel p{color:var(--muted);margin:0 0 12px;max-width:640px}
+.slides-settings-panel .system-prompt{max-width:720px}
+.modal-actions .spacer{flex:1}
+@media(max-width:1199px){.esf-workbench{padding-left:16px;padding-right:16px}.esf-workbench .notes-bar{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}.gallery{padding:24px}.template-grid{gap:16px}}
+@media(prefers-reduced-motion:reduce){#slides-root *,.slides-sidebar *{animation:none!important;transition:none!important}}
+
+.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.primary:hover{background:var(--accent);filter:brightness(1.08)}
+.danger{color:var(--error);border-color:var(--error)}
+.ui-icon{display:block;flex:none;width:18px;height:18px}
+/* Alternative views (slides / slide master) as a segmented control. */
+.segmented-view{display:flex;gap:2px;padding:2px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius)}
+.segmented-view>button[aria-selected=true]{background:var(--panel);color:var(--accent);box-shadow:var(--shadow)}
+/* Contextual bar (formatting): always present with a presentation, so the canvas never moves. */
+.canvas-menu{position:fixed;z-index:80;min-width:180px}
+.rail-caption{height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:6px;color:var(--muted);padding:0 12px;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.08em}
+.rail-caption .icon,.rail-caption button{width:20px;height:20px;padding:0;border:0;background:none;color:inherit}
+.rail-caption svg{width:14px;height:14px}
+.slide-list{overflow:auto;flex:1;padding:4px 12px 12px 28px}
+.slide-item{position:relative;margin-bottom:12px;cursor:grab}
+.slide-item>button{display:block;aspect-ratio:16/9;width:100%;padding:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius)}
+.slide-item.selected>button{outline:2px solid var(--accent);outline-offset:2px}
+.slide-number{position:absolute;top:4px;left:-20px;width:16px;text-align:right;font-size:var(--fs-xs);color:var(--muted);font-variant-numeric:tabular-nums}
+.slide-item.selected .slide-number{color:var(--accent);font-weight:650}
+.slide-rail.inactive .slide-item.selected>button{outline-color:var(--border-strong)}
+.slide-rail.inactive .slide-item.selected .slide-number{color:var(--muted)}
+.canvas-scroll{container-type:size;display:flex;flex-direction:column;justify-content:flex-start;align-items:safe center;flex:1;min-height:0;overflow:auto;padding:0 4px 24px}
+.slide-canvas{aspect-ratio:16/9;flex-shrink:0;box-shadow:var(--shadow);outline:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--panel);cursor:text}
+.notes-bar{margin:12px -24px 0;padding:8px 24px;background:var(--panel);border-top:1px solid var(--border)}
+.notes-bar label{font-size:var(--fs-xs);color:var(--muted);font-weight:400;gap:4px}
+.notes-bar textarea{font-size:var(--fs-base);background:transparent;border:0;resize:none;outline:none;box-shadow:none;padding:3px 0;color:var(--text);width:100%}
+.preview{display:block;width:100%;height:100%;border:0;pointer-events:none;background:var(--panel)}
+.preview.editable{pointer-events:auto}
+body.file-drag .preview.editable{pointer-events:none}
+/* Slide master view. */
+.master-rail .slide-list{padding:8px 12px 12px}
+.master-rail .slide-item{cursor:pointer;margin-bottom:12px}
+.master-rail .item-name{display:block;font-size:var(--fs-xs);color:var(--muted);margin-top:4px;padding:1px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default}
+.master-rail .selected .item-name{color:var(--text);font-weight:600}
+.master-rail input.item-name{width:100%;height:24px;padding:3px 5px;margin-top:3px}
+.master-tabs{display:flex;flex-shrink:0;height:36px;border-bottom:1px solid var(--border)}
+.master-tabs button{flex:1;min-width:0;padding:0 8px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);font-size:var(--fs-sm)}
+.master-tabs button[aria-selected=true]{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+.master-tabs button:hover{background:var(--panel-2)}
+.master-item-caption{display:flex;align-items:center;gap:6px;margin-top:6px}
+.master-item-caption .item-name{flex:1;min-width:0;margin:0}
+.master-activate{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);box-shadow:var(--shadow)}
+.master-activate svg{width:16px;height:16px;opacity:0}
+.master-activate:hover svg,.master-activate:focus-visible svg{opacity:.5}
+.master-activate[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.master-activate[aria-pressed=true] svg{opacity:1}
+.master-rail .active-master .preview{outline:2px solid var(--accent);outline-offset:-2px}
+/* Modals. */
+.modal-subtitle{color:var(--muted);font-size:var(--fs-sm);margin:-6px 0 16px}
+.error-message{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--error)}
+/* New / Recent / Settings. */
+.home-layout,.settings-layout{display:flex;flex:1;min-height:0}
+.gallery{padding:24px 32px 0;flex:1;min-width:0;overflow:auto;display:flex;flex-direction:column}
+.gallery-controls{display:flex;align-items:center;justify-content:space-between;margin:0 0 24px;gap:16px}
+.gallery-controls input{width:260px}
+.template-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-bottom:24px}
+.template-card{display:flex;flex-direction:column;align-items:stretch;gap:8px;border:0;background:transparent;padding:0;border-radius:var(--radius);white-space:normal;text-align:left}
+.template-card:hover{background:none}
+.template-card strong{font-size:var(--fs-sm);font-weight:550;padding-left:2px}
+.template-art{position:relative;aspect-ratio:16/9;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
+.template-card.selected .template-art{outline:2px solid var(--accent);outline-offset:3px}
+.template-check{position:absolute;right:8px;bottom:8px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:var(--accent);color:var(--on-accent)}
+.template-check svg{width:14px}
+.template-row{display:flex;align-items:center;gap:4px;min-width:0}
+.template-row strong{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:550;padding-left:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.template-row input{flex:1;min-width:0;height:24px;font-size:var(--fs-sm)}
+.template-row button{width:24px;height:24px;border:0;background:none;padding:0;color:var(--muted)}
+.template-row button:hover{color:var(--text);background:var(--panel-2)}
+.template-row svg{width:16px;height:16px}
+.custom-card{display:flex;flex-direction:column;gap:8px;min-width:0}
+.layout-pick{flex:1;min-height:0;overflow:auto;padding:24px 32px 0}
+.layout-pick h3{font-size:var(--fs-sm);font-weight:600;color:var(--muted);margin:0 0 12px}
+.layout-pick .template-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+.info{display:flex;align-items:center;gap:12px;color:var(--text);background:var(--accent-soft);border-radius:var(--radius);padding:12px 16px;margin-top:16px;font-size:var(--fs-sm)}
+.success{display:flex;align-items:center;gap:12px;color:var(--muted);margin-top:16px;font-size:var(--fs-sm)}
+.success svg{background:var(--ok);color:var(--on-accent);padding:3px;border-radius:50%}
+.system-prompt{display:block;white-space:pre-wrap;width:100%;margin:12px 0;padding:12px;font-size:var(--fs-sm);resize:vertical;min-height:180px}
+.code{font-family:var(--mono);font-size:var(--fs-xs);tab-size:2;white-space:pre;line-height:1.55}
+/* Export. */
+.poll-editor{padding:0 24px}
+.poll-editor>label{display:flex;flex-direction:column;gap:7px;margin:18px 0}
+.poll-editor textarea,.poll-editor input,.poll-editor select{width:100%;padding:10px;border:1px solid var(--border,#ccd2dd);border-radius:7px;font:inherit}
+.poll-editor textarea{resize:vertical}
+.poll-editor fieldset{border:0;padding:0;margin:16px 0}
+.poll-editor-option{display:flex;flex-direction:row;align-items:center;gap:10px;margin:10px 0}
+.poll-editor-option span{font-weight:700}
+.poll-editor .error{color:#b32e3a}
+.poll-editor select{display:block;box-sizing:border-box;align-self:stretch;min-width:0;height:44px;min-height:44px;padding:8px 36px 8px 12px;line-height:1.35}
+.poll-editor-option span{display:grid;place-items:center;flex:0 0 30px;height:30px;border-radius:7px;color:white}
+.poll-editor-option input{min-width:0;flex:1}
+.rail-tools{display:flex;flex-shrink:0;gap:2px;padding:6px;border-bottom:1px solid var(--border)}
+.poll-editor-server{margin:4px 0 0;color:var(--muted);font-size:var(--fs-sm);overflow-wrap:anywhere}
+.slides-settings-panel .poll-server{width:100%;max-width:560px;box-sizing:border-box;height:36px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font:inherit;font-family:var(--mono);background:var(--panel);color:var(--text)}
+.slides-settings-panel .poll-server.invalid{border-color:var(--error)}
+.slides-settings-panel .poll-server:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.poll-server-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:14px}
+.poll-server-actions button{height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:inherit;cursor:pointer}
+.poll-server-actions button:disabled{opacity:.5;cursor:default}
+.poll-server-actions .success{margin:0;color:var(--ok)}
+.slides-ask .file-body p{margin:0;max-width:440px;line-height:1.5}
+
+/* Dialogs: Common's file-dialog; the gallery and the layout picker are large sheets. */
+.slides-dialog.sheet{width:min(1180px,94vw);max-width:none;height:min(820px,90vh);max-height:none;display:flex;flex-direction:column}
+.slides-dialog.sheet[open]{display:flex}
+.slides-dialog.sheet>.file-body{flex:1;min-height:0;display:flex;flex-direction:column;padding:0}
+.slides-dialog.sheet .home-layout,.slides-dialog.sheet .layout-pick{flex:1;min-height:0;overflow:auto}
+.slides-dialog .file-footer{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.slides-dialog.sheet .file-footer{padding:12px 16px;border-top:1px solid var(--border)}
+.slides-dialog .spacer{flex:1}
+.slides-dialog .error-message{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--error)}
+.slides-dialog .field{display:flex;flex-direction:column;gap:6px}
+.template-check{display:grid;place-items:center}
+.template-check svg{width:14px;height:14px}
+/* Slide list tools: Common's tool buttons, a little smaller; delete warns on hover. */
+.rail-tools{display:flex;flex-wrap:wrap;gap:0;padding:4px 6px;border-bottom:1px solid var(--border)}
+.rail-tools .tool{width:calc(28px * var(--font-scale,1));height:calc(28px * var(--font-scale,1))}
+.rail-tools .tool:disabled svg{opacity:.38}
+.rail-tools .tool-delete:hover:not(:disabled){color:var(--error)}
+.rail-tools .tool:first-child .tooltip{left:0;transform:none}
+.rail-caption .tool{width:22px;height:22px}
+.master-activate{color:var(--muted)}
+.master-activate svg{width:16px;height:16px}
+/* Slide frames: a new document loads behind the visible one and replaces it once drawn (no blank flash). */
+.preview-stack{position:relative;width:100%;height:100%}
+.preview-stack>.preview{position:absolute;inset:0}
+.preview-stack>.preview-behind{opacity:0;pointer-events:none!important}
+.preview-stack>.preview-stale{pointer-events:none!important}

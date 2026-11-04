@@ -1,8 +1,11 @@
+import {importPptx} from '../shared/pptx-import';
+import {loadLegacyDeck as loadDeck} from '../shared/legacy';
+import {readEslx,writeEslx} from './eslx';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {Deck,Project,validateDeck,usedAssets,uid} from '../shared/model';
-import {openPackage,readManifest,extractPackage,writePackage,fileHash,managedPaths,promptPath,conversationsPath,packageVersion,PackEntry,PackageError} from './package';
+import {openPackage,readManifest,extractPackage,fileHash,managedPaths,promptPath,conversationsPath,commonConversationsPath,packageVersion,PackEntry,PackageError} from './package';
 
 export async function exists(p:string){try{await fs.access(p);return true;}catch{return false;}}
 export async function atomic(p:string, text:string|Buffer){
@@ -38,34 +41,31 @@ export function serialize(deck:Deck){
     return{id:a.id,name:a.name,mime:a.mime,path:p};
   });
   const prompt=deck.systemPrompt?.trim()?promptPath:undefined;if(prompt)files[prompt]=deck.systemPrompt!;
-  const manifest={format:deck.format,packageVersion,schemaVersion:3,runtimeVersion:1,id:deck.id,revision:deck.revision,title:deck.title,canvas:deck.canvas,...prompt?{systemPrompt:prompt}:{},masters,activeMaster:deck.activeMaster,layouts,slides,assets};
+  const manifest={format:deck.format,packageVersion,schemaVersion:3,runtimeVersion:1,id:deck.id,revision:deck.revision,title:deck.title,canvas:deck.canvas,...deck.importReport?{importReport:deck.importReport}:{},...prompt?{systemPrompt:prompt}:{},masters,activeMaster:deck.activeMaster,layouts,slides,assets};
   return {files,manifest};
 }
 // The managed part of a package: manifest.json plus the files it references, all rebuilt from the deck.
 function managedEntries(deck:Deck):PackEntry[]{const {files,manifest}=serialize(deck);return[{name:'manifest.json',data:JSON.stringify(manifest,null,2)+'\n'},...Object.entries(files).map(([name,data])=>({name,data}))];}
-async function loadDeck(m:any,read:(p:string)=>Promise<Buffer>):Promise<Deck>{
-  if(!Array.isArray(m.slides)||m.slides.length>300||!Array.isArray(m.assets)||m.assets.length>2000||!Array.isArray(m.masters)||m.masters.length>50||!Array.isArray(m.layouts)||m.layouts.length>100)throw Error('Invalid ESF structure.');
-  const text=async(p:string)=>(await read(p)).toString('utf8');
-  const deck={format:m.format,schemaVersion:m.schemaVersion,runtimeVersion:m.runtimeVersion,id:m.id,revision:m.revision,title:m.title,canvas:m.canvas,activeMaster:m.activeMaster,
-    masters:await Promise.all(m.masters.map(async(x:any)=>({id:x.id,name:x.name,html:await text(x.html),css:await text(x.css)}))),
-    layouts:await Promise.all(m.layouts.map(async(l:any)=>({id:l.id,name:l.name,html:await text(l.html),...l.css!==undefined?{css:await text(l.css)}:{},...l.masterId!==undefined?{masterId:l.masterId}:{}}))),
-    slides:await Promise.all(m.slides.map(async(s:any)=>({id:s.id,title:s.title,layoutId:s.layoutId,html:await text(s.html),css:s.css?await text(s.css):'',script:s.script?await text(s.script):'',staticHtml:s.staticHtml?await text(s.staticHtml):'',notes:s.notes||'',...s.poll!==undefined?{poll:s.poll}:{}}))),
-    assets:await Promise.all(m.assets.map(async(a:any)=>({id:a.id,name:a.name,mime:a.mime,data:(await read(a.path)).toString('base64')}))),
-    ...m.systemPrompt===promptPath?{systemPrompt:await text(promptPath)}:{}};
-  validateDeck(deck);return deck;
-}
 // A package without a session, such as a custom template: only the deck, no auxiliary files.
-export async function readDeck(file:string){const pkg=await openPackage(file);try{return await loadDeck(await readManifest(pkg),p=>pkg.read(p));}finally{await pkg.close();}}
-export async function writeDeck(file:string,deck:Deck){await fs.mkdir(path.dirname(file),{recursive:true});await writePackage(file,managedEntries({...deck,assets:usedAssets(deck)}));}
-export class ConflictError extends Error {constructor(public reason:'changed'|'missing'){super(reason==='missing'?'The .ESF file was moved or deleted. Use Save As to keep this version.':'Files changed outside the app. Reopen or Save As to preserve both versions.');}}
-// One open .ESF: the file the user sees and the private working folder the editor, the assistant and MCP use.
-export interface Session {file:string;dir:string;workspace:string;fingerprint:string;revision:number;deck:Deck;queue:Promise<unknown>;aiSince?:number}
+export async function readDeck(file:string){if(path.extname(file).toLowerCase()==='.pptx')return (await importPptx(await fs.readFile(file),path.basename(file,path.extname(file)))).deck;if(path.extname(file).toLowerCase()==='.eslx')return (await readEslx(file)).deck;const pkg=await openPackage(file);try{return await loadDeck(await readManifest(pkg),p=>pkg.read(p));}finally{await pkg.close();}}
+export async function writeDeck(file:string,deck:Deck){
+  requireNativeTarget(file);
+  await fs.mkdir(path.dirname(file),{recursive:true});
+  return writeEslx(file,{...deck,assets:usedAssets(deck)});
+}
+function requireNativeTarget(file:string){
+  if(path.extname(file).toLowerCase()!=='.eslx')throw Error('Presentations can only be saved as .eslx.');
+}
+
+export class ConflictError extends Error {constructor(public reason:'changed'|'missing'){super(reason==='missing'?'The .eslx file was moved or deleted. Use Save As to keep this version.':'Files changed outside the app. Reopen or Save As to preserve both versions.');}}
+// One native presentation (or read-only import): the file the user sees and the private working folder the editor, the assistant and MCP use.
+export interface Session {file:string;sourcePath?:string;dir:string;workspace:string;fingerprint:string;revision:number;deck:Deck;queue:Promise<unknown>;aiSince?:number}
 export class ProjectStore {
   projects=new Map<string,Session>();
-  // workspaces holds one folder per .ESF path: files/ (the extracted package) and draft.json (unsaved changes).
+  // workspaces holds one folder per native/source path: files/ (the extracted package) and draft.json (unsaved changes).
   constructor(private workspaces:string){}
   private dirFor(file:string){return path.join(this.workspaces,createHash('sha256').update(file.normalize('NFC')).digest('hex').slice(0,24));}
-  private byFile(file:string){return [...this.projects.values()].find(s=>s.file===file);}
+  private byFile(file:string){return [...this.projects.values()].find(s=>s.file===file||s.sourcePath===file);}
   // Copies of one package share the deck ID; the second one open gets its own.
   private register(file:string,dir:string,deck:Deck,fingerprint:string,revision:number){
     if(this.projects.has(deck.id))deck.id=uid('deck');
@@ -84,20 +84,34 @@ export class ProjectStore {
   }
   async open(file:string):Promise<Project>{
     file=await fs.realpath(file);
-    if(path.extname(file).toLowerCase()!=='.esf')throw Error('Choose an .ESF file.');
-    const open=this.byFile(file);if(open)return{path:file,deck:open.deck};
+    const extension=path.extname(file).toLowerCase();
+    if(!['.esf','.eslx','.pptx'].includes(extension))throw Error('Choose an ESF, ESLX or PPTX file.');
+    const open=this.byFile(file);if(open)return{path:open.file,sourcePath:open.sourcePath,deck:open.deck};
     const fingerprint=await fileHash(file),dir=this.dirFor(file),workspace=path.join(dir,'files');
     // A draft is used only for the same file in the same version it started from; it also keeps the unsaved conversations.
     let draft:Deck|undefined;
     try{const r=JSON.parse(await fs.readFile(path.join(dir,'draft.json'),'utf8'));if(r.file===file&&r.base===fingerprint&&await exists(path.join(workspace,'manifest.json'))){const d=r.deck;validateDeck(d);draft=d;}}catch{}
     let m:any,deck:Deck;
     try{
-      if(!draft){await fs.rm(dir,{recursive:true,force:true});await extractPackage(file,workspace);}
+      if(!draft){
+        await fs.rm(dir,{recursive:true,force:true});
+        if(extension==='.esf')await extractPackage(file,workspace);
+        else{
+          const content=extension==='.eslx'?await readEslx(file):{deck:(await importPptx(await fs.readFile(file),path.basename(file,path.extname(file)))).deck,history:undefined,conversations:[]};
+          await fs.mkdir(workspace,{recursive:true});
+          const {files,manifest}=serialize(content.deck);
+          await atomic(path.join(workspace,'manifest.json'),JSON.stringify(manifest));
+          for(const [name,data] of Object.entries(files))await atomic(path.join(workspace,name),data);
+          if(content.history)await atomic(path.join(workspace,conversationsPath),content.history);
+          if(content.conversations.length)await atomic(path.join(workspace,commonConversationsPath),JSON.stringify(content.conversations));
+        }
+      }
       m=JSON.parse(await fs.readFile(path.join(workspace,'manifest.json'),'utf8'));
       deck=await loadDeck(m,async p=>{try{return await fs.readFile(await inside(workspace,p));}catch(e:any){if(e.code==='ENOENT')throw new PackageError(`Missing file in package: ${p}`);throw e;}});
     }catch(e){if(!draft)await fs.rm(dir,{recursive:true,force:true});throw e;}
-    const s=this.register(file,dir,draft||deck,fingerprint,m.revision);
-    return{path:file,deck:s.deck,recovered:!!draft};
+    const s=this.register(extension==='.eslx'?file:'',dir,draft||deck,fingerprint,m.revision);
+    if(extension!=='.eslx')s.sourcePath=file;
+    return{path:s.file,sourcePath:s.sourcePath,deck:s.deck,recovered:!!draft};
   }
   // A new presentation has no file until its first save (file ''); its working folder is not tied to a path yet.
   async untitled(deck:Deck):Promise<Project>{
@@ -106,19 +120,28 @@ export class ProjectStore {
   }
   // First save of a new presentation: the working folder moves to the one of its file, then the package is written.
   async attach(id:string,file:string,deck:Deck){
-    const s=this.location(id);if(s.file)throw Error('Presentation already has a file.');
+    const session=this.location(id);
+    if(session.file)throw Error('Presentation already has a file.');
+    requireNativeTarget(file);
     file=path.join(await fs.realpath(path.dirname(file)),path.basename(file));
-    if(path.extname(file).toLowerCase()!=='.esf')throw Error('Choose an .ESF file.');
     if(this.byFile(file))throw Error('This file is open in another tab.');
-    await s.queue;const dir=this.dirFor(file);await fs.rm(dir,{recursive:true,force:true});await fs.rename(s.dir,dir);
-    Object.assign(s,{file,dir,workspace:path.join(dir,'files'),fingerprint:''});
-    // Saving over an existing file (the dialog already confirmed the replacement) is not a conflict.
-    return (await this.save(deck)).project;
+    await session.queue;
+    const dir=this.dirFor(file),workspace=path.join(dir,'files');
+    await fs.rm(dir,{recursive:true,force:true});
+    await fs.cp(session.workspace,workspace,{recursive:true,filter:async source=>!(await fs.lstat(source)).isSymbolicLink()});
+    const staged:Session={...session,file,dir,workspace,fingerprint:'',queue:Promise.resolve()};
+    try{
+      const result=await this.write(staged,deck),previous=session.dir;
+      Object.assign(session,staged);
+      await fs.rm(previous,{recursive:true,force:true}).catch(()=>{});
+      return result.project;
+    }catch(error){await fs.rm(dir,{recursive:true,force:true});throw error;}
   }
   // from: an open presentation whose conversations go into the new file (Save As).
   async create(file:string,deck:Deck,from?:string):Promise<Project>{
+    requireNativeTarget(file);
     file=path.join(await fs.realpath(path.dirname(file)),path.basename(file));
-    if(path.extname(file).toLowerCase()!=='.esf')throw Error('Choose an .ESF file.');
+    requireNativeTarget(file);
     if(this.byFile(file))throw Error('This file is open in another tab.');
     const source=from?this.location(from):undefined,dir=this.dirFor(file);
     await fs.rm(dir,{recursive:true,force:true});await fs.mkdir(path.join(dir,'files'),{recursive:true});
@@ -130,12 +153,17 @@ export class ProjectStore {
   // Saves run one at a time per presentation.
   save(deck:Deck){const s=this.location(deck.id),run=s.queue.then(()=>this.write(s,deck));s.queue=run.catch(()=>{});return run;}
   private async write(s:Session,deck:Deck):Promise<{project:Project;pending:boolean}>{
-    validateDeck(deck);if(!s.file)throw Error('Use Save As for a new presentation.');
+    validateDeck(deck);if(!s.file)throw Error('Use Save As to create an .eslx presentation.');
+    requireNativeTarget(s.file);
     const current=await fileHash(s.file).catch((e:any)=>{if(e.code==='ENOENT')return null;throw e;});
     if(s.fingerprint&&current!==s.fingerprint)throw new ConflictError(current===null?'missing':'changed');
     const next=structuredClone(deck);next.revision=Math.max(next.revision,s.revision)+1;next.assets=usedAssets(next);
     const managed=managedEntries(next),{aux,pending}=await this.conversations(s);
-    await writePackage(s.file,[...managed,...aux]);
+    const legacy=aux.find(entry=>entry.name===conversationsPath);
+    const native=aux.find(entry=>entry.name===commonConversationsPath);
+    const conversations=native?JSON.parse(native.file?await fs.readFile(native.file,'utf8'):String(native.data)):[];
+    await writeEslx(s.file,next,legacy?(legacy.file?await fs.readFile(legacy.file):Buffer.from(legacy.data!)):undefined,conversations);
+
     s.fingerprint=await fileHash(s.file);s.revision=next.revision;s.deck=next;
     // The workspace mirrors the saved managed files, which the assistant may read.
     try{
@@ -143,7 +171,7 @@ export class ProjectStore {
       for(const e of managed){const target=path.join(s.workspace,...e.name.split('/'));await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,e.data!);}
     }catch{}
     if(pending)await this.draft(next);else await fs.rm(path.join(s.dir,'draft.json'),{force:true});
-    return{project:{path:s.file,deck:next,pending},pending};
+    return{project:{path:s.file,sourcePath:s.sourcePath,deck:next,pending},pending};
   }
   // Besides the presentation, the package keeps only the assistant's conversations: files the assistant or the user left
   // in the working folder (downloads, captures, research, scripts, exports) stay there until the tab closes, so the file
@@ -151,16 +179,17 @@ export class ProjectStore {
   // version is kept and the save stays pending.
   private async conversations(s:Session){
     const aux:PackEntry[]=[],full=path.join(s.workspace,conversationsPath);let pending=false;
+    try{const common=await inside(s.workspace,commonConversationsPath);if((await fs.stat(common)).isFile())aux.push({name:commonConversationsPath,file:common});}catch(error:any){if(error.code!=='ENOENT')throw error;}
     if(!(await fs.lstat(full).catch(()=>null))?.isFile()||(await fs.lstat(path.join(s.workspace,'.edukors')).catch(()=>null))?.isSymbolicLink())return{aux,pending};
     if(s.aiSince!==undefined&&(await fs.stat(full)).mtimeMs>=s.aiSince){
-      pending=true;const old=s.fingerprint?await openPackage(s.file).catch(()=>null):null;
+      pending=true;if(path.extname(s.file).toLowerCase()==='.eslx'){const old=s.fingerprint?await readEslx(s.file):undefined;if(old?.history)aux.push({name:conversationsPath,data:old.history});return{aux,pending};}const old=s.fingerprint?await openPackage(s.file).catch(()=>null):null;
       try{const e=old?.entries.get(conversationsPath);if(e&&!e.dir)aux.push({name:conversationsPath,data:await old!.read(conversationsPath)});}finally{await old?.close();}
     }else aux.push({name:conversationsPath,file:full});
     return{aux,pending};
   }
   async draft(deck:Deck){
-    validateDeck(deck);const s=this.location(deck.id);if(!s.file)return;
-    await atomic(path.join(s.dir,'draft.json'),JSON.stringify({file:s.file,base:s.fingerprint,deck}));
+    validateDeck(deck);const s=this.location(deck.id);if(!s.file&&!s.sourcePath)return;
+    await atomic(path.join(s.dir,'draft.json'),JSON.stringify({file:s.file||s.sourcePath,base:s.fingerprint,deck}));
   }
   async discard(id:string){await fs.rm(path.join(this.location(id).dir,'draft.json'),{force:true});}
   async close(id:string){const s=this.projects.get(id);if(!s)return;this.projects.delete(id);await s.queue;await fs.rm(s.dir,{recursive:true,force:true});}

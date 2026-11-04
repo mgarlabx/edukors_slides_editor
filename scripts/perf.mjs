@@ -27,7 +27,7 @@ for(const [count,file] of Object.entries(files)){
       await page.getByText('Exportação concluída',{exact:true}).waitFor({timeout:600000});r[format+'Ms']=Date.now()-t;
       await page.getByRole('button',{name:'Cancelar',exact:true}).click();
     }
-    r.htmlKB=Math.round((await fs.stat(path.join(path.dirname(file),path.basename(file,'.ESF')+'.html'))).size/1024);r.esfKB=Math.round((await fs.stat(file)).size/1024);
+    r.htmlKB=Math.round((await fs.stat(path.join(path.dirname(file),path.basename(file,path.extname(file))+'.html'))).size/1024);r.eslxKB=Math.round((await fs.stat(file)).size/1024);
     report[count]=r;console.log(count,JSON.stringify(r));
   }finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
 }

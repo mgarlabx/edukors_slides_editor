@@ -3,7 +3,7 @@ import {createReadStream} from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import {promisify} from 'node:util';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 
 // An .ESF is a standard ZIP: manifest.json at the root, the folders the app rebuilds from the deck on every save
 // (managed) and the assistant's conversations; nothing else from the working folder is packed.
@@ -14,9 +14,10 @@ export const packageLimits={entries:20000,file:512*2**20,total:2*2**30};
 export const promptPath='ai/system-prompt.md';
 export const managedPaths=['manifest.json','masters','layouts','slides','images','fonts',promptPath];
 // .edukors/ is the app's working state; only the conversations go into the package.
+export const commonConversationsPath='.edukors/ai/common-conversations.json';
 export const conversationsPath='.edukors/ai/conversations.json';
 export class PackageError extends Error {}
-const inflate=promisify(zlib.inflateRaw),deflate=promisify(zlib.deflateRaw);
+const inflate=promisify(zlib.inflateRaw);
 const invalid=()=>new PackageError('This file is not a valid ESF package.');
 // Names must mean the same file on macOS, Windows and Linux: no drive letters, reserved characters or trailing dots/spaces.
 export function validName(name:string){
@@ -103,38 +104,6 @@ export async function extractPackage(file:string,dest:string){
   }finally{await pkg.close();}
 }
 export interface PackEntry {name:string;data?:Buffer|string;file?:string}
-// Already compressed formats are stored as they are.
-const stored=/\.(png|jpe?g|gif|webp|avif|woff2?|mp4|m4v|mov|webm|mp3|m4a|aac|ogg|zip|gz|pdf|pptx|docx|xlsx|esf)$/i;
-function dosTime(d:Date){return{time:(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1),date:((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()};}
-// Writes a temporary package next to the target, checks it and only then replaces the target (rename is atomic on
-// the same volume), so a failure never truncates the previous version.
-export async function writePackage(target:string,entries:PackEntry[]){
-  checkNames(entries.map(e=>e.name));
-  if(entries.length>packageLimits.entries)throw new PackageError(`The package has more than ${packageLimits.entries} files.`);
-  const temp=path.join(path.dirname(target),`.${path.basename(target)}.${randomUUID().slice(0,8)}.tmp`);
-  const fh=await fs.open(temp,'wx'),{time,date}=dosTime(new Date()),central:Buffer[]=[];let offset=0,total=0,closed=false;
-  try{
-    for(const e of entries){
-      const data=typeof e.data==='string'?Buffer.from(e.data):e.data??await fs.readFile(e.file!);
-      if(data.length>packageLimits.file)throw new PackageError(`A file exceeds ${packageLimits.file/2**20} MB: ${e.name}`);
-      if((total+=data.length)>packageLimits.total)throw new PackageError(`The presentation exceeds ${packageLimits.total/2**30} GB.`);
-      let body=data,method=0;
-      if(data.length>64&&!stored.test(e.name)){const z=await deflate(data,{level:6});if(z.length<data.length){body=z;method=8;}}
-      const name=Buffer.from(e.name,'utf8'),crc=zlib.crc32(data),h=Buffer.alloc(30);
-      h.writeUInt32LE(0x04034b50,0);h.writeUInt16LE(20,4);h.writeUInt16LE(0x800,6);h.writeUInt16LE(method,8);h.writeUInt16LE(time,10);h.writeUInt16LE(date,12);
-      h.writeUInt32LE(crc,14);h.writeUInt32LE(body.length,18);h.writeUInt32LE(data.length,22);h.writeUInt16LE(name.length,26);
-      const c=Buffer.alloc(46);c.writeUInt32LE(0x02014b50,0);c.writeUInt16LE(0x0314,4);h.copy(c,6,4,30);c.writeUInt32LE((0o100644<<16)>>>0,38);c.writeUInt32LE(offset,42);
-      central.push(c,name);await fh.write(Buffer.concat([h,name]));await fh.write(body);offset+=30+name.length+body.length;
-      if(offset>=0xffffffff)throw new PackageError('The presentation exceeds the supported size.');
-    }
-    const cd=Buffer.concat(central),end=Buffer.alloc(22);
-    end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(cd.length,12);end.writeUInt32LE(offset,16);
-    await fh.write(Buffer.concat([cd,end]));await fh.sync();await fh.close();closed=true;
-    const check=await openPackage(temp);
-    try{if(check.entries.size!==entries.length)throw new PackageError('The written package is incomplete.');await readManifest(check);}finally{await check.close();}
-    await fs.rename(temp,target);
-  }catch(e){if(!closed)await fh.close().catch(()=>{});await fs.rm(temp,{force:true});throw e;}
-}
 export function fileHash(file:string){
   return new Promise<string>((resolve,reject)=>{const h=createHash('sha256');createReadStream(file).on('error',reject).on('data',b=>h.update(b)).on('end',()=>resolve(h.digest('hex')));});
 }

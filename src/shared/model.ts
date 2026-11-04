@@ -1,5 +1,6 @@
 import {PollConfig,validPoll} from './poll';
-export type Language = 'pt' | 'en' | 'es';
+// Interface languages. Content has no language; the exported HTML is always in English.
+export type Language = 'pt' | 'en' | 'es' | 'zh' | 'hi';
 export interface Asset { id: string; name: string; mime: string; data: string }
 export interface Slide {
   id: string; title: string; layoutId: string; html: string; css: string;
@@ -10,6 +11,8 @@ export interface Slide {
 // Master HTML/CSS and layout HTML/CSS are independent from slides; only inheritance flows down to slide instances.
 export interface Layout { id: string; name: string; html: string; css?: string; masterId?: string }
 export interface Master { id: string; name: string; html: string; css: string }
+export interface ImportIssue {slideId?:string;objectId?:string;code:string;detail:string}
+export interface ImportReport {format:'pptx';version:1;sourceName:string;issues:ImportIssue[];omitted:number}
 export interface Deck {
   format: 'edukors-slides'; schemaVersion: 3; runtimeVersion: 1;
   id: string; revision: number; title: string;
@@ -17,10 +20,11 @@ export interface Deck {
   masters: Master[]; activeMaster: string; layouts: Layout[]; slides: Slide[]; assets: Asset[];
   // Context of this talk for the assistant (ai/system-prompt.md in the package); the agent changes it only when asked.
   systemPrompt?: string;
+  importReport?: ImportReport;
 }
 // path: the .ESF the user sees (never the app's private working folder). pending: the save left out files the
 // assistant was still writing, so the presentation stays modified.
-export interface Project { path: string; deck: Deck; recovered?: boolean; pending?: boolean }
+export interface Project { path: string; sourcePath?:string; deck: Deck; recovered?: boolean; pending?: boolean }
 export interface Preferences {
   language: Language; recent: string[];
   // The AI library's account the assistant uses (accounts live in the shared EDUKORS registry, not here).
@@ -40,7 +44,7 @@ export interface Preferences {
   terms?: string;
 }
 // Bump it when the terms of use (src/ui/help/terms-of-use*.md) change: everyone is asked to accept them again.
-export const TERMS_VERSION = '2026-10-30';
+export const TERMS_VERSION = '2026-11-02';
 export interface Template { id: string; title: string }
 export interface AIEvent {
   projectId: string; type: 'text' | 'done' | 'error' | 'usage' | 'status' | 'limits' | 'activity' | 'progress' | 'thought' | 'question' | 'login';
@@ -73,7 +77,7 @@ p,li{font-size:32px;line-height:1.5;color:var(--muted)}p{margin-top:24px}ul{padd
 [data-step]{transition:opacity .25s,transform .25s}[data-step].pending{opacity:0;transform:translateY(12px)}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}`;
 export const blankHtml='<section class="slide"></section>';
 // Default names follow the interface language.
-export const defaultNames:Record<Language,{master:string;layout:string}>={pt:{master:'Base',layout:'Em branco'},en:{master:'Base',layout:'Blank'},es:{master:'Base',layout:'En blanco'}};
+export const defaultNames:Record<Language,{master:string;layout:string}>={pt:{master:'Base',layout:'Em branco'},en:{master:'Base',layout:'Blank'},es:{master:'Base',layout:'En blanco'},zh:{master:'基础',layout:'空白'},hi:{master:'आधार',layout:'रिक्त'}};
 export function newMaster(name=defaultNames.en.master):Master{return{id:uid('m'),name,html:'',css:baseCss};}
 // The active master (the first one if the ID is missing) and a slide's layout (the first one if missing).
 export const activeMaster=(deck:Deck)=>deck.masters.find(m=>m.id===deck.activeMaster)||deck.masters[0];
@@ -108,6 +112,11 @@ export function validateDeck(value:unknown):asserts value is Deck {
   if(!d||d.format!=='edukors-slides'||d.schemaVersion!==3||d.runtimeVersion!==1) throw Error('Unsupported ESF version.');
   if(typeof d.id!=='string'||!/^deck-[\w-]+$/.test(d.id))throw Error('Invalid project ID.');
   if(typeof d.title!=='string'||!d.title.trim()||d.title.length>500)throw Error('Invalid title.');
+  if(d.importReport!==undefined){
+    const report=d.importReport;
+    if(!report||report.format!=='pptx'||report.version!==1||typeof report.sourceName!=='string'||report.sourceName.length>500||!Number.isSafeInteger(report.omitted)||report.omitted<0||!Array.isArray(report.issues)||report.issues.length>5000)throw Error('Invalid presentation import report.');
+    for(const issue of report.issues)if(!issue||typeof issue.code!=='string'||issue.code.length>100||typeof issue.detail!=='string'||issue.detail.length>1000||issue.slideId!==undefined&&(typeof issue.slideId!=='string'||issue.slideId.length>200)||issue.objectId!==undefined&&(typeof issue.objectId!=='string'||issue.objectId.length>200))throw Error('Invalid presentation import issue.');
+  }
   if(!Number.isSafeInteger(d.revision)||d.revision<0)throw Error('Invalid metadata.');
   if(d.canvas?.width!==1600||d.canvas?.height!==900)throw Error('Unsupported canvas (1600 × 900 required).');
   if(!Array.isArray(d.slides)||d.slides.length<1||d.slides.length>300)throw Error('A presentation needs 1–300 slides.');

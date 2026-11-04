@@ -1,0 +1,2 @@
+// Edukors Common's Electron host (plain JavaScript, see node_modules/edukors-common-ux/desktop/host.mjs).
+declare module 'edukors-common-ux/desktop/host.mjs' {export function startDesktopApp(options:{appId:string;name:string;root:string;page?:string;skills?:string;documentExtensions:string[];importExtensions?:string[];exportFormats?:string[];openExtensions?:string[];saveExtensions?:string[];maxOpenBytes?:number}):void;}

@@ -1,16 +1,17 @@
 import type {Slide} from './model';
 import {boxStyle} from './geometry';
-export type SelectionDetails={index:number;kind:'text'|'image'|'link'|'shape'|'box';crop:boolean;fonts?:string[];style:Partial<Record<'fontFamily'|'fontSize'|'color'|'borderWidth'|'borderColor'|'borderStyle'|'backgroundColor'|'boxShadow'|'filter',string>>};
-export type ObjectStyle=Partial<Record<'border-width'|'border-color'|'border-style'|'background-color'|'box-shadow'|'filter'|'z-index'|'position'|'isolation'|'text-align'|'align-content'|'justify-content'|'align-items',string>>;
+export type SelectionDetails={index:number;kind:'text'|'image'|'link'|'shape'|'box';crop:boolean;fonts?:string[];style:Partial<Record<'fontFamily'|'fontSize'|'fontWeight'|'fontStyle'|'textDecorationLine'|'verticalAlign'|'color'|'borderWidth'|'borderColor'|'borderStyle'|'backgroundColor'|'boxShadow'|'filter'|'opacity'|'textAlign'|'alignContent',string>>};
+export type ObjectStyle=Partial<Record<'border-width'|'border-color'|'border-style'|'background-color'|'box-shadow'|'filter'|'opacity'|'z-index'|'position'|'isolation'|'text-align'|'align-content'|'justify-content'|'align-items'|'font-size',string>>;
 // Properties the frame may set on an object: the format bar, stacking order and text alignment (context menu).
-// Images get their shadow as a drop-shadow filter, which follows transparent pixels.
-const fixed:Record<string,RegExp>={filter:/^(none|drop-shadow\(-?[\d.]+(px)? -?[\d.]+(px)? [\d.]+(px)? #[\da-f]{3,8}\))$/i,'z-index':/^-?\d{1,6}$/,position:/^relative$/,isolation:/^isolate$/,'text-align':/^(left|center|right)$/,'align-content':/^(start|center|end)$/,'justify-content':/^(flex-start|center|flex-end)$/,'align-items':/^(flex-start|center|flex-end)$/};
+// Images get their shadow as a drop-shadow filter, which follows transparent pixels. A text block's own font size
+// follows its text after a size change (canvas.ts, fitBlockSize), so its lines are not spaced for a larger size.
+const fixed:Record<string,RegExp>={'font-size':/^\d{1,4}(\.\d{1,2})?px$/,filter:/^(none|drop-shadow\(-?[\d.]+(px)? -?[\d.]+(px)? [\d.]+(px)? #[\da-f]{3,8}\))$/i,'z-index':/^-?\d{1,6}$/,position:/^relative$/,isolation:/^isolate$/,'text-align':/^(left|center|right|justify)$/,opacity:/^(0(\.\d{1,3})?|1(\.0{1,3})?)$/,'align-content':/^(start|center|end)$/,'justify-content':/^(flex-start|center|flex-end)$/,'align-items':/^(flex-start|center|flex-end)$/};
 export const objectStyleKeys=['border-width','border-color','border-style','background-color','box-shadow',...Object.keys(fixed)];
 const styleValue=(key:string,value:unknown)=>objectStyleKeys.includes(key)&&typeof value==='string'&&value.length<=256&&!/[;{}<>]|url\s*\(/i.test(value)&&(!fixed[key]||fixed[key].test(value));
 export function cleanSelection(value:any,index:number|undefined):SelectionDetails|undefined{
   if(!value||value.index!==index||!Number.isInteger(index)||!['text','image','link','shape','box'].includes(value.kind))return;
   const style:SelectionDetails['style']={};
-  for(const key of ['fontFamily','fontSize','color','borderWidth','borderColor','borderStyle','backgroundColor','boxShadow','filter'] as const)if(typeof value.style?.[key]==='string')style[key]=value.style[key].slice(0,512);
+  for(const key of ['fontFamily','fontSize','fontWeight','fontStyle','textDecorationLine','verticalAlign','color','borderWidth','borderColor','borderStyle','backgroundColor','boxShadow','filter','opacity','textAlign','alignContent'] as const)if(typeof value.style?.[key]==='string')style[key]=value.style[key].slice(0,512);
   return{index:index!,kind:value.kind,crop:value.crop===true,style,fonts:Array.isArray(value.fonts)?value.fonts.filter((f:unknown)=>typeof f==='string'&&f.length<200).slice(0,200):[]};
 }
 // Direct editing on the canvas. Every element of the slide HTML is addressed by its position in document order, the same
@@ -41,8 +42,10 @@ function textTargets(doc:Document){
 export function annotate(html:string){
   const doc=parse(html),text=new Set(textTargets(doc));
   elements(doc).forEach((el,i)=>{el.setAttribute('data-esf-edit',String(i));const manual=el.getAttribute('data-manual'),kind=manual==='shape'?'shape':manual==='link'?'link':/^(img|svg|video|canvas)$/i.test(el.tagName)?'media':text.has(el)?'text':'';
-    // Layout elements are locked like the master's objects; of a layout field only the text is edited (fixed in place).
-    if(el.closest('[data-from-layout]')&&!el.matches('[data-image-slot] img')){if(kind==='text'&&el.hasAttribute('data-field')&&!el.closest('[data-manual]'))el.setAttribute('data-esf-fixed','');else{el.setAttribute('data-esf-locked','');return;}}
+    // Everything a layout brings, its texts included, is locked on the slides like the base's objects (decision of
+    // 02/11/2026): layouts change only in the slide master; a slide's own content is its own objects. A layout's empty
+    // image slot still takes the slide's picture.
+    if(el.closest('[data-from-layout]')&&!el.matches('[data-image-slot] img')){el.setAttribute('data-esf-locked','');return;}
     if(kind)el.setAttribute('data-esf-kind',kind);});
   return doc.body.innerHTML;
 }
@@ -82,7 +85,7 @@ function inlineContent(target:Element,html:string){
 // All operations of a gesture resolve their elements first, so deleting several never shifts the others.
 export function applyEdits(slide:Slide,ops:EditOp[]):Slide{
   const doc=parse(slide.html),all=elements(doc),sdoc=slide.staticHtml?parse(slide.staticHtml):null,sall=sdoc?elements(sdoc):[];
-  const jobs=ops.filter(op=>{const el=all[op.index];return el&&(!el.closest('[data-from-layout]')||op.type==='text'&&el.hasAttribute('data-field')&&!el.closest('[data-manual]')||el.matches('[data-image-slot] img'));}).map(op=>{const el=all[op.index],field=el.getAttribute('data-field');let twins:Element[]=[];
+  const jobs=ops.filter(op=>{const el=all[op.index];return el&&(!el.closest('[data-from-layout]')||el.matches('[data-image-slot] img'));}).map(op=>{const el=all[op.index],field=el.getAttribute('data-field');let twins:Element[]=[];
     if(sdoc){if(field)twins=sall.filter(x=>x.getAttribute('data-field')===field);else{const t=sall[op.index];if(sall.length===all.length&&t?.tagName===el.tagName&&fieldText(t)===fieldText(el))twins=[t];}}
     return{op,el,twins};});
   if(!jobs.length)return slide;

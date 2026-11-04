@@ -4,7 +4,7 @@ Esta guía muestra cómo crear una presentación en Edukors Slides Editor, desde
 
 ## 1. La idea en una frase
 
-Una presentación es un conjunto de **diapositivas**, cada una una pequeña página web, que comparten una misma apariencia: la **base** (colores, fuentes y lo que queda detrás de todas las diapositivas) y los **diseños** (la organización del contenido). El editor guarda todo en un archivo `.esf` y exporta **un único HTML** que se abre en cualquier navegador, incluso sin internet.
+Una presentación es un conjunto de **diapositivas**, cada una una pequeña página web, que comparten una misma apariencia: la **base** (colores, fuentes y lo que queda detrás de todas las diapositivas) y los **diseños** (la organización del contenido). El editor guarda todo en un archivo `.eslx` y exporta **un único HTML** que se abre en cualquier navegador, incluso sin internet.
 
 ## 2. Instalar y abrir
 
@@ -22,36 +22,42 @@ Sin Microsoft Store (algunos equipos escolares la tienen desactivada), use el in
 
 **En Linux** (64 bits, x64):
 
-- En **Ubuntu, Debian, Mint** y derivados, descargue [`Edukors-Slides-Editor-linux.deb`](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.deb) e instálelo con doble clic (o `sudo apt install ./Edukors-Slides-Editor-linux.deb`). El editor queda en el menú de aplicaciones, y un `.esf` se abre en él con doble clic.
+- En **Ubuntu, Debian, Mint** y derivados, descargue [`Edukors-Slides-Editor-linux.deb`](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.deb) e instálelo con doble clic (o `sudo apt install ./Edukors-Slides-Editor-linux.deb`). El editor queda en el menú de aplicaciones, y un `.eslx` se abre en él con doble clic.
 - En **otras distribuciones**, descargue [`Edukors-Slides-Editor-linux.AppImage`](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.AppImage), márquelo como ejecutable (`chmod +x`) y ábralo. Funciona sin instalar.
 
-Las versiones nuevas llegan por el propio editor: cuando una está lista, un aviso ofrece **Reiniciar**, y el editor pregunta antes por lo que no esté guardado.
+Cuando sale una versión nueva, el propio editor lo avisa y ofrece su página de descarga (en Microsoft Store, la actualización llega por la tienda).
 
-**En todos los sistemas**, la primera vez, el editor muestra los **Términos de uso** (la licencia MIT, explicada): hay que aceptarlos para continuar. Después quedan en la **Ayuda**, que también muestra la versión del editor. A partir de ahí puede crear una **Nueva presentación** o **Abrir** un archivo `.esf`. Una vez instalado, un `.esf` se abre en el editor con doble clic.
+**En todos los sistemas**, la primera vez, el editor muestra los **Términos de uso** (la licencia MIT, explicada): hay que aceptarlos para continuar. Después quedan en la **Ayuda**, que también muestra la versión del editor. A partir de ahí puede crear una **Nueva presentación** o **Abrir** un archivo `.eslx`. Una vez instalado, un `.eslx` se abre en el editor con doble clic.
+
+**Archivos de otras versiones y de PowerPoint.** **Abrir** también acepta presentaciones `.esf` (de versiones anteriores del editor) y `.pptx` (PowerPoint). Se abren convertidas, en una pestaña sin archivo: el original nunca se modifica, y **Guardar** pide un nombre para grabar un `.eslx` nuevo. La conversión de PowerPoint trae textos, imágenes y formas simples; lo que no se pudo convertir aparece en un aviso sobre la diapositiva, guardado con la presentación.
 
 ## 3. La pantalla
 
 | Parte | Qué hace |
 | --- | --- |
-| **Barra superior** | Archivo (nueva, abrir, recientes, guardar, exportar, mostrar en la carpeta), **Presentar**, el cambio entre **Diapositivas** y **Patrón de diapositivas**, deshacer y rehacer, edición de los objetos de la diapositiva (copiar, cortar, pegar, duplicar, eliminar), **Insertar** (texto, forma, imagen, enlace, pregunta interactiva), Configuración y Ayuda. A la derecha, la lista de diapositivas (⌥⌘0) y el **asistente de IA** ✦ (⇧⌘A). |
-| **Pestañas** (justo debajo) | Una presentación abierta por pestaña. El punto en la pestaña indica cambios sin guardar. |
-| **Barra de formato** | Fuente, tamaño, color, negrita, cursiva, subrayado, línea, relleno, sombra y recorte del objeto seleccionado en la diapositiva. |
-| **Lista de diapositivas** (izquierda) | Las miniaturas, con una barra para crear, mover, duplicar, copiar, cortar, pegar y eliminar diapositivas. Su borde derecho se arrastra para cambiar el ancho. |
+| **Barra superior** | Archivo (nueva, abrir, recientes, guardar, exportar, mostrar en la carpeta), **Presentar** y el cambio entre **Diapositivas** y **Patrón de diapositivas**, deshacer y rehacer, edición (cortar, copiar, pegar, duplicar, eliminar), **Insertar** (texto, forma, imagen, enlace, pregunta interactiva), Configuración y Ayuda. A la derecha, la lista de diapositivas (⌥⌘0) y el **asistente de IA** (⇧⌘A). |
+| **Pestañas** (justo debajo) | Una presentación abierta por pestaña. El punto en la pestaña indica cambios sin guardar; **+** crea otra presentación. |
+| **Barra de formato** | Fuente, tamaño, color, negrita, cursiva, subrayado, línea, relleno, sombra y recorte del objeto seleccionado. |
+| **Lista de diapositivas** (izquierda) | Las miniaturas, con una barra para crear, mover, duplicar, copiar, cortar, pegar y eliminar diapositivas. |
 | **Diapositiva** (centro) | La diapositiva en edición; debajo, las **notas del presentador**. |
 | **Asistente de IA** (derecha) | La conversación con el agente que crea y cambia las diapositivas. |
-| **Barra de estado** | Si está guardado, el archivo, el **diseño** de la diapositiva (haga clic para cambiarlo) y la versión del editor. |
+| **Barra de estado** | Si está guardado, el número de la diapositiva y su **diseño** (clic para cambiarlo), y la versión del editor. |
+
+El tema (claro, oscuro o el del sistema), el tamaño de letra de la interfaz y el idioma están en **Configuración → Aplicación**.
+
+La lista de diapositivas y el asistente de IA cambian de ancho: arrastre el borde interior del panel (o use las flechas con él enfocado); un doble clic en el borde vuelve al ancho predeterminado.
 
 ## 4. Crear una presentación, paso a paso
 
 1. **Nueva presentación.** Haga clic en el icono de nueva presentación (o pulse ⌘N) y elija una plantilla: *Blank presentation* (en blanco) o una de sus plantillas. Doble clic, o **Crear**, la abre.
 2. **Añada diapositivas.** El botón de nueva diapositiva, arriba de la lista (o ⇧⌘N), muestra los diseños: elija uno con doble clic o **Insertar**.
 3. **Escriba.** Haga clic en un texto de la diapositiva para editarlo allí mismo.
-4. **Pida al asistente.** Abra ✦ y describa lo que quiere: "crea tres diapositivas sobre el ciclo del agua para 6.º grado". Vea la sección 7.
-5. **Guarde** con ⌘S. La primera vez, el editor pregunta dónde y con qué nombre: toda la presentación queda en un solo archivo, `mi-clase.esf`, que puede copiar, mover y renombrar libremente.
+4. **Pida al asistente.** Abra el asistente (⇧⌘A) y describa lo que quiere: "crea tres diapositivas sobre el ciclo del agua para 6.º grado". Vea la sección 7.
+5. **Guarde** con ⌘S. La primera vez, el editor pregunta dónde y con qué nombre: toda la presentación queda en un solo archivo, `mi-clase.eslx`, que puede copiar, mover y renombrar libremente.
 
-El archivo guarda solo lo que la presentación usa (las imágenes y fuentes que ninguna diapositiva cita salen al guardar), por eso es pequeño. Si el equipo se apaga sin guardar, el editor recupera el borrador la próxima vez que se abre. Si el archivo cambia fuera del editor, nunca se sobrescribe sin preguntar.
+El archivo guarda solo lo que la presentación usa (las imágenes y fuentes que ninguna diapositiva cita salen al guardar), por eso queda pequeño. Mientras hay cambios sin guardar, el editor conserva un borrador: si se cierra de repente, al abrir de nuevo ofrece **Recuperar**. Si el archivo cambia fuera del editor (otro programa, una sincronización), pregunta antes de grabar encima.
 
-Para reutilizar una apariencia, use **Archivo → Guardar como plantilla…**: la plantilla aparece en la galería de **Nueva presentación**, donde también se renombra y elimina.
+Para reutilizar una apariencia, abra la galería de **Nueva presentación** con la presentación abierta y use **Guardar como plantilla**: la plantilla aparece en la galería, donde también se renombra y elimina.
 
 ## 5. Editar en la diapositiva
 
@@ -72,40 +78,40 @@ Cada gesto es un paso de deshacer (⌘Z). Solo Esc cancela un gesto en curso.
 
 ## 6. Patrón de diapositivas: bases y diseños
 
-**Patrón de diapositivas**, en la barra superior o en el menú Presentación, cambia la lista de diapositivas por dos pestañas:
+**Patrón de diapositivas**, junto a Presentar en la barra superior, cambia la lista de diapositivas por dos pestañas:
 
 - **Bases.** Cada base es una apariencia alternativa de toda la presentación: colores, fuentes y los objetos que quedan detrás de todas las diapositivas (un logotipo, una franja). El ✓ debajo de la miniatura elige la base **activa**, que vale para todas las diapositivas. Así puede probar otra apariencia sin tocar el contenido.
 - **Diseños.** Cada diseño es una organización del contenido (portada, título y texto, dos columnas…), compartida por todas las bases. Una diapositiva nueva parte de un diseño. Lo que viene del diseño solo se cambia aquí, y el cambio llega a todas las diapositivas que lo usan; en las diapositivas, solo se editan los textos e imágenes de los espacios del diseño.
 
-Renombre con doble clic en el nombre. La presentación siempre conserva al menos una base y un diseño; las diapositivas de un diseño eliminado pasan al anterior, con su contenido. Para **cambiar el diseño** de una diapositiva, haga clic en su nombre en la barra de estado (o **Diapositivas → Cambiar diseño…**): los textos van a los campos del mismo nombre del nuevo diseño.
+Renombre con doble clic en el nombre. La presentación siempre conserva al menos una base y un diseño; las diapositivas de un diseño eliminado pasan al anterior, con su contenido. Para **cambiar el diseño** de una diapositiva, haga clic en su nombre en la barra de estado: los textos van a los campos del mismo nombre del nuevo diseño.
 
 Los detalles de código (HTML y CSS de bases y diseños) quedan para el asistente: pida "pon los títulos en azul marino en todas las diapositivas" o "crea un diseño con imagen a la izquierda y texto a la derecha".
 
 ## 7. El asistente de IA
 
-El icono ✦ en el extremo derecho de la barra superior (o ⇧⌘A) abre y cierra el **asistente** junto a la diapositiva; cerrarlo no interrumpe ni borra la conversación. Ve la presentación y la cambia a pedido: crea y reescribe diapositivas, cambia la apariencia, busca en la web, captura páginas y descarga imágenes. Trabaja solo en la presentación abierta y solo en su carpeta, y nunca elimina diapositivas: eso queda en sus manos.
+El botón del asistente, en el extremo derecho de la barra superior (o ⇧⌘A), abre y cierra el **asistente** junto a la diapositiva; cerrarlo no interrumpe ni borra la conversación. Ve la presentación y la cambia a pedido: crea y reescribe diapositivas, cambia la apariencia y trae imágenes de la web. Trabaja solo en la presentación de esa conversación, en una carpeta propia del editor (no en la carpeta de su archivo), y nunca elimina diapositivas: eso queda en sus manos.
 
-**Antes de usarlo.** Instale en su equipo [Claude Code](https://claude.com/claude-code) o [Codex](https://developers.openai.com/codex/cli/); el editor no los descarga. Luego, en **Configuración → Asistente de IA**, cree una cuenta e inicie sesión: la página del proveedor se abre en el navegador (si no se abre, el editor muestra la dirección y, en Claude, un campo para el código). La cuenta es suya, no del editor, y queda disponible para las demás apps Edukors de este equipo. En Windows, el asistente funciona solo con Claude Code, sin ejecutar comandos: lee y escribe los archivos de la presentación y busca en la web.
+**Antes de usarlo.** Instale en su equipo [Claude Code](https://claude.com/claude-code) o [Codex](https://developers.openai.com/codex/cli/); el editor no los descarga. Después, en **Configuración → Asistente de IA**, agregue una cuenta e inicie sesión en el navegador. La cuenta es suya, no del editor, y sirve para las demás apps Edukors de este equipo.
 
-**Cómo pedir.** Escriba en el campo inferior y envíe. Las diapositivas seleccionadas van con el pedido, por eso "esta diapositiva" quiere decir la diapositiva seleccionada. Ejemplos:
+**Cómo pedir.** Escriba en el campo de abajo y envíe. Las diapositivas seleccionadas van con el pedido, por eso "esta diapositiva" significa la seleccionada; en el Patrón de diapositivas, el asistente sabe qué base o diseño está viendo. Ejemplos:
 
 - "Crea una portada y tres diapositivas sobre fracciones para 6.º grado."
 - "Reescribe esta diapositiva con frases más cortas."
-- "Haz una animación que muestre los pasos uno a la vez."
-- "Busca datos recientes sobre la deforestación y haz un gráfico."
+- "Haz una animación que muestre los pasos uno a uno."
+- "Trae una foto del ciclo del agua y ponla a la derecha."
 - "Cambia la fuente de toda la presentación por una más legible."
 
-El clip 📎 adjunta archivos (textos, PDF, imágenes) para que los use. Cuando el pedido admite más de un camino, pregunta con opciones en el propio chat: elija una o escriba otra respuesta.
+El **+** del campo adjunta archivos (textos, PDF, imágenes), elige una skill o un servidor MCP y activa o desactiva la búsqueda web. Cuando el pedido admite más de un camino, pregunta con opciones en el chat.
 
-**Cada cambio se verifica.** El editor comprueba y dibuja cada diapositiva que el asistente propone; lo que no pasa vuelve a él para corregir. Lo que hace en una respuesta es **un paso de deshacer**: ⌘Z lo deshace todo de una vez. El asistente no guarda el archivo: guárdelo usted, con ⌘S, cuando esté conforme.
+**Cada cambio se verifica y se deshace.** El editor verifica cada cambio que propone el asistente; lo que no pase vuelve a él para corregirlo. Cada cambio aplicado es **un paso de deshacer** (⌘Z). En el modo **revisar antes de aplicar**, usted aprueba cada cambio. El asistente no guarda el archivo: guárdelo usted, con ⌘S.
 
-**Instrucciones permanentes.** En **Configuración → Asistente de IA → Avanzado**, las **Instrucciones para el agente** tienen dos pestañas: **Global**, para todas las presentaciones (el tono, el público, reglas de estilo), y **Esta presentación**, el contexto de esta charla (público, objetivos, fuentes), guardado en el propio `.esf`. Allí también están sus **servidores MCP** (cada llamada pide su permiso) y la carpeta de **skills**.
+**Instrucciones permanentes.** Sus instrucciones para todas las presentaciones están en **Configuración → Asistente de IA**, con los servidores MCP y las skills. El contexto de esta charla (público, objetivos, fuentes) está en **Configuración → Esta presentación**, guardado en el propio `.eslx`.
 
-**Modelo y esfuerzo.** El botón junto a Enviar elige el modelo y el **esfuerzo**: más esfuerzo, respuestas más cuidadosas y más lentas, con más consumo.
+**Modelo, esfuerzo y consumo.** Junto a Enviar están el modo, el modelo y el **esfuerzo** (más esfuerzo, respuestas más cuidadosas y lentas, con más consumo). Debajo, el uso de la ventana de 5 horas de la suscripción.
 
-**Sesiones y consumo.** El título en la parte superior del panel abre las sesiones anteriores (con búsqueda); **Nueva sesión** empieza otra conversación. Las conversaciones se guardan en la presentación. El círculo en el encabezado muestra cuánto del contexto de la sesión está en uso, y el pie, la cuenta, el último pedido y el uso de la ventana de 5 horas de la suscripción.
+**Conversaciones.** El historial, arriba del panel, reabre conversaciones anteriores (con búsqueda); una nueva conversación empieza otra. Las conversaciones quedan guardadas en la presentación.
 
-**Detener.** Mientras el asistente trabaja, el botón **Detener** detiene el pedido; no se aplica nada de lo que estaba haciendo.
+**Detener.** Mientras el asistente trabaja, **Detener** interrumpe el pedido; los cambios que ya aplicó se quedan y se deshacen con ⌘Z.
 
 ## 8. Preguntas interactivas
 
@@ -123,7 +129,9 @@ Las respuestas pasan por un servidor de preguntas que **usted o su institución 
 | --- | --- |
 | **HTML** (recomendado) | Un solo archivo, con imágenes, fuentes y animaciones, que se abre en cualquier navegador, incluso sin internet (solo las preguntas interactivas usan la red). |
 | **PDF** | Una página por diapositiva, como imagen. |
-| **PPTX** | Una diapositiva de imagen por diapositiva, para quien necesite recibir un archivo de PowerPoint; no es editable. |
+| **PPTX** | Una presentación de PowerPoint editable: los textos, imágenes y formas se convierten en objetos nativos (fuente, tamaño, color, alineación, enlaces); lo que no tiene equivalente (degradados, decoraciones de la base, dibujos libres) va como imagen de fondo de cada diapositiva. Las animaciones y las preguntas interactivas no se exportan. |
+
+El archivo exportado queda junto a la presentación, con el mismo nombre; si ya existe un archivo con ese nombre, el editor pregunta antes de reemplazarlo.
 
 **En el HTML exportado**, las flechas, la barra espaciadora y Av Pág/Re Pág cambian de diapositiva. Lleve el ratón a una esquina superior para ver las herramientas: **panel del presentador** (se abre en otra ventana, con todas las diapositivas y la actual destacada), **lápiz**, **resaltador**, **texto**, **borrador**, **lupa**, **pizarra** infinita y **pantalla completa**. Una esquina inferior muestra la pista de diapositivas, con vista previa al pasar el ratón. Los controles del HTML están siempre en inglés, sea cual sea el idioma del editor.
 
@@ -149,6 +157,7 @@ En Windows y Linux, ⌘ corresponde a Ctrl, ⌥ a Alt y ⇧ a Shift.
 | ⌘E | Exportar |
 | ⌥⌘0 | Mostrar / ocultar la lista de diapositivas |
 | ⇧⌘A | Abrir / cerrar el asistente de IA |
-| ⌘= / ⌘− / ⌘0 | Ampliar / reducir / tamaño real |
+| ⌘= / ⌘− / ⌘0 | Acercar / alejar / tamaño real de la diapositiva |
+| ⇧⌘+ / ⇧⌘− | Letra de la interfaz más grande / más pequeña |
 | ⌘, | Configuración |
 | Esc | Cancelar el gesto en curso |

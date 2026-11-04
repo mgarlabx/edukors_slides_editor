@@ -322,6 +322,63 @@
           }
         }
       }
+    },
+    "importReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "version",
+        "sourceName",
+        "issues",
+        "omitted"
+      ],
+      "properties": {
+        "format": {
+          "const": "pptx"
+        },
+        "version": {
+          "const": 1
+        },
+        "sourceName": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "omitted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issues": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "detail"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "detail": {
+                "type": "string",
+                "maxLength": 1000
+              },
+              "slideId": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "objectId": {
+                "type": "string",
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

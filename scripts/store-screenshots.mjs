@@ -8,11 +8,11 @@ import {pathToFileURL} from 'node:url';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 const require=createRequire(import.meta.url),[width,height]=[1920,1080];
-const out=path.resolve('test-results/store-screenshots'),fake=path.resolve('node_modules/@edukors/ai-cli/fixtures/fake-ai.mjs');
+const out=path.resolve('test-results/store-screenshots'),fake=path.resolve('node_modules/edukors-common-ux/src/ai/runtime/fixtures/fake-ai.mjs');
 await fs.rm(out,{recursive:true,force:true});await fs.mkdir(out,{recursive:true});
-await build({entryPoints:['scripts/store-sample.ts'],bundle:true,platform:'node',target:'node22',format:'esm',outfile:path.join(out,'sample.mjs'),external:['@edukors/ai-cli','electron'],logLevel:'warning'});
+await build({entryPoints:['scripts/store-sample.ts'],bundle:true,platform:'node',target:'node22',format:'esm',outfile:path.join(out,'sample.mjs'),external:['edukors-common-ux/*','electron'],logLevel:'warning'});
 const sample=await import(pathToFileURL(path.join(out,'sample.mjs')).href);
-const {createAiCli}=await import('@edukors/ai-cli'),{createFakeProvider}=await import('@edukors/ai-cli/testing');
+const {createAiRuntime}=await import('edukors-common-ux/src/ai/runtime/index.js'),{createFakeProvider}=await import('edukors-common-ux/src/ai/runtime/testing/index.js');
 const account={pt:'Minha conta',en:'My account',es:'Mi cuenta'};
 const settle=page=>page.waitForTimeout(1500);
 // Hidden windows paint on the Mac (and nobody wants them popping up there), but not on Windows or Linux.
@@ -20,7 +20,7 @@ const visible=process.platform!=='darwin';
 for(const lang of ['pt','en','es']){
   const root=path.join(out,lang),data=path.join(root,'appdata');await fs.mkdir(data,{recursive:true});
   // An account of the fake provider, signed in, as the one in use.
-  const ai=createAiCli({appId:'slides',dataDir:path.join(data,'edukors-ai'),providers:[createFakeProvider({command:{file:process.execPath,args:[fake]}})]});
+  const ai=createAiRuntime({appId:'slides',dataDir:path.join(data,'edukors-ai'),providers:[createFakeProvider({command:{file:process.execPath,args:[fake]}})]});
   const acc=await ai.createAccount({providerId:'fake',label:account[lang]});await ai.connectAccount(acc.id);await ai.dispose();
   await fs.writeFile(path.join(data,'preferences.json'),JSON.stringify({language:lang,recent:[],aiAccount:acc.id}));
   const file=path.join(root,...sample.sampleFile(lang));await fs.mkdir(path.dirname(file),{recursive:true});const deck=await sample.writeSample(file,lang,acc.id);

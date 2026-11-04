@@ -801,7 +801,8 @@ const panelCss=`*{box-sizing:border-box;margin:0;padding:0}.esf-panel-page{backg
 // Exported HTML always uses English; lang only controls the in-app Present window.
 // pollServer: base URL of the interactive questions service; each exported file keeps the one set at export time.
 export function playerDocument(deck:Deck,options:{tools?:boolean;start?:number;title?:string;lang?:Language;minify?:(code:string)=>string;pollServer?:string}={}){
-  const tools=options.tools!==false,lang=(!tools&&['pt','en','es'].includes(options.lang as string)?options.lang:'en') as Language;
+  // The in-app window speaks the interface language when the player has its words (pt, en, es); otherwise English.
+  const tools=options.tools!==false,lang=(!tools&&['pt','en','es'].includes(options.lang as string)?options.lang:'en') as 'pt'|'en'|'es';
   const W=playerWords[lang];
   const slides=deck.slides.map(s=>({id:s.id,title:s.title,steps:s.poll?0:(s.html.match(/\sdata-step\b/g)||[]).length,poll:s.poll,html:slideDocument(deck,s,false,'__ESF_TOKEN__',STEP_SENTINEL,false,undefined,lang,options.minify),static:slideDocument(deck,s,true,'',0,false,undefined,lang,options.minify)}));
   const used=slides.map(s=>s.html+s.static).join('\n');

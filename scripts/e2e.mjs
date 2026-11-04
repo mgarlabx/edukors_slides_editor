@@ -13,7 +13,7 @@ const win=process.platform==='win32';
 await fs.mkdir(root,{recursive:true});
 const env={...process.env,ESF_EXTERNAL_LOG:path.join(root,'external.txt'),ESF_DATA_DIR:path.join(root,'appdata'),ESF_HIDDEN:process.env.ESF_SHOW?'':'1'};delete env.ELECTRON_RUN_AS_NODE;
 // The AI library's fake provider stands in for Claude and Codex: a real separate CLI process, no account.
-env.ESF_AI_FAKE=path.resolve('node_modules/@edukors/ai-cli/fixtures/fake-ai.mjs');
+env.ESF_AI_FAKE=path.resolve('node_modules/edukors-common-ux/src/ai/runtime/fixtures/fake-ai.mjs');
 const tinyPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64');
 // Pages the agent's web tools (screenshot, download) fetch.
 const webServer=(await import('node:http')).createServer((q,r)=>{if(q.url==='/logo.png'){r.writeHead(200,{'content-type':'image/png'}).end(tinyPng);return;}r.writeHead(200,{'content-type':'text/html'}).end('<h1>Fonte</h1>');});
@@ -23,8 +23,8 @@ const packaged=process.env.ESF_EXECUTABLE||(process.argv.includes('--packaged')?
 const launch=(...extra)=>electron.launch({executablePath:packaged||require('electron'),args:packaged?extra:['.',...extra],env,timeout:30000});
 const log=[],shot=(page,name)=>page.screenshot({path:path.join(root,name)});
 const watch=page=>{page.on('pageerror',e=>log.push(e.message));page.on('console',m=>{if(m.type()==='error')log.push(m.text());});return page;};
-// New asks for nothing; the first save asks for the file (always .esf, lowercase) and nothing else is created next to it.
-const projectDir=path.join(root,'Minha pasta'),esf=path.join(projectDir,'Apresentacao-de-teste.esf');
+// New asks for nothing; the first save asks for the file (always .eslx, lowercase) and nothing else is created next to it.
+const projectDir=path.join(root,'Minha pasta'),esf=path.join(projectDir,'Apresentacao-de-teste.eslx');
 const unzip=async file=>require('fflate').unzipSync(new Uint8Array(await fs.readFile(file))),zipEntries=async file=>Object.keys(await unzip(file)),zipText=async(file,name)=>new TextDecoder().decode(require('fflate').unzipSync(new Uint8Array(await fs.readFile(file)))[name]);
 await fs.mkdir(projectDir);
 // Blank is the only built-in template; "Essencial" stands for one the user saved (a package with content layouts).
@@ -83,7 +83,7 @@ try{
  assert.equal(await page.locator('.menubar').count(),0,'only the native menu');await page.locator('.toolbar').getByRole('button',{name:'Nova apresentação',exact:true}).click();
  await page.locator('.modal.sheet').getByRole('heading',{name:'Nova apresentação',exact:true}).waitFor();
  await shot(page,'01-gallery.png');
- await app.evaluate(({dialog},dir)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[dir]});dialog.showSaveDialog=async(_w,o)=>({canceled:false,filePath:/\.esf$/.test(o.defaultPath)?dir+'/Apresentacao-de-teste.ESF':o.defaultPath});globalThis.__boxes=[];dialog.showMessageBox=async(_w,o)=>{globalThis.__boxes.push(o.message);return{response:0};};},projectDir);
+ await app.evaluate(({dialog},dir)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[dir]});dialog.showSaveDialog=async(_w,o)=>({canceled:false,filePath:/\.eslx$/.test(o.defaultPath)?dir+'/Apresentacao-de-teste.ESLX':o.defaultPath});globalThis.__boxes=[];dialog.showMessageBox=async(_w,o)=>{globalThis.__boxes.push(o.message);return{response:0};};},projectDir);
  assert.equal(await page.locator('.modal.sheet .home-nav,.modal.sheet .segmented').count(),0,'one category, no side bar');
  assert.deepEqual(await page.locator('.template-grid > .template-card, .template-grid .custom-card').allInnerTexts().then(x=>x.map(v=>v.trim())),['Blank presentation','Essencial'],'Blank first, then the templates');
  await page.locator('.custom-card .template-art iframe.preview').waitFor();
@@ -96,7 +96,7 @@ try{
   await h1.filter({hasText:'Título da apresentação'}).click();await page.frameLocator('.slide-canvas iframe').locator('h1[contenteditable]').waitFor();await h1.evaluate(el=>getSelection().selectAllChildren(el));await page.keyboard.type('Apresentação de teste');await page.keyboard.press('Escape');
   await h1.filter({hasText:'Apresentação de teste'}).waitFor();await page.getByRole('button',{name:'Salvar',exact:true}).click();await page.locator('.tab').filter({hasText:'Apresentacao-de-teste'}).waitFor();}
  for(let i=0;i<50&&!(await menuEnabled())['Slides/Novo slide'];i++)await page.waitForTimeout(50);assert.equal((await menuEnabled())['Arquivo/Exportar…'],true,'menu enabled with a presentation');
- assert.deepEqual(await fs.readdir(projectDir),['Apresentacao-de-teste.esf'],'a single file with a lowercase extension, no project folder');assert.ok((await zipEntries(esf)).includes('manifest.json'));
+ assert.deepEqual(await fs.readdir(projectDir),['Apresentacao-de-teste.eslx'],'a single file with a lowercase extension, no project folder');assert.ok((await zipEntries(esf)).includes('[Content_Types].xml'));
  const [toolbarBox,tabsBox]=[await page.locator('.toolbar').boundingBox(),await page.locator('.tabs').boundingBox()];
  assert.ok(toolbarBox.y<tabsBox.y,'toolbar above the tabs');
  await page.locator('.app-header .app-wordmark img.app-logo').waitFor();
@@ -357,7 +357,7 @@ try{
  await app.evaluate(({Menu})=>{Menu.getApplicationMenu().items.find(x=>x.label==='Arquivo').submenu.items.find(x=>x.label==='Salvar como template…').click();});
  {const input=page.getByLabel('Nome do template');assert.equal(await input.inputValue(),'Apresentacao-de-teste');await input.fill('Meu modelo');await input.press('Enter');}await page.locator('.toast').filter({hasText:'Template salvo'}).waitFor();
  const templateDirs=async()=>(await fs.readdir(path.join(env.ESF_DATA_DIR,'templates'))).filter(x=>!x.startsWith('.')&&x!=='essencial');
- {const dirs=await templateDirs();assert.equal(dirs.length,1);assert.ok((await zipEntries(path.join(env.ESF_DATA_DIR,'templates',dirs[0],'template.ESF'))).includes('manifest.json'),'templates are ESF packages');assert.ok(!(await zipEntries(path.join(env.ESF_DATA_DIR,'templates',dirs[0],'template.ESF'))).includes('ai/system-prompt.md'),'templates leave the talk prompt out');assert.equal(JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'templates',dirs[0],'template.json'),'utf8')).title,'Meu modelo');}
+ {const dirs=await templateDirs();assert.equal(dirs.length,1);const template=path.join(env.ESF_DATA_DIR,'templates',dirs[0],'template.eslx');assert.ok((await zipEntries(template)).includes('[Content_Types].xml'),'new templates are ESLX packages');assert.equal(JSON.parse(await zipText(template,'slides/presentation.json')).deck.systemPrompt,undefined,'templates leave the talk prompt out');assert.equal(JSON.parse(await fs.readFile(path.join(env.ESF_DATA_DIR,'templates',dirs[0],'template.json'),'utf8')).title,'Meu modelo');}
  await page.locator('.toolbar').getByRole('button',{name:'Nova apresentação',exact:true}).click();
  {const card=name=>page.locator('.template-grid .custom-card').filter({hasText:name});
   await card('Meu modelo').getByRole('button',{name:'Renomear template'}).click();{const input=page.locator('.template-grid input[aria-label="Renomear template"]');await input.fill('Modelo final');await input.press('Enter');}await card('Modelo final').waitFor();
@@ -458,7 +458,7 @@ try{
  // applied when the turn ends, a question, sessions, undo. The fake reads its command from the request's last paragraph.
  step("AI flow, against the library's fake provider: attach, pick a model, a …");
  {await page.locator('.slide-item button').first().click();
- const manifest=JSON.parse(await zipText(esf,'manifest.json')),cover=manifest.slides[0].id,coverHtml=await zipText(esf,manifest.slides[0].html);
+ const manifest=JSON.parse(await zipText(esf,'slides/presentation.json')).deck,cover=manifest.slides[0].id,coverHtml=manifest.slides[0].html;
  const ask=async(text,wait)=>{const box=page.getByPlaceholder('Peça uma alteração…');await box.fill(text);await box.press('Enter');await page.locator('.chat-list').getByText(wait,{exact:false}).last().waitFor({timeout:40000});await page.locator('.composer .send').waitFor();};
  const attachment=path.join(root,'anexo.png');await fs.copyFile(path.resolve('build/icon.png'),attachment).catch(()=>fs.writeFile(attachment,tinyPng));
  await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},attachment);
@@ -510,9 +510,9 @@ try{
  await page.locator('.statusbar .saved').waitFor();
  // Only the presentation and the conversations are saved inside the package (not the assistant's own files nor exports); no project folder appears.
  step("Only the presentation and the conversations are saved inside the packa…");
- {const files=await unzip(esf),names=Object.keys(files);assert.ok(names.includes('.edukors/ai/conversations.json'),'conversations in the package');for(const n of ['media/logo.png','media/pagina.png','research/fontes.md','exports/Apresentacao-de-teste.pptx'])assert.ok(!names.includes(n),n+' left out of the package');
+ {const files=await unzip(esf),names=Object.keys(files);assert.ok(names.includes('slides/ai/legacy-conversations.json'),'conversations in the package');for(const n of ['media/logo.png','media/pagina.png','research/fontes.md','exports/Apresentacao-de-teste.pptx'])assert.ok(!names.includes(n),n+' left out of the package');
   assert.ok(!names.some(n=>/^\.edukors\/(?!ai\/conversations\.json$)/.test(n)),'no internal state in the package');
-  assert.deepEqual((await fs.readdir(projectDir)).sort(),['Apresentacao-de-teste.esf','Apresentacao-de-teste.html','Apresentacao-de-teste.pdf','Apresentacao-de-teste.pptx']);}
+  assert.deepEqual((await fs.readdir(projectDir)).sort(),['Apresentacao-de-teste.eslx','Apresentacao-de-teste.html','Apresentacao-de-teste.pdf','Apresentacao-de-teste.pptx']);}
  // Inserted text: the format bar keeps the canvas selection (its menus never take the focus) and colors only the selected word.
  // Selecting the box never moves the canvas, so a press-and-drag on a new selection moves it. Objects copy, paste and cut.
  step("Inserted text: the format bar keeps the canvas selection (its menus ne…");
@@ -561,7 +561,7 @@ try{
  await page.waitForTimeout(1200);
 }catch(e){for(const [i,w] of app.windows().entries())await w.screenshot({path:path.join(root,`failure-${i}.png`)}).catch(()=>{});throw e;}
 finally{await app.evaluate(({app})=>app.exit(0)).catch(()=>{});}
-// Opening the .ESF by path (as Finder does) must open it, with its conversation, from the package alone.
+// Opening the .eslx by path (as Finder does) must open it, with its conversation, from the package alone.
 step('reopen the package by path');
 const ghost=path.join(projectDir,'Sumiu.ESF');{const f=path.join(env.ESF_DATA_DIR,'preferences.json'),p=JSON.parse(await fs.readFile(f,'utf8'));p.recent=[...p.recent,ghost];await fs.writeFile(f,JSON.stringify(p));}
 app=await launch(esf);
@@ -582,7 +582,7 @@ try{
   assert.equal(await page.evaluate(()=>getSelection().toString()),'','Cmd+A on the canvas does not select the window');assert.equal(await page.locator('.slide-item.selected').count(),1,'Cmd+A on the canvas keeps the slide selection');}}
  assert.equal(await page.locator('.tab').count(),1,'reopen + file argument must not duplicate the tab');
  await page.getByText('You chose blue').waitFor();
- assert.ok((await zipText(esf,'.edukors/ai/conversations.json')).includes('You chose blue'),'conversations are stored in the package');
+ assert.ok((await zipText(esf,'slides/ai/legacy-conversations.json')).includes('You chose blue'),'conversations are stored in the package');
  await page.getByRole('button',{name:process.platform==='darwin'?'Mostrar no Finder':'Mostrar na pasta'}).waitFor();
  await page.locator('.statusbar button').filter({hasText:'Minha pasta'}).waitFor();
  await page.frameLocator('.slide-canvas iframe').locator('h1').filter({hasText:'Apresentação de teste'}).waitFor();

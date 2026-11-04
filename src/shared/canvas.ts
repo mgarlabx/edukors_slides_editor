@@ -99,8 +99,8 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     for(let n=walk.nextNode();n&&!first;n=walk.nextNode())if(n.textContent!.trim())first=n.parentElement;
     const text=editing===el&&node?.nodeType===3?node.parentElement:first||el;
     const s=getComputedStyle(el),font=getComputedStyle(text&&el.contains(text)?text:el),style:SelectionDetails['style']={};
-    for(const key of ['fontFamily','fontSize','color'] as const)style[key]=font[key];
-    for(const key of ['borderWidth','borderColor','borderStyle','backgroundColor','boxShadow','filter'] as const)style[key]=s[key];
+    for(const key of ['fontFamily','fontSize','fontWeight','fontStyle','textDecorationLine','verticalAlign','color'] as const)style[key]=font[key];
+    for(const key of ['borderWidth','borderColor','borderStyle','backgroundColor','boxShadow','filter','opacity','textAlign','alignContent'] as const)style[key]=s[key];
     if(el.parentElement?.matches('[data-image-shadow]'))style.filter=getComputedStyle(el.parentElement).filter;
     return{index:index(el),kind:kind(el)==='link'?'link':kind(el)==='shape'?'shape':isImage(el)||kind(el)==='media'?'image':kind(el)==='text'?'text':'box',crop:isImage(el),fonts:[...new Set([...document.fonts].map(f=>f.family.replace(/["']/g,'')))],style};
   }
@@ -172,6 +172,28 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   function paint(){if(!highlights||!Highlight)return;if(editing&&savedRange&&!savedRange.collapsed&&!document.hasFocus())highlights.set('esf-sel',new Highlight(savedRange));else highlights.delete('esf-sel');}
   // Character offsets of the selection inside the edited text, which survive the frame reloads.
   const chars=(el:HTMLElement,r:Range)=>{const before=document.createRange();before.selectNodeContents(el);before.setEnd(r.startContainer,r.startOffset);const start=before.toString().length;before.setEnd(r.endContainer,r.endOffset);return{start,end:before.toString().length};};
+  // Line spacing follows the text. Every line is at least as tall as the block's own font size (the browser's strut),
+  // so after the text was made smaller its lines kept the spacing of the old size. The block therefore takes the
+  // smallest size of its text: one size everywhere → that size on the block and none on the runs; mixed sizes → text
+  // that had the block's size keeps it in a span of its own. Blocks holding other blocks (lists) and runs sized
+  // in em or % are left as they are. Returns the block's new size, or null when nothing changed.
+  function fitBlockSize(el:HTMLElement):string|null{
+    if([...el.children].some(c=>c.tagName!=='BR'&&!getComputedStyle(c).display.startsWith('inline')))return null;
+    const sizedAncestor=(t:Text)=>{for(let n=t.parentElement;n&&n!==el;n=n.parentElement)if(n.style.fontSize)return n;return null;};
+    const texts:Text[]=[],walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);for(let n=walk.nextNode();n;n=walk.nextNode())if((n as Text).length)texts.push(n as Text);
+    if(!texts.length)return null;
+    const holders=texts.map(sizedAncestor);
+    if(holders.some(h=>h&&!/^[\d.]+px$/.test(h.style.fontSize)))return null;
+    const own=parseFloat(getComputedStyle(el).fontSize),sizes=holders.map(h=>h?parseFloat(h.style.fontSize):own),low=Math.min(...sizes);
+    if(sizes.every(n=>n===low)){
+      if(!holders.some(Boolean))return null;
+      el.querySelectorAll<HTMLElement>('[style]').forEach(x=>{x.style.removeProperty('font-size');if(!x.getAttribute('style'))x.removeAttribute('style');if(x.tagName==='SPAN'&&!x.attributes.length)x.replaceWith(...x.childNodes);});
+    }else{
+      if(low>=own)return null;
+      texts.forEach((t,i)=>{if(holders[i])return;const span=document.createElement('span');span.style.setProperty('font-size',own+'px','important');t.replaceWith(span);span.append(t);});
+    }
+    const value=Math.round(low*100)/100+'px';el.style.setProperty('font-size',value,'important');return value;
+  }
   function selectChars(el:HTMLElement,start:number,end:number){
     const nodes:Text[]=[],walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);for(let n=walk.nextNode();n;n=walk.nextNode())nodes.push(n as Text);if(!nodes.length)return;
     const point=(offset:number)=>{let left=offset;for(const n of nodes){if(left<=n.length)return[n,left] as const;left-=n.length;}return[nodes.at(-1)!,nodes.at(-1)!.length] as const;};
@@ -217,11 +239,27 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     if(m.type==='release'){held=false;if(crop)endCrop(true);if(editing&&!document.hasFocus()){finish();flush();}return;}
     if(m.type==='style'&&selection.length===1&&!fixed(selection[0])&&m.style&&typeof m.style==='object'){
       const entries=Object.entries(m.style);
-      if(!entries.length||!entries.every(([key,value])=>['border-width','border-color','border-style','background-color','box-shadow','filter'].includes(key)&&typeof value==='string'&&CSS.supports(key,value)))return;
+      if(!entries.length||!entries.every(([key,value])=>['border-width','border-color','border-style','background-color','box-shadow','filter','opacity'].includes(key)&&typeof value==='string'&&CSS.supports(key,value)))return;
       const el=selection[0];collectNudge();finish();
       for(const [key,value] of entries)el.style.setProperty(key,value as string,'important');
       pending.push({type:'style',index:index(el),style:m.style as ObjectStyle});place();state();flush();return;
     }
+    // Several objects aligned to each other (their common box) or spread with equal gaps (three or more), as in Common.
+    if(m.type==='arrange'&&['left','center','right','top','middle','bottom','distributeH','distributeV'].includes(m.value)){
+      collectNudge();finish();const items=free(outer());if(items.length<2)return;
+      const rects=items.map(el=>el.getBoundingClientRect()),L=Math.min(...rects.map(r=>r.left)),R=Math.max(...rects.map(r=>r.right)),T=Math.min(...rects.map(r=>r.top)),B=Math.max(...rects.map(r=>r.bottom));
+      const moves=rects.map(r=>({dx:m.value==='left'?L-r.left:m.value==='center'?(L+R)/2-(r.left+r.right)/2:m.value==='right'?R-r.right:0,dy:m.value==='top'?T-r.top:m.value==='middle'?(T+B)/2-(r.top+r.bottom)/2:m.value==='bottom'?B-r.bottom:0}));
+      if(m.value==='distributeH'||m.value==='distributeV'){
+        if(items.length<3)return;const h=m.value==='distributeH',order=rects.map((r,i)=>i).sort((a,b)=>h?rects[a].left-rects[b].left:rects[a].top-rects[b].top);
+        const size=(r:DOMRect)=>h?r.width:r.height,start=h?L:T,gap=((h?R:B)-start-rects.reduce((sum,r)=>sum+size(r),0))/(items.length-1);let cursor=start;
+        for(const i of order){const r=rects[i];if(h)moves[i].dx=cursor-r.left;else moves[i].dy=cursor-r.top;cursor+=size(r)+gap;}
+      }
+      items.forEach((el,i)=>{const {dx,dy}=moves[i];if(Math.abs(dx)<0.01&&Math.abs(dy)<0.01)return;
+        const z=parseFloat(getComputedStyle(el).zoom)||1,d=geometry.inverse(geometry.multiply(matrix(el.parentElement),{a:z,b:0,c:0,d:z}),dx,dy);if(!d)return;
+        const [x,y]=offset(el);setPosition(el,x+d.x,y+d.y);const [nx,ny]=offset(el);pending.push({type:'move',index:index(el),x:nx,y:ny});});
+      place();state();flush();return;
+    }
+    if(m.type==='edit'&&selection.length===1&&kind(selection[0])==='text'&&!isImage(selection[0])){begin(selection[0]);return;}
     // Context menu. Stacking order: z-index above (or below) every other element of the parent, keeping the order of the
     // selected ones; below needs the parent to isolate, or the object would go behind the parent's own background.
     if(m.type==='order'&&(m.value==='front'||m.value==='back')&&selection.length){
@@ -254,7 +292,12 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     const sel=getSelection()!;if(savedRange&&el.contains(savedRange.commonAncestorContainer)){sel.removeAllRanges();sel.addRange(savedRange);}
     // Without a selection the whole text is formatted.
     if(!sel.rangeCount||sel.isCollapsed){const r=document.createRange();r.selectNodeContents(el);sel.removeAllRanges();sel.addRange(r);}
-    if(['bold','italic','underline','strikeThrough'].includes(m.command))document.execCommand(m.command,false);
+    if(['bold','italic','underline','strikeThrough','subscript','superscript'].includes(m.command))document.execCommand(m.command,false);
+    else if(['justifyLeft','justifyCenter','justifyRight','justifyFull'].includes(m.command)){
+      const value=({justifyLeft:'left',justifyCenter:'center',justifyRight:'right',justifyFull:'justify'} as Record<string,string>)[m.command];
+      el.style.setProperty('text-align',value,'important');
+      pending.push({type:'style',index:index(el),style:{'text-align':value}});
+    }
     else if(['color','fontFamily','fontSize'].includes(m.command)&&typeof m.value==='string'){
       const r=sel.getRangeAt(0),span=document.createElement('span');
       if(m.command==='color')span.style.setProperty('color',m.value,'important');
@@ -266,6 +309,10 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
       // Splitting the selection leaves empty inline wrappers behind.
       el.querySelectorAll('span,b,i,u,s,strike,strong,em,font').forEach(x=>{if(!x.textContent&&!x.querySelector('img,br,svg'))x.remove();});
       r.selectNodeContents(span);sel.removeAllRanges();sel.addRange(r);
+      if(m.command==='fontSize'){
+        const keep=chars(el,r),size=fitBlockSize(el);
+        if(size){pending.push({type:'style',index:index(el),style:{'font-size':size}});selectChars(el,keep.start,keep.end);}
+      }
     }
     // Commit now (one undoable slide edit); the reloaded frame resumes the edit with the same characters selected.
     const range=sel.rangeCount?chars(el,sel.getRangeAt(0)):null,html=el.innerHTML;
@@ -347,10 +394,10 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   function context(t:EventTarget|null,x:number,y:number){
     if(gesture||crop||!(t instanceof Element))return;
     if(!handles.includes(t as HTMLDivElement)&&!t.hasAttribute('data-esf-edge')){
-      const chain=chainOf(t);if(!chain.length){select([]);return;}
+      const chain=chainOf(t);if(!chain.length){select([]);flush();send('context',{x,y,text:false,count:0});return;}
       if(!chain.some(el=>selection.includes(el)))select([target(chain)]);
     }
-    if(selection.length)send('context',{x,y,text:outer().some(el=>kind(el)==='text'||kind(el)==='link')});
+    if(selection.length)send('context',{x,y,text:outer().some(el=>kind(el)==='text'||kind(el)==='link'),count:free(outer()).length});
   }
   function updateGesture(e:PointerEvent){
     const g=gesture;if(!g||e.pointerId!==g.pointer)return;
@@ -431,6 +478,11 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   addEventListener('click',e=>{if((e.target as Element).closest('a'))e.preventDefault();});
   addEventListener('dragstart',e=>e.preventDefault());addEventListener('dragover',e=>e.preventDefault());addEventListener('drop',e=>e.preventDefault());
   addEventListener('keydown',e=>{
+    // The window's shortcuts (save, duplicate, copy objects, present…) reach the editor, which has no menu bar for
+    // them; the frame keeps select all and, while a text is edited, the text's own editing keys.
+    if((e.metaKey||e.ctrlKey)&&!crop&&!gesture&&!/^(Meta|Control|Shift|Alt)$/.test(e.key)&&!e.key.startsWith('Arrow')&&!(editing?['a','b','i','u','c','x','v','z','y']:['a']).includes(e.key.toLowerCase())){
+      e.preventDefault();send('key',{key:e.key,code:e.code,meta:e.metaKey,ctrl:e.ctrlKey,shift:e.shiftKey,alt:e.altKey});return;
+    }
     if(crop){if(e.key==='Escape'||e.key==='Enter'){e.preventDefault();endCrop(e.key==='Enter');}return;}
     if(gesture){if(e.key==='Escape'){e.preventDefault();cancel();}return;}
     if(editing){

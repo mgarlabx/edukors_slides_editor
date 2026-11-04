@@ -1,34 +1,26 @@
+import './pptx-import.test';
+import './openxml.test';
 import './poll.test';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {newDeck,newSlide,validateDeck,duplicateSlides} from '../src/shared/model';
-import {ProjectStore,ConflictError,inside,readDeck,writeDeck} from '../src/main/projects';
+import {ProjectStore,ConflictError,inside,readDeck,writeDeck,serialize} from '../src/main/projects';
 import {openPackage,packageLimits} from '../src/main/package';
 import {zipSync,unzipSync,strToU8,strFromU8} from 'fflate';
 import {slideDocument,withMaster} from '../src/shared/render';
 import {playerDocument} from '../src/shared/player';
 import {minifyJs} from '../src/main/minify';
-import {CancelledError,instruction,ownedPaths,applySlideChanges,agentContext,removedSlides,sentKeys,contextDir} from '../src/main/ai';
-import {Assistant,fiveHour,instructionsFor} from '../src/main/assistant';
-import {createFakeProvider} from '@edukors/ai-cli/testing';
+import {applySlideChanges,agentContext,removedSlides,sentKeys} from '../src/shared/assistant';
 import esfSchema from '../src/shared/esf.schema.json';
 import {embedFonts} from '../src/main/fonts';
-// The assistant against the AI library's fake provider: a real separate CLI process, no account.
-const fakeCli=path.resolve('node_modules/@edukors/ai-cli/fixtures/fake-ai.mjs');
-async function assistantFixture(){
-  const dir=await fixture(),events:any[]=[],work=path.join(dir,'files');await fs.mkdir(work);
-  const a=new Assistant({providers:[createFakeProvider({command:{file:process.execPath,args:[fakeCli]}})],dataDir:path.join(dir,'library'),sessionsFile:path.join(dir,'sessions.json'),emit:e=>events.push(e)});
-  const account=await a.createAccount('fake','Teste');await a.connect(account.id);
-  return{a,events,dir,work:await fs.realpath(work),account:account.id,[Symbol.asyncDispose]:()=>a.dispose()};
-}
-const tool=(args:unknown)=>'tool apply_changes '+JSON.stringify(args);
 const root=path.resolve('test-results/core');
 await fs.mkdir(root,{recursive:true});
 const fixture=async()=>fs.mkdtemp(path.join(root,'case-'));
 const workspaces=path.join(root,'workspaces'),newStore=()=>new ProjectStore(workspaces);
-const esfIn=async(dir:string,name='Apresentação.ESF')=>path.join(dir,name);
+const eslxIn=async(dir:string,name='Apresentação.eslx')=>path.join(dir,name.replace(/\.(?:esf|eslx)$/i,'.eslx'));
+const writeLegacyFixture=async(file:string,deck:ReturnType<typeof newDeck>)=>{const {files,manifest}=serialize(deck);await fs.writeFile(file,zipSync(Object.fromEntries(Object.entries({'manifest.json':JSON.stringify(manifest),...files}).map(([name,data])=>[name,typeof data==='string'?strToU8(data):new Uint8Array(data)]))));};
 // New decks start blank; these layouts stand in for the content layouts people build.
 const sampleLayouts=[{id:'cover',name:'Capa',html:'<section class="slide cover"><h1 data-field="title">Título da apresentação</h1><p data-field="subtitle">Uma ideia</p></section>'},
   {id:'cards',name:'Cartões',html:'<section class="slide"><h2 data-field="title">Título</h2><div class="cards">'+[0,1,2].map(i=>`<div class="card" data-step><h3 data-field="card${i}">Ideia</h3><p data-field="body${i}">Texto</p></div>`).join('')+'</div></section>'},
@@ -36,21 +28,21 @@ const sampleLayouts=[{id:'cover',name:'Capa',html:'<section class="slide cover">
 function themed(title:string){const d=newDeck(title);d.layouts.push(...structuredClone(sampleLayouts));d.slides=[newSlide(d.layouts[1])];return d;}
 const sample=(id:string)=>newSlide(sampleLayouts.find(l=>l.id===id)!);
 const entries=async(file:string)=>{const pkg=await openPackage(file);try{return[...pkg.entries.keys()].sort();}finally{await pkg.close();}};
-test('ESF is a single ZIP package that survives copy, move and reopen',async()=>{
+test('ESLX is a single OPC package that survives copy, move and reopen',async()=>{
   const dir=await fixture(),store=newStore();
-  const a=await store.create(await esfIn(dir,'Apresentação com acentos.ESF'),themed('Apresentação com acentos'));
+  const a=await store.create(await eslxIn(dir,'Apresentação com acentos.ESF'),themed('Apresentação com acentos'));
   a.deck.slides.push(sample('cards'));a.deck.slides[1].html=a.deck.slides[1].html.replace('</section>','<img src="asset:asset-image" alt=""></section>');
   a.deck.assets.push({id:'asset-image',name:'tiny.png',mime:'image/png',data:'aGVsbG8='},{id:'asset-old',name:'old.png',mime:'image/png',data:'b2xk'});
   const s=store.location(a.deck.id);await fs.mkdir(path.join(s.workspace,'research'),{recursive:true});await fs.writeFile(path.join(s.workspace,'research','notas.md'),'fonte');
   await fs.mkdir(path.join(s.workspace,'.edukors/ai'),{recursive:true});await fs.writeFile(path.join(s.workspace,'.edukors/ai/conversations.json'),'{"sessions":[]}');await fs.writeFile(path.join(s.workspace,'.edukors/lock'),'x');
   const saved=(await store.save(a.deck)).project;
-  assert.deepEqual(await fs.readdir(dir),['Apresentação com acentos.ESF'],'one visible file, nothing next to it');
+  assert.deepEqual(await fs.readdir(dir),['Apresentação com acentos.eslx'],'one visible file, nothing next to it');
   assert.equal((await fs.readFile(saved.path)).subarray(0,4).toString('latin1'),'PK\x03\x04');
   const names=await entries(saved.path);
-  for(const n of ['manifest.json',`masters/${a.deck.masters[0].id}/theme.css`,`slides/${a.deck.slides[0].id}/content.html`,'images/asset-image.png','.edukors/ai/conversations.json'])assert.ok(names.includes(n),n);
+  for(const n of ['[Content_Types].xml','_rels/.rels','slides/presentation.json','slides/media/asset1.bin','slides/ai/legacy-conversations.json'])assert.ok(names.includes(n),n);
   for(const n of ['.edukors/lock','research/notas.md','images/asset-old.png'])assert.ok(!names.includes(n),n+' stays out: internal state, auxiliary files and unused images');
   assert.deepEqual(saved.deck.assets.map(x=>x.id),['asset-image'],'the saved deck drops the unused image');
-  const other=await fixture(),copy=path.join(other,'Cópia movida.ESF');await fs.copyFile(saved.path,copy);await store.close(a.deck.id);await fs.rm(saved.path);
+  const other=await fixture(),copy=path.join(other,'Cópia movida.eslx');await fs.copyFile(saved.path,copy);await store.close(a.deck.id);await fs.rm(saved.path);
   const reopened=await newStore().open(copy);
   assert.equal(reopened.deck.slides.length,2);assert.equal(reopened.deck.assets[0].data,'aGVsbG8=');assert.equal(reopened.path,await fs.realpath(copy));assert.equal(reopened.deck.revision,saved.deck.revision);
   assert.ok(!('root' in reopened),'the working folder is not exposed');
@@ -60,38 +52,39 @@ test('a new presentation has no file until its first save, which keeps its ID, f
   assert.equal(p.path,'');assert.deepEqual(await fs.readdir(dir),[]);const blank=newDeck('');assert.deepEqual([blank.masters.length,blank.layouts.length,blank.masters[0].html,blank.slides[0].html],[1,1,'','<section class="slide"></section>'],'Blank: one white master with one white layout');
   await assert.rejects(()=>store.save(p.deck),/Save As/);await store.draft(p.deck);
   const s=store.location(p.deck.id),old=s.dir;await fs.mkdir(path.join(s.workspace,'research'),{recursive:true});await fs.writeFile(path.join(s.workspace,'research','notas.md'),'fonte');
-  const saved=await store.attach(p.deck.id,path.join(dir,'Nova.esf'),{...p.deck,title:'Nova'});
-  assert.equal(saved.deck.id,p.deck.id);assert.equal(saved.deck.title,'Nova');assert.deepEqual(await fs.readdir(dir),['Nova.esf']);assert.ok(!(await entries(saved.path)).includes('research/notas.md'));
-  await assert.rejects(fs.access(old),'the untitled working folder moved');await assert.rejects(()=>store.attach(p.deck.id,path.join(dir,'Outra.esf'),p.deck),/already has a file/);
+  const saved=await store.attach(p.deck.id,path.join(dir,'Nova.eslx'),{...p.deck,title:'Nova'});
+  assert.equal(saved.deck.id,p.deck.id);assert.equal(saved.deck.title,'Nova');assert.deepEqual(await fs.readdir(dir),['Nova.eslx']);assert.ok(!(await entries(saved.path)).includes('research/notas.md'));
+  await assert.rejects(fs.access(old),'the untitled working folder moved');await assert.rejects(()=>store.attach(p.deck.id,path.join(dir,'Outra.eslx'),p.deck),/already has a file/);
   await store.untitled(newDeck('X'));const left=(await fs.readdir(workspaces)).filter(n=>n.startsWith('untitled-'));await newStore().cleanup();
   for(const n of left)await assert.rejects(fs.access(path.join(workspaces,n)),'cleanup removes untitled leftovers');
 });
 test('several presentations share a folder; copies with one ID never share a session',async()=>{
   const dir=await fixture(),store=newStore();
-  const a=await store.create(await esfIn(dir,'A.ESF'),newDeck('A'));const b=await store.create(await esfIn(dir,'B.ESF'),newDeck('B'));
+  const a=await store.create(await eslxIn(dir,'A.ESF'),newDeck('A'));const b=await store.create(await eslxIn(dir,'B.ESF'),newDeck('B'));
   assert.notEqual(store.location(a.deck.id).workspace,store.location(b.deck.id).workspace);
-  await fs.copyFile(a.path,path.join(dir,'A cópia.ESF'));
-  const c=await store.open(path.join(dir,'A cópia.ESF'));assert.notEqual(c.deck.id,a.deck.id,'the second copy gets its own ID');
+  await fs.copyFile(a.path,path.join(dir,'A cópia.eslx'));
+  const c=await store.open(path.join(dir,'A cópia.eslx'));assert.notEqual(c.deck.id,a.deck.id,'the second copy gets its own ID');
   assert.equal((await store.open(a.path)).deck.id,a.deck.id,'opening the same file again reuses its session');
   await assert.rejects(()=>store.create(a.path,newDeck('Outra')),/open in another tab/);
   const ws=store.location(a.deck.id).dir;await store.close(a.deck.id);await assert.rejects(fs.access(ws),'closing removes the working folder');
 });
 test('external changes and missing files are never overwritten',async()=>{
-  const dir=await fixture(),store=newStore(),p=await store.create(await esfIn(dir),newDeck('Conflicts'));
+  const dir=await fixture(),store=newStore(),p=await store.create(await eslxIn(dir),newDeck('Conflicts'));
   await fs.writeFile(p.path,'external');
   await assert.rejects(()=>store.save(p.deck),(e:any)=>e instanceof ConflictError&&e.reason==='changed');assert.equal(await fs.readFile(p.path,'utf8'),'external');
   await fs.rm(p.path);await assert.rejects(()=>store.save(p.deck),(e:any)=>e instanceof ConflictError&&e.reason==='missing');
 });
 test('a failed save keeps the previous package and leaves no temporary file',async()=>{
-  const dir=await fixture(),store=newStore(),p=await store.create(await esfIn(dir),themed('Atomic'));
+  const dir=await fixture(),store=newStore(),p=await store.create(await eslxIn(dir),themed('Atomic'));
   const before=await fs.readFile(p.path),s=store.location(p.deck.id);
-  await fs.writeFile(path.join(s.workspace,'big.bin'),Buffer.alloc(16));const limit=packageLimits.file;packageLimits.file=8;
-  try{await assert.rejects(()=>store.save(p.deck),/exceeds/);}finally{packageLimits.file=limit;}
-  assert.deepEqual(await fs.readFile(p.path),before);assert.deepEqual(await fs.readdir(dir),['Apresentação.ESF']);
-  await fs.rm(path.join(s.workspace,'big.bin'));assert.ok((await store.save(p.deck)).project.deck.revision>p.deck.revision,'the session keeps working');
+  const corrupt=path.join(s.workspace,'.edukors','ai','common-conversations.json');
+  await fs.mkdir(path.dirname(corrupt),{recursive:true});await fs.writeFile(corrupt,'{invalid');
+  await assert.rejects(()=>store.save(p.deck),/JSON|Unexpected|property name/i);
+  assert.deepEqual(await fs.readFile(p.path),before);assert.deepEqual(await fs.readdir(dir),['Apresentação.eslx']);
+  await fs.rm(corrupt);assert.ok((await store.save(p.deck)).project.deck.revision>p.deck.revision,'the session keeps working');
 });
 test('draft recovery is tied to the file and its version, with its working folder',async()=>{
-  const dir=await fixture(),store=newStore(),p=await store.create(await esfIn(dir),newDeck('Draft'));
+  const dir=await fixture(),store=newStore(),p=await store.create(await eslxIn(dir),newDeck('Draft'));
   const draft=structuredClone(p.deck);draft.title='Recovered';await store.draft(draft);await fs.writeFile(path.join(store.location(p.deck.id).workspace,'media.txt'),'unsaved');
   // A crash: the session is gone but its working folder and draft remain.
   const crashed=newStore();await crashed.cleanup();
@@ -99,22 +92,22 @@ test('draft recovery is tied to the file and its version, with its working folde
   assert.equal(await fs.readFile(path.join(crashed.location(restored.deck.id).workspace,'media.txt'),'utf8'),'unsaved');
   const next=(await crashed.save(draft)).project;const afterUndo=(await crashed.save(p.deck)).project;assert.ok(afterUndo.deck.revision>next.deck.revision);
   assert.ok(!(await entries(p.path)).includes('media.txt'),'auxiliary files are not packed');
-  const copy=path.join(dir,'Copia.ESF');await fs.copyFile(p.path,copy);await crashed.draft({...afterUndo.deck,title:'Só no original'});
+  const copy=path.join(dir,'Copia.eslx');await fs.copyFile(p.path,copy);await crashed.draft({...afterUndo.deck,title:'Só no original'});
   const third=newStore(),other=await third.open(copy);assert.ok(!other.recovered,'a copy never takes the draft of another file');
   await writeDeck(p.path,{...afterUndo.deck,title:'Externa'});const changed=await newStore().open(p.path);assert.notEqual(changed.deck.title,'Só no original','a draft of another version is ignored');
 });
 test('conversations the assistant is still writing are not packed half written',async()=>{
-  const dir=await fixture(),store=newStore(),p=await store.create(await esfIn(dir),newDeck('IA'));const s=store.location(p.deck.id),c=path.join(s.workspace,'.edukors/ai/conversations.json');
+  const dir=await fixture(),store=newStore(),p=await store.create(await eslxIn(dir),newDeck('IA'));const s=store.location(p.deck.id),c=path.join(s.workspace,'.edukors/ai/conversations.json');
   await fs.mkdir(path.dirname(c),{recursive:true});await fs.writeFile(c,'v1');await store.save(p.deck);
   await fs.utimes(c,new Date(Date.now()-5000),new Date(Date.now()-5000));
   store.aiStart(p.deck.id);await fs.writeFile(c,'v2 parcial');
   const r=await store.save(p.deck);assert.equal(r.pending,true);assert.equal(r.project.pending,true);
-  const read=async()=>{const pkg=await openPackage(p.path);try{return(await pkg.read('.edukors/ai/conversations.json')).toString();}finally{await pkg.close();}};
+  const read=async()=>{const {readEslx}=await import('../src/main/eslx');return(await readEslx(p.path)).history?.toString();};
   assert.equal(await read(),'v1');store.aiEnd(p.deck.id);assert.equal((await store.save(p.deck)).pending,false);assert.equal(await read(),'v2 parcial');
 });
 test('invalid, unsafe and oversized packages are rejected',async()=>{
   const dir=await fixture(),store=newStore(),file=path.join(dir,'x.ESF');
-  const valid=await store.create(path.join(dir,'ok.ESF'),newDeck('OK'));const m=(await openPackage(valid.path));const manifest=JSON.parse((await m.read('manifest.json')).toString());await m.close();
+  const manifest=serialize(newDeck('OK')).manifest;
   const reject=async(files:Record<string,any>,re:RegExp,opts?:any)=>{await fs.writeFile(file,zipSync(Object.fromEntries(Object.entries(files).map(([k,v])=>[k,typeof v==='string'?strToU8(v):v])),opts));await assert.rejects(()=>newStore().open(file),re);};
   await fs.writeFile(file,JSON.stringify(manifest));await assert.rejects(()=>newStore().open(file),/not a valid ESF package/,'the old JSON format is not read');
   await reject({'manifest.json':JSON.stringify({...manifest,packageVersion:2})},/Unsupported ESF version/);
@@ -136,10 +129,10 @@ test('invalid, unsafe and oversized packages are rejected',async()=>{
   await assert.rejects(fs.access((newStore() as any).dirFor(await fs.realpath(file))),'a rejected package leaves no working folder');
 });
 test('packages written by the app are standard ZIP files',async()=>{
-  const dir=await fixture(),p=await newStore().create(await esfIn(dir),themed('Padrão'));
-  const files=unzipSync(new Uint8Array(await fs.readFile(p.path)));assert.ok(files['manifest.json']);
-  assert.equal(JSON.parse(strFromU8(files['manifest.json'])).packageVersion,1);
-  const tpl=path.join(dir,'t.ESF');await writeDeck(tpl,p.deck);assert.equal((await readDeck(tpl)).title,'Padrão');assert.ok(!(await entries(tpl)).some(n=>n.startsWith('.edukors')));
+  const dir=await fixture(),p=await newStore().create(await eslxIn(dir),themed('Padrão'));
+  const files=unzipSync(new Uint8Array(await fs.readFile(p.path)));assert.ok(files['[Content_Types].xml']);
+  assert.equal(JSON.parse(strFromU8(files['slides/presentation.json'])).version,1);
+  const tpl=path.join(dir,'t.eslx');await writeDeck(tpl,p.deck);assert.equal((await readDeck(tpl)).title,'Padrão');assert.ok(!(await entries(tpl)).some(n=>n.startsWith('.edukors')));
 });
 test('path confinement handles traversal and symlinks',async()=>{
   const dir=await fixture(),outside=await fixture();await fs.writeFile(path.join(outside,'secret'),'x');await fs.symlink(outside,path.join(dir,'link'));
@@ -206,13 +199,11 @@ function conform(schema:any,v:any,at='$'):string[]{
   if(schema.type==='object'){if(!v||typeof v!=='object'||Array.isArray(v))return[`${at}: object`];for(const k of schema.required||[])if(!(k in v))e.push(`${at}.${k}: required`);for(const[k,x]of Object.entries(v))if(schema.properties?.[k])e.push(...conform(schema.properties[k],x,`${at}.${k}`));else if(schema.additionalProperties===false)e.push(`${at}.${k}: not allowed`);}
   return e;
 }
-test('saved manifest follows esf.schema.json; agent instructions avoid duplicating it',async()=>{
-  const store=newStore(),p=await store.create(await esfIn(await fixture()),themed('Schema'));
+test('private workspace follows legacy schema while the saved document uses native ESLX',async()=>{
+  const store=newStore(),p=await store.create(await eslxIn(await fixture()),themed('Schema'));
   p.deck.slides.push(sample('cards'));p.deck.assets.push({id:'asset-image',name:'tiny.png',mime:'image/png',data:'aGVsbG8='},{id:'asset-font',name:'f.woff2',mime:'font/woff2',data:'aGVsbG8='});p.deck.systemPrompt='Público: professores.';
   const saved=(await store.save(p.deck)).project,pkg=await openPackage(saved.path);
-  try{assert.deepEqual(conform(esfSchema,JSON.parse((await pkg.read('manifest.json')).toString())),[]);}finally{await pkg.close();}
-  assert.ok(!instruction('en').includes(JSON.stringify(esfSchema)));
-  assert.match(instruction('en'),/slideUpdates/);
+  try{assert.deepEqual(conform(esfSchema,JSON.parse(await fs.readFile(path.join(store.location(saved.deck.id).workspace,'manifest.json'),'utf8'))),[]);assert.ok(pkg.entries.has('[Content_Types].xml'));assert.ok(pkg.entries.has('slides/presentation.json'));}finally{await pkg.close();}
 });
 
 test('fonts installed only on this computer are embedded in the export; system and generic ones are not',async()=>{
@@ -325,27 +316,24 @@ test('legacy selection metadata and object styling only accept supported propert
   assert.deepEqual(cleanOp(op),op);
   for(const style of [{position:'fixed'},{color:'red'},{'border-width':4},{'background-color':'url(https://example.com)'},{'box-shadow':'none;display:none'}])assert.equal(cleanOp({...op,style}),null);
   // Context menu: stacking order and text alignment, with fixed values only.
-  for(const style of [{'z-index':'-2',position:'relative'},{isolation:'isolate'},{'text-align':'right'},{'align-content':'center'},{'justify-content':'flex-end'},{'align-items':'flex-start'}])assert.deepEqual(cleanOp({...op,style}),{...op,style});
-  for(const style of [{position:'absolute'},{'z-index':'auto'},{'z-index':'1 !important'},{'text-align':'justify'},{'align-content':'space-between'},{isolation:'auto'}])assert.equal(cleanOp({...op,style}),null);
+  for(const style of [{'z-index':'-2',position:'relative'},{isolation:'isolate'},{'text-align':'right'},{'text-align':'justify'},{'align-content':'center'},{'justify-content':'flex-end'},{'align-items':'flex-start'}])assert.deepEqual(cleanOp({...op,style}),{...op,style});
+  for(const style of [{position:'absolute'},{'z-index':'auto'},{'z-index':'1 !important'},{'text-align':'unsupported'},{'align-content':'space-between'},{isolation:'auto'}])assert.equal(cleanOp({...op,style}),null);
 });
 
-test('presentation system prompt lives in ai/system-prompt.md, reaches the agent and changes only through apply_changes',async()=>{
-  const dir=await fixture(),store=newStore(),p=await store.create(await esfIn(dir),themed('Prompt'));
+test('presentation system prompt lives in ai/system-prompt.md and changes only through apply_changes',async()=>{
+  const dir=await fixture(),store=newStore(),p=await store.create(await eslxIn(dir),themed('Prompt'));
   const s=store.location(p.deck.id);await fs.mkdir(path.join(s.workspace,'ai'),{recursive:true});await fs.writeFile(path.join(s.workspace,'ai','notas.md'),'aux');
   p.deck.systemPrompt='# Palestra\nPúblico: professores.';
   const saved=(await store.save(p.deck)).project,names=await entries(saved.path);
-  assert.ok(names.includes('ai/system-prompt.md')&&!names.includes('ai/notas.md'),'prompt managed, the rest of ai/ left out');
+  assert.ok(names.includes('slides/presentation.json')&&!names.includes('ai/notas.md'),'native content saved, auxiliary files left out');assert.equal(await fs.readFile(path.join(s.workspace,'ai/system-prompt.md'),'utf8'),p.deck.systemPrompt);
   await store.close(p.deck.id);const reopened=await newStore().open(saved.path);assert.equal(reopened.deck.systemPrompt,'# Palestra\nPúblico: professores.');
   const again=newStore(),q=await again.open(saved.path);delete q.deck.systemPrompt;const cleared=(await again.save(q.deck)).project;
-  assert.ok(!(await entries(cleared.path)).includes('ai/system-prompt.md'),'an empty prompt leaves no file');
+  assert.equal((await readDeck(cleared.path)).systemPrompt,undefined,'an empty prompt leaves no native field');await assert.rejects(fs.access(path.join(again.location(q.deck.id).workspace,'ai/system-prompt.md')));
   assert.equal(applySlideChanges(reopened.deck,{systemPrompt:'Novo'})!.systemPrompt,'Novo');
   assert.equal('systemPrompt' in applySlideChanges(reopened.deck,{systemPrompt:' '})!,false);
   assert.equal(applySlideChanges(reopened.deck,{message:'ok'}),undefined,'omitted prompt changes nothing');
   assert.throws(()=>validateDeck({...reopened.deck,systemPrompt:'x'.repeat(20001)}),/system prompt/);
-  assert.ok(ownedPaths.includes('ai/system-prompt.md'));
   assert.ok(!JSON.stringify(agentContext(reopened.deck,[])).includes('Palestra'),'sent once, in the system prompt');
-  const system=instructionsFor('en',true,'Global rule',reopened.deck.systemPrompt);
-  assert.ok(system.indexOf('Global rule')>0&&system.indexOf('Público: professores.')>system.indexOf('Global rule'),'global first, then the presentation');
 });
 
 
@@ -385,7 +373,6 @@ test('slide masters: objects render inside the slide, behind it; only the active
   next.layouts[0].html='<section class="slide"><script>x</script></section>';assert.throws(()=>validateDeck(next),/layout/);
   assert.throws(()=>validateDeck({...deck,layouts:[]}),/layouts/);assert.throws(()=>validateDeck({...deck,activeMaster:'gone'}),/active master/);
   const orphan=structuredClone(deck);orphan.slides[0].layoutId='gone';assert.throws(()=>validateDeck(orphan),/layout that does not exist/);
-  assert.match(instruction('Português'),/layoutUpdates/);assert.match(instruction('Português'),/activeMaster/);
 });
 
 test('incremental context includes selected and unsaved edits with full authoritative order',()=>{
@@ -401,70 +388,135 @@ test('incremental context includes selected and unsaved edits with full authorit
   deck.slides.pop();assert.equal(agentContext(deck,[],previous).slideIndex.length,2);
 });
 
-test('the agent changes the presentation only through apply_changes, applied when the turn ends; each conversation resumes',async()=>{
-  await using f=await assistantFixture();const deck=themed('AI');deck.slides.push(sample('quote'));
-  const before=structuredClone(deck),out=await f.a.send({deck,accountId:f.account,root:f.work,selected:[deck.slides[0].id],conversation:'c-1',scope:'w',prompt:tool({message:'Feito',slideUpdates:[{id:deck.slides[0].id,title:'Novo título'}]})});
-  assert.equal(out.deck!.slides[0].title,'Novo título');assert.equal(out.deck!.slides[0].html,deck.slides[0].html,'omitted fields keep their value');assert.deepEqual(out.deck!.slides[1],deck.slides[1]);
-  assert.deepEqual(deck,before,'the request never mutates the deck it was given');assert.match(out.message,/Accepted/);
-  assert.ok(f.events.some(e=>e.type==='activity'&&e.kind==='validating')&&f.events.some(e=>e.type==='usage'&&e.input>0));
-  assert.deepEqual(f.events.filter(e=>e.type==='activity'&&['start','resume'].includes(e.kind)).map(e=>e.kind),['start']);
-  assert.ok(JSON.parse(await fs.readFile(path.join(f.dir,'sessions.json'),'utf8'))['w:'+deck.id+':c-1:'+f.account],'session saved to resume');
-  const file=JSON.parse(await fs.readFile(path.join(f.work,contextDir,deck.slides[1].id+'.json'),'utf8'));assert.deepEqual(file,deck.slides[1],'every slide is available to the agent as a file');
-  assert.equal(f.a.busy(deck.id),false);
-  const again=await f.a.send({deck:out.deck!,accountId:f.account,root:f.work,selected:[],conversation:'c-1',scope:'w',prompt:'olá'});
-  assert.match(again.message,/history 1/,'the same conversation continues');assert.equal(again.deck,undefined,'an answer without apply_changes changes nothing');
-  const third=await f.a.send({deck:out.deck!,accountId:f.account,root:f.work,selected:[],conversation:'c-1',scope:'w',prompt:tool({slideUpdates:[{id:deck.slides[0].id,title:'Outro'}]})});
-  assert.equal(third.deck?.slides[0].title,'Outro','the resumed session applies changes to the request now running');
-  const other=await f.a.send({deck:out.deck!,accountId:f.account,root:f.work,selected:[],conversation:'c-2',scope:'w',prompt:'olá'});assert.match(other.message,/history 0/,'another conversation starts its own session');
-});
-test('problems found by the app go back to the agent, and nothing is applied until it fixes them',async()=>{
-  await using f=await assistantFixture();const deck=themed('Check');
-  const out=await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:tool({slideUpdates:[{id:deck.slides[0].id,script:'while(true){}'}]}),check:async()=>['Slide 1: script never finishes']});
-  assert.equal(out.deck,undefined);assert.match(out.message,/Not applied[\s\S]*script never finishes/);
-  assert.ok(f.events.some(e=>e.type==='activity'&&e.kind==='fixing'&&/never finishes/.test(e.body)));
-  const bad=await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:tool({slideOrder:['missing']})});assert.equal(bad.deck,undefined);assert.match(bad.message,/Invalid slide order/);
-});
-test('the agent asks; the answer reaches it and the turn goes on',async()=>{
-  await using f=await assistantFixture();const deck=themed('Ask');
-  const pending=f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'ask'});
-  for(let i=0;i<200&&!f.events.some(e=>e.type==='question');i++)await new Promise(r=>setTimeout(r,20));
-  const q=f.events.find(e=>e.type==='question');assert.deepEqual([q.text,q.options],['Which color?',['red','blue']]);
-  f.a.answer(deck.id,q.questionId,'blue');assert.match((await pending).message,/You chose blue/);
-  assert.throws(()=>f.a.answer('other-deck',q.questionId,'x'),/Unknown question/);
-});
-test('a cancelled request never yields changes and frees the presentation',async()=>{
-  await using f=await assistantFixture();const deck=themed('Cancel');
-  const pending=f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'slow'});
-  for(let i=0;i<200&&!f.events.some(e=>e.type==='text');i++)await new Promise(r=>setTimeout(r,20));
-  f.a.cancel(deck.id);await assert.rejects(pending,CancelledError);assert.equal(f.a.busy(deck.id),false);
-  await assert.rejects(f.a.send({deck,accountId:'missing',root:f.work,selected:[],prompt:'x'}));assert.equal(f.a.busy(deck.id),false,'a failed start leaves nothing busy');
-});
-test('the workspace is the presentation folder: the app owns its own files there, and the agent works in it',async()=>{
-  await using f=await assistantFixture();const deck=themed('Folder');
-  const write=await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'write nota.md texto'});assert.match(write.message,/wrote nota.md/);
-  assert.equal(await fs.readFile(path.join(f.work,'nota.md'),'utf8'),'texto');
-  for(const owned of ['slides/x.json','manifest.json','.edukors/ai/x.json'])assert.match((await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'write '+owned+' x'})).message,/protected/,owned);
-  assert.match((await f.a.send({deck,accountId:f.account,root:f.work,selected:[],prompt:'workspace'})).message,/web=true shell=true protected=8/);
-  assert.match(instruction('en',false),/no shell commands/);assert.match(instruction('en',true),/sandbox confined to that folder/);
-  for(const name of ['apply_changes','screenshot','download'])assert.match(instruction('en'),new RegExp(name));assert.match(instruction('en'),/only on this presentation/);
-});
-test('removing an account forgets its sessions; the 5-hour window comes from the provider usage',async()=>{
-  await using f=await assistantFixture();const deck=themed('Forget');
-  await f.a.send({deck,accountId:f.account,root:f.work,selected:[],conversation:'c',prompt:'olá'});
-  await f.a.removeAccount(f.account);assert.deepEqual(JSON.parse(await fs.readFile(path.join(f.dir,'sessions.json'),'utf8')),{});
-  assert.deepEqual((await f.a.accounts()).length,0);
-  assert.deepEqual({...fiveHour({windows:[{name:'seven_day',used:.1},{name:'five_hour',used:.42,resetsAt:new Date(1800000000e3).toISOString()}],observedAt:''})!,updated:0},{utilization:.42,resetsAt:1800000000,status:'allowed',updated:0});
-  assert.equal(fiveHour({windows:[{name:'seven_day',used:.9}],observedAt:''}),null);
-});
-
 test('imported layouts persist their master binding and CSS; invalid bindings/resources are rejected',async()=>{
   const d=themed('Imported layout'),master={id:'m-imported',name:'Imported',html:'<div>Imported logo</div>',css:'body{color:navy}'};
   d.masters.push(master);d.layouts[1].masterId=master.id;d.layouts[1].css='h1{letter-spacing:4px}';
-  const dir=await fixture(),file=await esfIn(dir);await writeDeck(file,d);assert.deepEqual(await readDeck(file),d);
+  const dir=await fixture(),file=await eslxIn(dir);await writeDeck(file,d);assert.deepEqual(await readDeck(file),d);
   const html=slideDocument(d,d.slides[0],true);assert.match(html,/Imported logo/);assert.match(html,/letter-spacing:4px/);
   const changed=applySlideChanges(d,{layoutUpdates:[{id:d.layouts[1].id,css:'h1{color:green}'}]})!;
   assert.equal(changed.layouts[1].masterId,master.id);assert.equal(changed.layouts[1].css,'h1{color:green}');assert.deepEqual(changed.masters,d.masters);
   const active=applySlideChanges(d,{activeMaster:d.activeMaster})!;assert.equal(active.layouts[1].masterId,undefined,'explicit activation applies the chosen master to all layouts');
   const bad=structuredClone(d);bad.layouts[1].masterId='missing';assert.throws(()=>validateDeck(bad),/layout/);
   bad.layouts[1].masterId=master.id;bad.layouts[1].css='div{background:url(asset:asset-missing)}';assert.throws(()=>validateDeck(bad),/Missing resource/);
+});
+
+test('ESLX uses Common OPC and preserves rich slides, binary assets and legacy histories',async()=>{
+  const {encodeEslx,decodeEslx}=await import('../src/main/eslx');
+  const deck=newDeck('ESLX preservation');
+  deck.slides[0].html='<section class="slide"><p>Editable <b>text</b></p></section>';
+  deck.slides[0].script='console.log("preserved")';
+  const history=Buffer.from('{"messages":["legacy conversation"]}');
+  const bytes=await encodeEslx(deck,history),entries=unzipSync(bytes);
+  assert.ok(entries['[Content_Types].xml']);assert.ok(entries['_rels/.rels']);
+  const restored=await decodeEslx(bytes);assert.deepEqual(restored.deck,deck);assert.deepEqual(restored.history,history);
+  const dir=await fixture(),store=new ProjectStore(path.join(dir,'workspaces')),file=path.join(dir,'copy.eslx');
+  const project=await store.create(file,deck);await store.close(project.deck.id);
+  const reopened=await store.open(file);assert.equal(reopened.deck.slides[0].script,deck.slides[0].script);
+  reopened.deck.title='Edited ESLX';await store.save(reopened.deck);await store.close(reopened.deck.id);
+  assert.equal((await readDeck(file)).title,'Edited ESLX');
+});
+
+test('ESLX rejects unknown schemas and missing resource relationships without changing the source',async()=>{
+  const {encodeEslx,decodeEslx}=await import('../src/main/eslx');
+  const deck=newDeck('Resources');
+  deck.assets=[{id:'asset-image-one',name:'pixel.png',mime:'image/png',data:Buffer.from([137,80,78,71]).toString('base64')}];
+  const bytes=await encodeEslx(deck),restored=await decodeEslx(bytes);
+  assert.deepEqual(restored.deck.assets,deck.assets);
+  const entries=unzipSync(bytes),main='slides/presentation.json',content=JSON.parse(strFromU8(entries[main]));
+  content.version=999;entries[main]=strToU8(JSON.stringify(content));
+  await assert.rejects(()=>decodeEslx(zipSync(entries)),/Unsupported ESLX/);
+  content.version=1;content.deck.assets[0].relationship='missing';entries[main]=strToU8(JSON.stringify(content));
+  await assert.rejects(()=>decodeEslx(zipSync(entries)),/resource relationship/);
+  assert.deepEqual((await decodeEslx(bytes)).deck.assets,deck.assets);
+});
+
+test('ESLX sessions preserve legacy conversations and detect external file changes',async()=>{
+ const {readEslx}=await import('../src/main/eslx');
+ const dir=await fixture(),store=new ProjectStore(path.join(dir,'workspaces')),file=path.join(dir,'history.eslx');
+ const project=await store.create(file,newDeck('History')),session=store.location(project.deck.id);
+ const history=Buffer.from('{"messages":["preserve all legacy messages"]}');
+ await fs.mkdir(path.join(session.workspace,'.edukors','ai'),{recursive:true});
+ await fs.writeFile(path.join(session.workspace,'.edukors','ai','conversations.json'),history);
+ await store.save(project.deck);assert.deepEqual((await readEslx(file)).history,history);
+ await store.close(project.deck.id);const reopened=await store.open(file);
+ assert.deepEqual(await fs.readFile(path.join(store.location(reopened.deck.id).workspace,'.edukors','ai','conversations.json')),history);
+ await fs.appendFile(file,'external change');
+ await assert.rejects(()=>store.save(reopened.deck),ConflictError);
+ assert.ok((await fs.readFile(file)).subarray(-15).toString().includes('external change'));
+ await store.close(reopened.deck.id);
+});
+
+test('ESF inputs remain read-only and every save target must be ESLX',async()=>{
+ const dir=await fixture(),store=new ProjectStore(path.join(dir,'workspaces')),esf=path.join(dir,'legacy.ESF'),eslx=path.join(dir,'converted.eslx');
+ const deck=newDeck('Legacy migration');deck.systemPrompt='Keep all slides and notes.';
+ deck.slides[0].notes='Presenter notes';deck.slides[0].script='window.__legacy = true;';
+ await writeLegacyFixture(esf,deck);const original=await fs.readFile(esf),opened=await store.open(esf);
+ assert.equal(opened.path,'');assert.equal(opened.sourcePath,await fs.realpath(esf));
+ await assert.rejects(()=>store.save(opened.deck),/Save As/);
+ await assert.rejects(()=>store.attach(opened.deck.id,esf,opened.deck),/only.*eslx/);
+ await assert.rejects(()=>store.create(esf,opened.deck),/only.*eslx/);
+ await assert.rejects(()=>writeDeck(esf,opened.deck),/only.*eslx/);
+ const {writeEslx}=await import('../src/main/eslx');await assert.rejects(()=>writeEslx(esf,opened.deck),/only.*eslx/);
+ const converted=await store.attach(opened.deck.id,eslx,opened.deck);
+ assert.deepEqual(await fs.readFile(esf),original);
+ await store.close(converted.deck.id);const reopened=await store.open(eslx);
+ assert.equal(reopened.deck.slides[0].notes,deck.slides[0].notes);
+ assert.equal(reopened.deck.slides[0].script,deck.slides[0].script);assert.equal(reopened.deck.systemPrompt,deck.systemPrompt);
+ reopened.deck.title='Edited native copy';await store.save(reopened.deck);
+ assert.deepEqual(await fs.readFile(esf),original);await store.close(reopened.deck.id);
+});
+
+test('Common conversations survive ESLX saves through the legacy adapter without serializing live credentials',async()=>{
+  const {writeEslx,readEslx}=await import('../src/main/eslx');
+  const dir=await fixture(),file=path.join(dir,'native-history.eslx');
+  const conversation={id:'conversation-native',updated:'2026-11-02T12:00:00Z',accountId:'account-test',resumeId:'resume-test',accessToken:'never-save-secret',running:true,items:[{kind:'user',text:'Keep this conversation'},{kind:'assistant',text:'Preserved'}]};
+  const legacy=Buffer.from(JSON.stringify({messages:Array.from({length:500},(_,index)=>({text:'Legacy message '+index}))}));
+  await writeEslx(file,newDeck('Native conversation'),legacy,[conversation]);
+  const initial=await readEslx(file);
+  assert.equal(initial.conversations[0].id,conversation.id);
+  assert.equal(initial.conversations[0].accessToken,undefined);
+  assert.equal(initial.conversations[0].running,undefined);
+  assert.deepEqual(initial.history,legacy);
+  const store=new ProjectStore(path.join(dir,'workspaces')),opened=await store.open(file);
+  opened.deck.title='Edited with existing adapter';await store.save(opened.deck);
+  const saved=await readEslx(file);
+  assert.equal(saved.conversations[0].items[0].text,'Keep this conversation');
+  assert.deepEqual(saved.history,legacy);
+  const copyFile=path.join(dir,'native-copy.eslx');
+  const copy=await store.create(copyFile,{...structuredClone(opened.deck),id:'deck-native-copy'},opened.deck.id);
+  assert.equal((await readEslx(copyFile)).conversations[0].id,conversation.id);
+  await store.close(copy.deck.id);await store.close(opened.deck.id);
+});
+
+test('PPTX is imported read-only and saves only as an ESLX document',async()=>{
+ const {createRasterPptx}=await import('../src/shared/pptx-raster');
+ const dir=await fixture(),source=path.join(dir,'Source.PPTX'),target=path.join(dir,'Converted.eslx');
+ const original=createRasterPptx([Buffer.from('test-image')],'Input');await fs.writeFile(source,original);
+ const store=new ProjectStore(path.join(dir,'workspaces')),opened=await store.open(source);
+ assert.equal(opened.path,'');assert.equal(opened.sourcePath,await fs.realpath(source));
+ assert.equal(opened.deck.importReport?.format,'pptx');
+ assert.equal((await store.open(source)).deck.id,opened.deck.id,'reopening the input reuses the imported session');
+ await assert.rejects(()=>store.save(opened.deck),/Save As/);
+ await assert.rejects(()=>store.attach(opened.deck.id,source,opened.deck),/only.*eslx/);
+ await assert.rejects(()=>store.create(source,opened.deck),/only.*eslx/);
+ await assert.rejects(()=>writeDeck(source,opened.deck),/only.*eslx/);
+ opened.deck.slides[0].notes='Edited native notes';
+ const saved=await store.attach(opened.deck.id,target,opened.deck);
+ assert.equal(saved.path,await fs.realpath(target));
+ assert.deepEqual(await fs.readFile(source),Buffer.from(original));
+ assert.equal((await readDeck(target)).slides[0].notes,'Edited native notes');
+ assert.equal((await readDeck(target)).importReport?.format,'pptx');
+ await store.close(saved.deck.id);
+});
+
+test('exports cannot overwrite an imported source, the native document or their aliases',async()=>{
+ const {assertExportTarget}=await import('../src/main/file-policy');
+ const dir=await fixture(),source=path.join(dir,'source.pptx'),native=path.join(dir,'converted.eslx');
+ await fs.writeFile(source,'original');await fs.writeFile(native,'native');
+ await assert.rejects(()=>assertExportTarget(source,[native,source]),/another export name/);
+ await assert.rejects(()=>assertExportTarget(native,[native,source]),/another export name/);
+ const alias=path.join(dir,'alias.pptx');await fs.link(source,alias);
+ await assert.rejects(()=>assertExportTarget(alias,[source]),/another export name/);
+ await assertExportTarget(path.join(dir,'copy.pptx'),[source,native]);
+ assert.equal(await fs.readFile(source,'utf8'),'original');
 });

@@ -1,8 +1,7 @@
 // Sample presentation for the store screenshots (scripts/store-screenshots.mjs): a short class on the water cycle in the
 // interface's language, with a theme, two layouts, an interactive question and a conversation with the assistant.
 import {Deck,Language,Slide,newDeck,uid} from '../src/shared/model';
-import {serialize} from '../src/main/projects';
-import {writePackage} from '../src/main/package';
+import {writeEslx} from '../src/main/eslx';
 import {playerDocument} from '../src/shared/player';
 
 const css=`:root{--paper:#f7f4ee;--ink:#14213d;--accent:#1d6fd1;--muted:#5b6475;--surface:#ffffff}
@@ -56,13 +55,13 @@ export function sampleDeck(lang:Language):Deck{
   return deck;
 }
 
-// The .esf with the deck and one conversation with the assistant, as the editor saves them.
-export const sampleFile=(lang:Language)=>[text[lang].folder,text[lang].title+'.esf'];
+// The .eslx with the deck and one conversation with the assistant, as the editor saves them.
+export const sampleFile=(lang:Language)=>[text[lang].folder,text[lang].title+'.eslx'];
 export async function writeSample(file:string,lang:Language,account:string){
-  const t=text[lang],deck=sampleDeck(lang),{files,manifest}=serialize(deck),at=new Date().toISOString();
+  const t=text[lang],deck=sampleDeck(lang),at=new Date().toISOString();
   const chat=[{role:'user',text:t.ask,at},{role:'activity',text:'',kind:'launch'},{role:'activity',text:'',kind:'start',detail:'Claude'},{role:'activity',text:'',kind:'thinking'},{role:'activity',text:'',kind:'validating'},{role:'assistant',agent:'Claude',text:t.answer}];
   const conversations={active:'c-store',sessions:[{id:'c-store',title:t.ask,updated:at,chat,profile:account}]};
-  await writePackage(file,[{name:'manifest.json',data:JSON.stringify(manifest,null,2)+'\n'},...Object.entries(files).map(([name,data])=>({name,data})),{name:'.edukors/ai/conversations.json',data:JSON.stringify(conversations)}]);
+  await writeEslx(file,deck,Buffer.from(JSON.stringify(conversations)));
   return deck;
 }
 

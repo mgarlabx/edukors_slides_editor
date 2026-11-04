@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {api} from './bridge';
 import {PollConfig,pollWords,pollOptionColors,validPoll,normalizePollServer} from '../shared/poll';
 import {Language,Preferences} from '../shared/model';
 import type {T} from './i18n';
@@ -13,7 +14,7 @@ export function PollEditor({initial,lang,server,onSave,onCancel}:{initial?:PollC
     {type==='quiz'&&<fieldset><legend>{w.options}</legend>{options.map((s,i)=><label className="poll-editor-option" key={i}><span style={{backgroundColor:pollOptionColors[i]}}>{'ABCDE'[i]}</span><input aria-label={`${w.options} ${'ABCDE'[i]}`} maxLength={500} value={s} onChange={e=>setOptions(old=>old.map((v,k)=>k===i?e.target.value:v))}/>{options.length>2&&<button type="button" aria-label={`${w.remove} ${'ABCDE'[i]}`} onClick={()=>setOptions(old=>old.filter((_,k)=>k!==i))}>×</button>}</label>)}{options.length<5&&<button type="button" onClick={()=>setOptions(old=>[...old,''])}>{w.add}</button>}</fieldset>}
     {error&&<p role="alert" className="error">{w.invalid}</p>}
     <p className="poll-editor-server">{w.server}: {normalizePollServer(server)||w.noServerEditor}</p>
-    <footer className="modal-actions">{initial&&<button type="button" className="danger" onClick={()=>onSave(undefined)}>{w.remove}</button>}<button type="button" onClick={onCancel}>{w.cancel}</button><button type="submit" className="primary">{w.save}</button></footer>
+    <footer className="file-footer">{initial&&<button type="button" className="small-button danger" onClick={()=>onSave(undefined)}>{w.remove}</button>}<button type="button" className="small-button" onClick={onCancel}>{w.cancel}</button><button type="submit" className="small-button primary">{w.save}</button></footer>
   </form>;
 }
 
@@ -22,10 +23,10 @@ export function PollServerSettings({prefs,t,onChange}:{prefs:Preferences;t:T;onC
   const [text,setText]=useState(prefs.pollServer||''),[test,setTest]=useState<''|'testing'|'ok'|'fail'>('');
   const valid=normalizePollServer(text),empty=!text.trim();
   const edit=(value:string)=>{setText(value);setTest('');const base=normalizePollServer(value);if(base||!value.trim())onChange({pollServer:base||undefined});};
-  const check=async()=>{if(!valid)return;setTest('testing');const r=await (window as any).api.invoke('pollPing',valid).catch(()=>({ok:false}));setTest(r?.ok?'ok':'fail');};
+  const check=async()=>{if(!valid)return;setTest('testing');const r=await api.invoke('pollPing',valid).catch(()=>({ok:false}));setTest(r?.ok?'ok':'fail');};
   return <section><h2>{t('pollServer')}</h2><p>{t('pollServerHelp')}</p>
     <input className={'poll-server'+(valid||empty?'':' invalid')} type="url" spellCheck={false} aria-label={t('pollServer')} aria-invalid={!valid&&!empty} value={text} placeholder="https://example.org/poll" onChange={e=>edit(e.target.value)}/>
     {!valid&&!empty&&<p role="alert" className="error">{t('pollServerInvalid')}</p>}
-    <div className="poll-server-actions"><button type="button" disabled={!valid||test==='testing'} onClick={()=>void check()}>{test==='testing'?t('pollServerTesting'):t('pollServerTest')}</button>{test==='ok'&&<span className="success" role="status">{t('pollServerOk')}</span>}{test==='fail'&&<span className="error" role="status">{t('pollServerFail')}</span>}</div>
+    <div className="poll-server-actions"><button type="button" className="small-button" disabled={!valid||test==='testing'} onClick={()=>void check()}>{test==='testing'?t('pollServerTesting'):t('pollServerTest')}</button>{test==='ok'&&<span className="success" role="status">{t('pollServerOk')}</span>}{test==='fail'&&<span className="error" role="status">{t('pollServerFail')}</span>}</div>
   </section>;
 }

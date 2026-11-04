@@ -7,7 +7,7 @@ import {writeDeck,readDeck,serialize} from '../src/main/projects';
 import {playerDocument} from '../src/shared/player';
 import {slideDocument} from '../src/shared/render';
 import {copySlides,pasteSlides} from '../src/shared/clipboard';
-import {applySlideChanges} from '../src/main/ai';
+import {applySlideChanges} from '../src/shared/assistant';
 import {qrRuntimeSource,qrSvg} from '../src/shared/qr';
 
 const quiz:PollConfig={version:1,provider:'edukors',type:'quiz',prompt:'Qual opção?',options:['Primeira','Segunda','Terceira']};
@@ -42,7 +42,7 @@ test('poll config is optional, bounded, persistent and independent of runtime se
   const d=newDeck('Activity');d.slides[0].poll=quiz;validateDeck(d);
   assert.equal(validPoll({...quiz,provider:'solverpoll'}),true,'files saved before the Edukors service still open');
   for(const bad of [{...quiz,options:['A','']},{...quiz,prompt:' '},{...quiz,room:'leak'},{...quiz,type:'post'},{...quiz,options:['1','2','3','4','5','6']},{...quiz,provider:'other'}])assert.equal(validPoll(bad),false);
-  await fs.mkdir('test-results/poll',{recursive:true});const file='test-results/poll/roundtrip.ESF';await writeDeck(file,d);assert.deepEqual((await readDeck(file)).slides[0].poll,quiz);
+  await fs.mkdir('test-results/poll',{recursive:true});const file='test-results/poll/roundtrip.eslx';await writeDeck(file,d);assert.deepEqual((await readDeck(file)).slides[0].poll,quiz);
   assert.deepEqual((serialize(d).manifest.slides[0] as any).poll,quiz);
   assert.deepEqual(duplicateSlides(d.slides)[0].poll,quiz);
   const copied=pasteSlides(d,copySlides(d,[d.slides[0].id]),d.slides[0].id);assert.deepEqual(copied[0].poll,quiz);assert.notEqual(copied[0].id,d.slides[0].id);

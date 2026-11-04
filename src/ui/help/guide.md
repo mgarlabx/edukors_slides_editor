@@ -4,7 +4,7 @@ Este guia mostra como criar uma apresentação no Edukors Slides Editor, do prim
 
 ## 1. A ideia em uma frase
 
-Uma apresentação é um conjunto de **slides**, cada um uma pequena página da web, que compartilham uma mesma aparência: a **base** (cores, fontes e o que fica atrás de todos os slides) e os **layouts** (a arrumação do conteúdo). O editor guarda tudo num arquivo `.esf` e exporta **um único HTML** que abre em qualquer navegador, mesmo sem internet.
+Uma apresentação é um conjunto de **slides**, cada um uma pequena página da web, que compartilham uma mesma aparência: a **base** (cores, fontes e o que fica atrás de todos os slides) e os **layouts** (a arrumação do conteúdo). O editor guarda tudo num arquivo `.eslx` e exporta **um único HTML** que abre em qualquer navegador, mesmo sem internet.
 
 ## 2. Instalar e abrir
 
@@ -22,36 +22,42 @@ Sem a Microsoft Store (alguns computadores de escola a têm desligada), use o in
 
 **No Linux** (64 bits, x64):
 
-- No **Ubuntu, Debian, Mint** e derivados, baixe o [`Edukors-Slides-Editor-linux.deb`](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.deb) e instale-o com dois cliques (ou `sudo apt install ./Edukors-Slides-Editor-linux.deb`). O editor fica no menu de aplicativos, e um `.esf` abre nele com dois cliques.
+- No **Ubuntu, Debian, Mint** e derivados, baixe o [`Edukors-Slides-Editor-linux.deb`](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.deb) e instale-o com dois cliques (ou `sudo apt install ./Edukors-Slides-Editor-linux.deb`). O editor fica no menu de aplicativos, e um `.eslx` abre nele com dois cliques.
 - Em **outras distribuições**, baixe o [`Edukors-Slides-Editor-linux.AppImage`](https://github.com/mgarlabx/edukors_slides_editor/releases/latest/download/Edukors-Slides-Editor-linux.AppImage), marque-o como executável (`chmod +x`) e abra-o. Ele roda sem instalar.
 
-As versões novas chegam pelo próprio editor: quando uma fica pronta, um aviso oferece **Reiniciar**, e o editor pergunta antes sobre o que não estiver salvo.
+Quando sai uma versão nova, o próprio editor avisa e oferece a página para baixá-la (na Microsoft Store, a atualização chega pela loja).
 
-**Em todos os sistemas**, na primeira vez, o editor mostra os **Termos de uso** (a licença MIT, explicada): é preciso aceitá-los para continuar. Eles ficam depois na **Ajuda**, que também mostra a versão do editor. A partir daí você pode criar uma **Nova apresentação** ou **Abrir** um arquivo `.esf`. Depois de instalado, um `.esf` abre no editor com duplo clique.
+**Em todos os sistemas**, na primeira vez, o editor mostra os **Termos de uso** (a licença MIT, explicada): é preciso aceitá-los para continuar. Eles ficam depois na **Ajuda**, que também mostra a versão do editor. A partir daí você pode criar uma **Nova apresentação** ou **Abrir** um arquivo `.eslx`. Depois de instalado, um `.eslx` abre no editor com duplo clique.
+
+**Arquivos de outras versões e do PowerPoint.** **Abrir** também aceita apresentações `.esf` (das versões anteriores do editor) e `.pptx` (PowerPoint). Elas abrem convertidas, numa aba sem arquivo: o original nunca é alterado, e **Salvar** pede um nome para gravar um `.eslx` novo. A conversão do PowerPoint traz textos, imagens e formas simples; o que não pôde ser convertido aparece num aviso no alto do slide, guardado com a apresentação.
 
 ## 3. A tela
 
 | Parte | O que faz |
 | --- | --- |
-| **Barra de cima** | Arquivo (nova, abrir, recentes, salvar, exportar, mostrar na pasta), **Apresentar**, a troca entre **Slides** e **Slide mestre**, desfazer e refazer, edição dos objetos do slide (copiar, recortar, colar, duplicar, excluir), **Inserir** (texto, forma, imagem, link, pergunta interativa), Configurações e Ajuda. À direita, a lista de slides (⌥⌘0) e o **assistente de IA** ✦ (⇧⌘A). |
-| **Abas** (logo abaixo) | Uma apresentação aberta por aba. O ponto na aba indica alterações não salvas. |
+| **Barra de cima** | Arquivo (nova, abrir, recentes, salvar, exportar, mostrar na pasta), **Apresentar** e a troca entre **Slides** e **Slide mestre**, desfazer e refazer, edição (recortar, copiar, colar, duplicar, excluir), **Inserir** (texto, forma, imagem, link, pergunta interativa), Configurações e Ajuda. À direita, a lista de slides (⌥⌘0) e o **assistente de IA** (⇧⌘A). |
+| **Abas** (logo abaixo) | Uma apresentação aberta por aba. O ponto na aba indica alterações não salvas; o **+** cria outra apresentação. |
 | **Barra de formatação** | Fonte, tamanho, cor, negrito, itálico, sublinhado, linha, fundo, sombra e recorte do objeto selecionado no slide. |
-| **Lista de slides** (esquerda) | As miniaturas, com uma barra para criar, mover, duplicar, copiar, recortar, colar e excluir slides. A borda direita se arrasta para mudar a largura. |
+| **Lista de slides** (esquerda) | As miniaturas, com uma barra para criar, mover, duplicar, copiar, recortar, colar e excluir slides. |
 | **Slide** (centro) | O slide em edição; abaixo dele, as **notas do apresentador**. |
 | **Assistente de IA** (direita) | A conversa com o agente que cria e altera os slides. |
-| **Rodapé** | Se está salvo, o arquivo, o **layout** do slide (clique para trocar) e a versão do editor. |
+| **Rodapé** | Se está salvo, o número do slide e o **layout** dele (clique para trocar), e a versão do editor. |
+
+O tema (claro, escuro ou o do sistema), o tamanho das letras da interface e o idioma ficam em **Configurações → Aplicativo**.
+
+A lista de slides e o assistente de IA mudam de largura: puxe a borda interna do painel (ou use as setas com ela em foco); um duplo clique na borda volta à largura padrão.
 
 ## 4. Criar uma apresentação, passo a passo
 
 1. **Nova apresentação.** Clique no ícone de nova apresentação (ou tecle ⌘N) e escolha um modelo: *Blank presentation* (em branco) ou um dos seus templates. Duplo clique, ou **Criar**, abre a apresentação.
 2. **Adicione slides.** O botão de novo slide, no alto da lista de slides (ou ⇧⌘N), mostra os layouts: escolha um com duplo clique ou **Inserir**.
 3. **Escreva.** Clique num texto do slide para editá-lo ali mesmo.
-4. **Peça ao assistente.** Abra o ✦ e descreva o que quer: "crie três slides sobre o ciclo da água para o 6º ano". Veja a seção 7.
-5. **Salve** com ⌘S. Na primeira vez, o editor pergunta onde gravar e com que nome: a apresentação inteira fica num arquivo só, `minha-aula.esf`, que você pode copiar, mover e renomear à vontade.
+4. **Peça ao assistente.** Abra o assistente (⇧⌘A) e descreva o que quer: "crie três slides sobre o ciclo da água para o 6º ano". Veja a seção 7.
+5. **Salve** com ⌘S. Na primeira vez, o editor pergunta onde gravar e com que nome: a apresentação inteira fica num arquivo só, `minha-aula.eslx`, que você pode copiar, mover e renomear à vontade.
 
-O arquivo guarda só o que a apresentação usa (imagens e fontes que nenhum slide cita saem ao salvar), por isso fica pequeno. Se o computador desligar sem salvar, o editor recupera o rascunho na próxima abertura. Se o arquivo mudar fora do editor, ele não é sobrescrito sem perguntar.
+O arquivo guarda só o que a apresentação usa (imagens e fontes que nenhum slide cita saem ao salvar), por isso fica pequeno. Enquanto há alterações não salvas, o editor guarda um rascunho: se ele fechar de repente, na próxima abertura oferece **Recuperar**. Se o arquivo mudar fora do editor (outro programa, uma sincronização), ele pergunta antes de gravar por cima.
 
-Para reaproveitar a aparência, use **Arquivo → Salvar como template…**: o template aparece na galeria de **Nova apresentação**, onde também se renomeia e exclui.
+Para reaproveitar a aparência, abra a galeria de **Nova apresentação** com a apresentação aberta e use **Salvar como template**: o template aparece na galeria, onde também se renomeia e exclui.
 
 ## 5. Editar no slide
 
@@ -72,40 +78,40 @@ Cada gesto é um passo do desfazer (⌘Z). Só Esc cancela um gesto em andamento
 
 ## 6. Slide mestre: bases e layouts
 
-**Slide mestre**, na barra de cima ou no menu Apresentação, troca a lista de slides por duas abas:
+**Slide mestre**, ao lado de Apresentar na barra de cima, troca a lista de slides por duas abas:
 
 - **Bases.** Cada base é uma aparência alternativa da apresentação inteira: cores, fontes e os objetos que ficam atrás de todos os slides (um logotipo, uma faixa). O ✓ abaixo da miniatura escolhe a base **ativa**, que vale para todos os slides. Assim você testa outra aparência sem mexer no conteúdo.
 - **Layouts.** Cada layout é uma arrumação de conteúdo (capa, título e texto, duas colunas…), compartilhada por todas as bases. Um slide novo começa de um layout. O que vem do layout só se altera aqui, e a mudança chega a todos os slides que o usam; nos slides, só os textos e imagens dos espaços do layout se editam.
 
-Renomeie com duplo clique no nome. A apresentação sempre fica com pelo menos uma base e um layout; os slides de um layout excluído passam ao anterior, com o conteúdo. Para **trocar o layout** de um slide, clique no nome do layout no rodapé (ou **Slides → Alterar layout…**): os textos vão para os campos de mesmo nome do novo layout.
+Renomeie com duplo clique no nome. A apresentação sempre fica com pelo menos uma base e um layout; os slides de um layout excluído passam ao anterior, com o conteúdo. Para **trocar o layout** de um slide, clique no nome do layout no rodapé: os textos vão para os campos de mesmo nome do novo layout.
 
 Os detalhes de código (HTML e CSS das bases e layouts) ficam com o assistente: peça "deixe os títulos em azul-marinho em todos os slides" ou "crie um layout com imagem à esquerda e texto à direita".
 
 ## 7. O assistente de IA
 
-O ícone ✦ na ponta direita da barra de cima (ou ⇧⌘A) abre e fecha o **assistente** ao lado do slide; fechar não interrompe nem apaga a conversa. Ele vê a apresentação e a altera a pedido: cria e reescreve slides, muda a aparência, pesquisa na web, captura páginas e baixa imagens. Trabalha só na apresentação aberta e só na pasta dela, e nunca exclui slides: isso fica com você.
+O botão do assistente, na ponta direita da barra de cima (ou ⇧⌘A), abre e fecha o **assistente** ao lado do slide; fechar não interrompe nem apaga a conversa. Ele vê a apresentação e a altera a pedido: cria e reescreve slides, muda a aparência e traz imagens da web. Trabalha só na apresentação daquela conversa, numa pasta própria do editor (não na pasta do seu arquivo), e nunca exclui slides: isso fica com você.
 
-**Antes de usar.** Instale no seu computador o [Claude Code](https://claude.com/claude-code) ou o [Codex](https://developers.openai.com/codex/cli/); o editor não os baixa. Depois, em **Configurações → Assistente de IA**, crie uma conta e entre nela: a página do provedor abre no navegador (se não abrir, o editor mostra o endereço e, no Claude, um campo para o código). A conta é sua, não do editor, e fica disponível para os outros apps Edukors deste computador. No Windows, o assistente funciona só com o Claude Code, sem executar comandos: ele lê e escreve os arquivos da apresentação e pesquisa na web.
+**Antes de usar.** Instale no seu computador o [Claude Code](https://claude.com/claude-code) ou o [Codex](https://developers.openai.com/codex/cli/); o editor não os baixa. Depois, em **Configurações → Assistente de IA**, adicione uma conta e entre nela pelo navegador. A conta é sua, não do editor, e vale para os outros apps Edukors deste computador.
 
-**Como pedir.** Escreva no campo de baixo e envie. Os slides selecionados vão junto com o pedido, por isso "este slide" quer dizer o slide selecionado. Exemplos:
+**Como pedir.** Escreva no campo de baixo e envie. Os slides selecionados vão junto com o pedido, por isso "este slide" quer dizer o slide selecionado; no Slide mestre, o assistente sabe qual base ou layout você está vendo. Exemplos:
 
 - "Crie uma capa e três slides sobre frações para o 6º ano."
 - "Reescreva este slide com frases mais curtas."
 - "Faça uma animação que mostre as etapas uma de cada vez."
-- "Pesquise dados recentes sobre o desmatamento e faça um gráfico."
+- "Traga uma foto do ciclo da água e coloque à direita."
 - "Troque a fonte de toda a apresentação por uma mais legível."
 
-O clipe 📎 anexa arquivos (textos, PDFs, imagens) para ele usar. Quando o pedido tem mais de um caminho, ele pergunta com opções no próprio chat: escolha uma ou escreva outra resposta.
+O **+** do campo anexa arquivos (textos, PDFs, imagens), escolhe uma skill ou um servidor MCP e liga ou desliga a pesquisa na web. Quando o pedido tem mais de um caminho, ele pergunta com opções no próprio chat.
 
-**Cada alteração é verificada.** O editor confere e desenha cada slide que o assistente propõe; o que não passar volta para ele corrigir. O que ele faz numa resposta entra como **um passo do desfazer**: ⌘Z desfaz tudo de uma vez. O assistente não salva o arquivo: salve você, com ⌘S, quando estiver contente.
+**Cada alteração é verificada e se desfaz.** O editor confere cada mudança que o assistente propõe; o que não passar volta para ele corrigir. Cada mudança aplicada é **um passo do desfazer** (⌘Z). No modo **revisar antes de aplicar**, você aprova cada mudança antes. O assistente não salva o arquivo: salve você, com ⌘S.
 
-**Instruções permanentes.** Em **Configurações → Assistente de IA → Avançado**, as **Instruções para o agente** têm duas abas: **Global**, para todas as apresentações (o tom, o público, regras de estilo), e **Esta apresentação**, o contexto desta palestra (público, objetivos, fontes), guardado no próprio `.esf`. Ali também ficam os seus **servidores MCP** (cada chamada pede a sua permissão) e a pasta de **skills**.
+**Instruções permanentes.** As suas instruções para todas as apresentações ficam em **Configurações → Assistente de IA**, com os servidores MCP e as skills. O contexto desta palestra (público, objetivos, fontes) fica em **Configurações → Esta apresentação**, guardado no próprio `.eslx`.
 
-**Modelo e esforço.** O botão ao lado de Enviar escolhe o modelo e o **esforço**: mais esforço, respostas mais cuidadosas e mais lentas, com mais consumo.
+**Modelo, esforço e consumo.** Ao lado de Enviar ficam o modo, o modelo e o **esforço** (mais esforço, respostas mais cuidadosas e mais lentas, com mais consumo). Abaixo, o uso da janela de 5 horas da assinatura.
 
-**Sessões e consumo.** O título no alto do painel abre as sessões anteriores (com busca); **Nova sessão** começa outra conversa. As conversas ficam guardadas na apresentação. O círculo no cabeçalho mostra quanto do contexto da sessão está em uso, e o rodapé, a conta, o último pedido e o uso da janela de 5 horas da assinatura.
+**Conversas.** O histórico, no alto do painel, reabre conversas anteriores (com busca); a nova conversa começa outra. As conversas ficam guardadas na apresentação.
 
-**Parar.** Enquanto o assistente trabalha, o botão **Interromper** para o pedido; nada do que ele estava fazendo é aplicado.
+**Parar.** Enquanto o assistente trabalha, **Parar** interrompe o pedido; as mudanças que ele já aplicou ficam e se desfazem com ⌘Z.
 
 ## 8. Perguntas interativas
 
@@ -123,7 +129,9 @@ As respostas passam por um servidor de perguntas que **você ou a sua instituiç
 | --- | --- |
 | **HTML** (recomendado) | Um arquivo só, com imagens, fontes e animações, que abre em qualquer navegador, mesmo sem internet (só as perguntas interativas usam a rede). |
 | **PDF** | Uma página por slide, como imagem. |
-| **PPTX** | Um slide de imagem por slide, para quem precisa receber um arquivo do PowerPoint; não é editável. |
+| **PPTX** | Uma apresentação do PowerPoint editável: textos, imagens e formas viram objetos nativos (fonte, tamanho, cor, alinhamento, links); o que não tem equivalente (gradientes, decorações da base, desenhos livres) vai como imagem de fundo de cada slide. Animações e perguntas interativas não vão. |
+
+O arquivo exportado fica ao lado da apresentação, com o mesmo nome; se já existir um arquivo com esse nome, o editor pergunta antes de substituí-lo.
 
 **No HTML exportado**, as setas, a barra de espaço e Page Down/Up mudam de slide. Leve o mouse a um canto de cima para ver as ferramentas: **painel do apresentador** (abre noutra janela, com todos os slides e o atual em destaque), **caneta**, **marca-texto**, **texto**, **borracha**, **lente** de aumento, **lousa** infinita e **tela cheia**. Num canto de baixo aparece a trilha de slides, com prévia ao passar o mouse. Os controles do HTML ficam sempre em inglês, qualquer que seja o idioma do editor.
 
@@ -149,6 +157,7 @@ No Windows e no Linux, ⌘ corresponde a Ctrl, ⌥ a Alt e ⇧ a Shift.
 | ⌘E | Exportar |
 | ⌥⌘0 | Mostrar / ocultar a lista de slides |
 | ⇧⌘A | Abrir / fechar o assistente de IA |
-| ⌘= / ⌘− / ⌘0 | Ampliar / reduzir / tamanho real |
+| ⌘= / ⌘− / ⌘0 | Ampliar / reduzir / tamanho real do slide |
+| ⇧⌘+ / ⇧⌘− | Aumentar / diminuir as letras da interface |
 | ⌘, | Configurações |
 | Esc | Cancelar o gesto em andamento |
