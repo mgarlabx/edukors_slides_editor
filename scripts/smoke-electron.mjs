@@ -151,11 +151,10 @@ try{
   await page.evaluate(()=>{const doc=EdukorsDocuments.list().find(d=>d.name==='Smoke');EdukorsDocuments.activate(doc.id);});
   // Common keeps the drafts in the app's data folder (packaged: the user data folder; unpackaged: --data-dir/apps/slides).
   const draftsDirs=[path.join(tmp,'data','drafts'),path.join(tmp,'common','apps','slides','drafts')];
-  const drafts=async()=>{let n=0;for(const dir of draftsDirs)n+=(await fs.readdir(dir).catch(()=>[])).filter(n=>n.endsWith('.draft')).length;return n;};
-  // Imports opened earlier are unsaved and keep their own drafts: count from here.
-  // (The large import's draft takes a while to encode: wait until the count is stable.)
-  let base=-1;for(let i=0,last=-2;i<120;i++){const n=await drafts();if(n===last&&n>=1)break;last=n;base=n;await new Promise(r=>setTimeout(r,1000));}
-  base=await drafts();const draftCount=async()=>await drafts()-base;
+  // Imports opened earlier are unsaved and keep their own drafts (the large one may be written at any moment): only
+  // drafts of Smoke.eslx count, by the document path Common writes beside each draft.
+  const draftCount=async()=>{let n=0;for(const dir of draftsDirs)for(const f of (await fs.readdir(dir).catch(()=>[])).filter(n=>n.endsWith('.draft'))){
+    const meta=await fs.readFile(path.join(dir,f+'.json'),'utf8').then(JSON.parse).catch(()=>({}));if(meta.path===saved)n++;}return n;};
   await page.locator('#insert-actions [data-command="insertText"]').click();await page.keyboard.press('Escape');
   for(let i=0;i<40&&!await draftCount();i++)await new Promise(r=>setTimeout(r,150));
   assert.equal(await draftCount(),1);
