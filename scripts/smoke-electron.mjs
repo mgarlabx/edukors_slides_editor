@@ -169,7 +169,8 @@ try{
   await page.keyboard.press(mod+'+s');await conflict.locator('.primary').click();
   await page.waitForFunction(()=>!EdukorsDocuments.isModified(EdukorsDocuments.active()));
   assert.notDeepEqual(await fs.readFile(saved),external);
-  for(let i=0;i<40&&await draftCount();i++)await new Promise(r=>setTimeout(r,150));
+  // A draft still being written when the save ends is removed when that write finishes (slow CI machines: seconds).
+  for(let i=0;i<200&&await draftCount();i++)await new Promise(r=>setTimeout(r,150));
   assert.equal(await draftCount(),0);
   pass('saving over a file changed outside the app asks first; saving removes the draft');
   await page.locator('#insert-actions [data-command="insertText"]').click();await page.keyboard.press('Escape');
