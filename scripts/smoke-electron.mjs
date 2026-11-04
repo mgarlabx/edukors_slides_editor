@@ -176,9 +176,9 @@ try{
   for(let i=0;i<40&&!await draftCount();i++)await new Promise(r=>setTimeout(r,150));
   // Calls to the main process around the crash get a deadline, so a stuck renderer fails the check instead of hanging CI.
   const within=(ms,what,p)=>Promise.race([p,new Promise((_,no)=>setTimeout(()=>no(new Error(`${what}: no answer in ${ms} ms`)),ms))]);
-  await within(15000,'crash renderer',app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.forcefullyCrashRenderer()));
-  await new Promise(r=>setTimeout(r,500));
-  await within(15000,'reload',app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.reload()));
+  // Wait until Electron reports the crash before loading again (a reload sent too early is ignored on Linux).
+  await within(30000,'crash and reload',app.evaluate(async({BrowserWindow})=>{const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')),url=w.webContents.getURL();
+    await new Promise(r=>{w.webContents.once('render-process-gone',r);w.webContents.forcefullyCrashRenderer();});await w.loadURL(url);}));
   // The crashed page object is gone; the reloaded page is checked from the main process.
   const names=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.executeJavaScript('document.querySelector("dialog.file-dialog[open] .primary")?.click();globalThis.EdukorsDocuments?EdukorsDocuments.list().map(d=>d.name):[]').catch(()=>[]));
   let recovered=[];for(let i=0;i<80&&!recovered.some(n=>/\(recovered\)$/.test(n||''));i++){await new Promise(r=>setTimeout(r,250));recovered=await within(5000,'list documents',names()).catch(()=>[]);}
