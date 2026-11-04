@@ -1,5 +1,18 @@
 # Changelog
 
+## 26.11.4
+
+Versions are now numbered by date (YY.M.D), as in the other Edukors apps.
+
+- **Same interface as the other Edukors apps:** title bar, toolbar, tabs, Open/Save/Recent, the AI assistant panel, settings, help, terms, light/dark/system theme and the update notice now come from Edukors Common. The format bar, shape picker and right-click menu are Common's (with align and distribute for several objects).
+- **New native format `.eslx`.** `.esf` presentations and PowerPoint `.pptx` files open as imports (the originals are never written); Save writes only `.eslx`. Files up to 1 GB open, with an "Opening…" indicator.
+- **Editable PPTX export:** text, pictures and shapes become native PowerPoint objects (replaces the export of one image per slide).
+- **Interface in five languages:** Portuguese, English, Spanish, Chinese and Hindi (help and terms included). Exported HTML stays in English.
+- **Layouts locked on the slide:** everything that comes from a layout, its texts included, is part of the layout; the slide's own text and objects stay editable.
+- **Faster canvas:** images and fonts are shared between the canvas and thumbnails, and a new slide replaces the previous one only when ready (no flash).
+- Drafts and recovery after a crash, a question before saving over a file changed on disk, and resizable side panels.
+- Save As and Export to a file that already exists ask first, with only Cancel or Replace.
+
 ## 1.3
 
 From this version on, releases are named X.Y (1.3, 1.4…).

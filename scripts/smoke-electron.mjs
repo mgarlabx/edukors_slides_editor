@@ -107,7 +107,7 @@ try{
   await exportAs('html');
   const html=await fs.readFile(path.join(docs,'Smoke.html'),'utf8');assert.match(html,/<meta name="generator"/);assert.match(html,/Content-Security-Policy/);
   pass('Export HTML writes the offline player');
-  // Exporting again to an existing file asks first: Choose another name keeps it, Replace writes it.
+  // Exporting again to an existing file asks first (Cancel or Replace); Replace writes it.
   {const before=(await fs.stat(path.join(docs,'Smoke.html'))).mtimeMs;await page.locator('.toolbar [data-command="slidesExport"]').click();const d=page.locator('dialog.file-dialog[open]');
     await d.locator('input[type=radio][value="html"]').check();await d.locator('.file-footer .primary:visible').click();
     await d.locator('.file-footer button:visible',{hasText:/Replace|Substituir/}).waitFor();assert.equal((await fs.stat(path.join(docs,'Smoke.html'))).mtimeMs,before);
