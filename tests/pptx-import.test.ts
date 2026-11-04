@@ -9,14 +9,14 @@ const fixture=()=>createRasterPptx([png],'PowerPoint fixture');
 const shape=`<p:sp><p:nvSpPr><p:cNvPr id="3" name="Editable title"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="5486400" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr sz="2400" b="1" i="1"><a:solidFill><a:srgbClr val="123456"/></a:solidFill><a:latin typeface="Arial"/></a:rPr><a:t>PowerPoint &amp; edits</a:t></a:r></a:p></p:txBody></p:sp>`;
 
 test('PPTX importer keeps raster exports as images and does not modify the original package',async()=>{
-  const original=fixture(),result=await importPptx(original,'Imported PowerPoint');
+  const original=fixture(),before=original.slice(),result=await importPptx(original,'Imported PowerPoint');
   validateDeck(result.deck);
   assert.equal(result.deck.slides.length,1);
   assert.equal(result.deck.assets.length,1);
   assert.deepEqual(Buffer.from(result.deck.assets[0].data,'base64'),Buffer.from(png));
   assert.match(result.deck.slides[0].html,/<img data-manual="image"/);
   assert.match(result.deck.slides[0].html,/data-pptx-slide-id="256"/);
-  assert.deepEqual(original,fixture());
+  assert.deepEqual(original,before);
 });
 
 test('PPTX importer creates editable text with positions, rich styles and alignment',async()=>{

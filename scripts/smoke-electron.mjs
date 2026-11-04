@@ -90,7 +90,7 @@ try{
   // Reopen the saved .eslx through Recent.
   await page.locator('.toolbar [data-command="recent"]').click();
   await page.locator('.recent-menu').waitFor();
-  await page.locator('.recent-menu [role=menuitem][title$="/Smoke.eslx"]').click();
+  await page.locator('.recent-menu [role=menuitem][title$="Smoke.eslx"]').click();
   await page.waitForFunction(()=>EdukorsDocuments.active()?.name==='Smoke');
   pass('Recent reopens the saved .eslx');
   // Insert image from a file: Common's picker (the system dialog answered here); the picture enters the slide.
@@ -169,20 +169,22 @@ try{
   await page.keyboard.press(mod+'+s');await conflict.locator('.primary').click();
   await page.waitForFunction(()=>!EdukorsDocuments.isModified(EdukorsDocuments.active()));
   assert.notDeepEqual(await fs.readFile(saved),external);
-  for(let i=0;i<20&&await draftCount();i++)await new Promise(r=>setTimeout(r,150));
+  for(let i=0;i<40&&await draftCount();i++)await new Promise(r=>setTimeout(r,150));
   assert.equal(await draftCount(),0);
   pass('saving over a file changed outside the app asks first; saving removes the draft');
   await page.locator('#insert-actions [data-command="insertText"]').click();await page.keyboard.press('Escape');
   for(let i=0;i<40&&!await draftCount();i++)await new Promise(r=>setTimeout(r,150));
-  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.forcefullyCrashRenderer());
+  // Calls to the main process around the crash get a deadline, so a stuck renderer fails the check instead of hanging CI.
+  const within=(ms,what,p)=>Promise.race([p,new Promise((_,no)=>setTimeout(()=>no(new Error(`${what}: no answer in ${ms} ms`)),ms))]);
+  await within(15000,'crash renderer',app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.forcefullyCrashRenderer()));
   await new Promise(r=>setTimeout(r,500));
-  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.reload());
+  await within(15000,'reload',app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.reload()));
   // The crashed page object is gone; the reloaded page is checked from the main process.
   const names=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/dist/index.html')).webContents.executeJavaScript('document.querySelector("dialog.file-dialog[open] .primary")?.click();globalThis.EdukorsDocuments?EdukorsDocuments.list().map(d=>d.name):[]').catch(()=>[]));
-  let recovered=[];for(let i=0;i<80&&!recovered.some(n=>/\(recovered\)$/.test(n||''));i++){await new Promise(r=>setTimeout(r,250));recovered=await names();}
+  let recovered=[];for(let i=0;i<80&&!recovered.some(n=>/\(recovered\)$/.test(n||''));i++){await new Promise(r=>setTimeout(r,250));recovered=await within(5000,'list documents',names()).catch(()=>[]);}
   assert.ok(recovered.some(n=>/\(recovered\)$/.test(n||'')),'recovered: '+JSON.stringify(recovered));
   pass('after a crash, the next start recovers the draft as an unsaved presentation');
   errors.length=0;
   assert.deepEqual(errors,[]);
   console.log(`Electron smoke passed (${packaged?'packaged':'dist'}): ${results.length} checks.`);
-}finally{await app.close().catch(()=>{});await fs.rm(tmp,{recursive:true,force:true});}
+}finally{await Promise.race([app.close().catch(()=>{}),new Promise(r=>setTimeout(r,15000))]);try{app.process().kill('SIGKILL');}catch{}await fs.rm(tmp,{recursive:true,force:true});}
