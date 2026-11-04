@@ -10,6 +10,9 @@ Versions are now numbered by date (YY.M.D), as in the other Edukors apps.
 - **Interface in five languages:** Portuguese, English, Spanish, Chinese and Hindi (help and terms included). Exported HTML stays in English.
 - **Layouts locked on the slide:** everything that comes from a layout, its texts included, is part of the layout; the slide's own text and objects stay editable.
 - **Faster canvas:** images and fonts are shared between the canvas and thumbnails, and a new slide replaces the previous one only when ready (no flash).
+- **PowerPoint import, much closer to the original:** slide, layout and master backgrounds (color, gradient, picture); the master and layouts become the presentation's base and layouts (pictures on every slide); groups; preset shapes (stars, explosions, arrows, polygons, connectors) and custom shapes as editable shapes; text styles inherited from placeholders and the master; text boxes no longer clip their text when moved.
+- **Large presentations stay fast:** editing no longer re-checks every image or sends the whole file for the draft after each change; saving no longer decodes and recompresses every image (images are stored under their own type), so saving 130 MB takes about half a second instead of several.
+- **"Saving…" and "Exporting…" indicator** (from Edukors Common) appears as soon as Save, Replace or Export is clicked, above the dialog.
 - Drafts and recovery after a crash, a question before saving over a file changed on disk, and resizable side panels.
 - Save As and Export to a file that already exists ask first, with only Cancel or Replace.
 

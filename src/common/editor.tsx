@@ -71,7 +71,10 @@ common.EdukorsAppDocument={
   async draftBytes(doc:CommonDoc){
     const tab=store.get(doc.id);if(!tab)throw Error('The presentation is not open.');
     const deck={...tab.deck,assets:usedAssets(tab.deck)};
-    return desktop()?new Uint8Array(await api.invoke('draftPack',{deck,history:tab.history,conversations:conversationsOf(doc)})):encodeEslx(deck,tab.history,conversationsOf(doc));
+    if(!desktop())return encodeEslx(deck,tab.history,conversationsOf(doc));
+    // Each resource crosses to the main process once (the frames' registry); drafts then carry only their IDs.
+    await registerAssets(deck,deck.assets);
+    return new Uint8Array(await api.invoke('draftPack',{deck:{...deck,assets:deck.assets.map(a=>({...a,data:''}))},history:tab.history,conversations:conversationsOf(doc)}));
   },
   async fromBytes(bytes:Uint8Array):Promise<Content>{const r=await decodeEslx(bytes);return{deck:r.deck,history:r.history,conversations:r.conversations};},
 
@@ -117,16 +120,20 @@ common.EdukorsAiAssistant.configure({
 
 // In the desktop app the slide frames load images and fonts from the frame scheme (registered once per presentation
 // with the main process), so a large presentation does not carry them as base64 into every canvas and thumbnail.
-if(desktop()){
-  const registered=new Set<string>();let batch:Map<string,any[]>|null=null;
-  setAssetUrl((deck,asset)=>{
-    const key=deck.id+'/'+asset.id;
-    if(!registered.has(key)){registered.add(key);
-      if(!batch){batch=new Map();queueMicrotask(()=>{const b=batch!;batch=null;for(const [deckId,list] of b)void api.invoke('registerAssets',deckId,list).catch(()=>{});});}
-      const list=batch.get(deck.id)||[];list.push({id:asset.id,mime:asset.mime,data:asset.data});batch.set(deck.id,list);}
-    return`esf-frame://preview/asset/${deck.id}/${asset.id}`;
-  });
+// Resources registered in one task go together in one call per presentation.
+const registered=new Map<string,Promise<unknown>>();let batch:Map<string,{list:any[];done:Promise<unknown>}>|null=null;
+function registerAssets(deck:Deck,assets:Asset[]){
+  return Promise.all(assets.map(asset=>{
+    const key=deck.id+'/'+asset.id,known=registered.get(key);if(known)return known;
+    const open=batch||(batch=new Map());if(open.size===0)queueMicrotask(()=>{batch=null;});
+    let entry=open.get(deck.id);
+    if(!entry){const list:any[]=[];entry={list,done:Promise.resolve().then(()=>api.invoke('registerAssets',deck.id,list))};open.set(deck.id,entry);}
+    entry.list.push({id:asset.id,mime:asset.mime,data:asset.data});registered.set(key,entry.done);
+    entry.done.catch(()=>registered.delete(key));
+    return entry.done;
+  }));
 }
+if(desktop())setAssetUrl((deck,asset)=>{void registerAssets(deck,[asset]).catch(()=>{});return`esf-frame://preview/asset/${deck.id}/${asset.id}`;});
 // ---------- Shell slots ----------
 // Places in Common's shell where the editor renders (React portals); created once.
 function slot(tag:string,className:string,place:(el:HTMLElement)=>void){const el=document.createElement(tag);el.className=className;place(el);return el;}

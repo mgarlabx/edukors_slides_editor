@@ -136,8 +136,11 @@ handle('revealOutput',async(_e,file:string)=>{if(!outputs.has(file))throw Error(
 
 // Drafts of unsaved presentations are Common's; Slides only packs them here, so typing and dragging never wait for the
 // compression of large images in the page.
+// Resources the page already registered for the frames arrive without data and are taken from that registry.
 handle('draftPack',async(_e,content:{deck:Deck;history?:Uint8Array;conversations?:unknown[]})=>{
-  validateDeck(content?.deck);return encodeEslx(content.deck,content.history instanceof Uint8Array?content.history:undefined,Array.isArray(content.conversations)?content.conversations:[]);
+  const deck=content?.deck;validateDeck(deck);
+  const bytesOf=(asset:Deck['assets'][number])=>{if(asset.data)return;const found=served.get(deck.id+'/'+asset.id);if(!found||found.mime!==asset.mime)throw Error('Missing resource: '+asset.id);return new Uint8Array(found.bytes.buffer,found.bytes.byteOffset,found.bytes.byteLength);};
+  return encodeEslx(deck,content.history instanceof Uint8Array?content.history:undefined,Array.isArray(content.conversations)?content.conversations:[],bytesOf);
 });
 
 // Templates: Blank is built in; the others are presentations saved as templates (template.eslx + template.json), kept

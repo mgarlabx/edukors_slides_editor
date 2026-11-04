@@ -39,7 +39,7 @@ test('ESLX is a single OPC package that survives copy, move and reopen',async()=
   assert.deepEqual(await fs.readdir(dir),['Apresentação com acentos.eslx'],'one visible file, nothing next to it');
   assert.equal((await fs.readFile(saved.path)).subarray(0,4).toString('latin1'),'PK\x03\x04');
   const names=await entries(saved.path);
-  for(const n of ['[Content_Types].xml','_rels/.rels','slides/presentation.json','slides/media/asset1.bin','slides/ai/legacy-conversations.json'])assert.ok(names.includes(n),n);
+  for(const n of ['[Content_Types].xml','_rels/.rels','slides/presentation.json','slides/media/asset1.png','slides/ai/legacy-conversations.json'])assert.ok(names.includes(n),n);
   for(const n of ['.edukors/lock','research/notas.md','images/asset-old.png'])assert.ok(!names.includes(n),n+' stays out: internal state, auxiliary files and unused images');
   assert.deepEqual(saved.deck.assets.map(x=>x.id),['asset-image'],'the saved deck drops the unused image');
   const other=await fixture(),copy=path.join(other,'Cópia movida.eslx');await fs.copyFile(saved.path,copy);await store.close(a.deck.id);await fs.rm(saved.path);
@@ -416,6 +416,18 @@ test('ESLX uses Common OPC and preserves rich slides, binary assets and legacy h
   assert.equal((await readDeck(file)).title,'Edited ESLX');
 });
 
+test('ESLX stores images under their type without compressing them again, and older .bin parts still open',async()=>{
+  const {encodeEslx,decodeEslx}=await import('../src/main/eslx');
+  const deck=newDeck('Stored media'),png=Buffer.alloc(4096);for(let i=0;i<png.length;i++)png[i]=(i*7919)%251;
+  deck.assets.push({id:'asset-photo',name:'photo.png',mime:'image/png',data:png.toString('base64')});
+  deck.slides[0].html='<section class="slide"><img src="asset:asset-photo"></section>';
+  const bytes=Buffer.from(await encodeEslx(deck)),name='slides/media/asset1.png',at=bytes.indexOf(Buffer.from(name));
+  assert.ok(at>=30);assert.equal(bytes.readUInt16LE(at-30+8),0,'the image is stored, not deflated');
+  assert.deepEqual((await decodeEslx(bytes)).deck,deck);
+  const entries=unzipSync(bytes),rename=(x:string)=>x.split('asset1.png').join('asset1.bin').split('Extension="png"').join('Extension="bin"');
+  const old:Record<string,Uint8Array>={};for(const [k,v] of Object.entries(entries))old[rename(k)]=k.endsWith('.rels')||k.endsWith('.xml')||k.endsWith('.json')?strToU8(rename(strFromU8(v))):v;
+  assert.deepEqual((await decodeEslx(zipSync(old))).deck,deck);
+});
 test('ESLX rejects unknown schemas and missing resource relationships without changing the source',async()=>{
   const {encodeEslx,decodeEslx}=await import('../src/main/eslx');
   const deck=newDeck('Resources');

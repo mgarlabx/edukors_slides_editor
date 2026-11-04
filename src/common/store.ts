@@ -27,7 +27,7 @@ export class Store {
   has(doc:number){return this.tabs.has(doc);}
   list(){return[...this.tabs.values()];}
   add(doc:number,deck:Deck,{history,saved=false}:{history?:Uint8Array;saved?:boolean}={}){
-    const synced=syncLayouts(null,structuredClone(deck));validateDeck(synced);
+    const synced=syncLayouts(null,copy(deck));validateDeck(synced);
     this.tabs.set(doc,{doc,deck:synced,selected:[synced.slides[0].id],past:[],future:[],version:0,savedVersion:saved?0:-1,masterView:null,history});
     this.emit(doc);return this.tabs.get(doc)!;
   }

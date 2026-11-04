@@ -107,6 +107,9 @@ export function usedAssets(d:Deck){
   const refs=new Set([...[...d.slides.flatMap(s=>[s.html,s.css,s.script,s.staticHtml]),...d.masters.flatMap(m=>[m.html,m.css]),...d.layouts.flatMap(l=>[l.html,l.css||''])].join('\n').matchAll(/asset:([\w-]+)/g)].map(m=>m[1]));
   return d.assets.filter(a=>refs.has(a.id));
 }
+// Resources never change in place (copies share them), so each asset object is checked once: scanning hundreds of MB of
+// base64 on every edit made large presentations slow.
+const checkedAssets=new WeakSet<object>();
 export function validateDeck(value:unknown):asserts value is Deck {
   const d=value as Deck;
   if(!d||d.format!=='edukors-slides'||d.schemaVersion!==3||d.runtimeVersion!==1) throw Error('Unsupported ESF version.');
@@ -151,15 +154,18 @@ export function validateDeck(value:unknown):asserts value is Deck {
   const missing=d.slides.find(s=>!layoutIds.has(s.layoutId));if(missing)throw Error(`Slide ${missing.id} uses a layout that does not exist: ${missing.layoutId}`);
   if(!Array.isArray(d.assets)||d.assets.length>2000)throw Error('Invalid assets.');
   const assetIds=new Set<string>();
+  let assetBytes=0;
   for(const a of d.assets){
     if(!a||!/^asset-[\w-]+$/.test(a.id)||assetIds.has(a.id))throw Error('Invalid asset ID.');
-    assetIds.add(a.id);
+    assetIds.add(a.id);assetBytes+=(typeof a.data==='string'?a.data.length:0)+(typeof a.name==='string'?a.name.length:0)+120;
+    if(checkedAssets.has(a))continue;
     if(typeof a.name!=='string'||!/^image\/(?:png|jpeg|webp|gif|svg\+xml|avif)$|^font\/(?:woff2?|ttf|otf)$/.test(a.mime)||typeof a.data!=='string'||!/^[A-Za-z0-9+/]*={0,2}$/.test(a.data)||a.data.length>80_000_000)throw Error('Invalid asset.');
+    checkedAssets.add(a);
   }
   for(const s of [...d.slides,...d.masters.map(m=>({html:m.html,css:m.css,script:'',staticHtml:''})),{html:d.layouts.map(l=>l.html).join('\n'),css:d.layouts.map(l=>l.css||'').join('\n'),script:'',staticHtml:''}]){
     const external=unresolvedReference(s.html+'\n'+s.css+'\n'+s.staticHtml);if(external)throw Error(`Presentation references a resource that is not embedded: ${external.slice(0,200)}`);
     const refs=[s.html,s.css,s.script,s.staticHtml].join('\n').matchAll(/asset:([\w-]+)/g);
     for(const m of refs)if(!assetIds.has(m[1]))throw Error(`Missing resource: ${m[1]}`);
   }
-  if(JSON.stringify(d).length>200_000_000)throw Error('Project exceeds 200 MB.');
+  if(JSON.stringify({...d,assets:[]}).length+assetBytes>200_000_000)throw Error('Project exceeds 200 MB.');
 }

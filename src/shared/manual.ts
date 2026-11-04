@@ -28,7 +28,10 @@ export function setShape(slide:Slide,index:number,change:Partial<ShapeLook>){ret
   if(el.dataset.manual!=='shape')return;const look={...shapeLook(el),...change};
   if(!(shapeTypes as readonly string[]).includes(look.type))return;
   look.fill=color(look.fill==='transparent'?'none':look.fill)||'none';look.stroke=color(look.stroke)||'#2f4fd0';look.width=Math.max(0,Math.min(64,Number(look.width)||0));
-  el.dataset.shape=look.type;el.innerHTML=shapeSvg(look);
+  // Imported outlines (PowerPoint stars, explosions, custom paths) keep their geometry: only the paint of their parts changes.
+  const own=!(shapeTypes as readonly string[]).includes(el.dataset.shape||'')&&!change.type&&el.querySelector('[data-shape-part]');
+  if(own){for(const part of el.querySelectorAll<SVGElement>('[data-shape-part]')){if(change.fill!==undefined)part.style.fill=look.fill;if(change.stroke!==undefined||change.width!==undefined){part.style.stroke=look.width?look.stroke:'none';part.style.strokeWidth=look.width+'px';}}}
+  else{el.dataset.shape=look.type;el.innerHTML=shapeSvg(look);}
   if(change.shadow!==undefined){if(look.shadow)el.style.filter=shapeShadow;else el.style.removeProperty('filter');}
 });}
 // A link's text is its <a>: font, color and weight are set there (its box keeps the alignment).
