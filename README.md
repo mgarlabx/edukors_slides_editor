@@ -29,6 +29,25 @@
 
 [Edukors.org](https://edukors.org) is a project of open tools for teaching and learning. The Slides Editor is its presentation editor: made for teachers and speakers who want rich, interactive slides without depending on an online service or a heavy office suite.
 
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>📝 <a href="https://github.com/mgarlabx/edukors_text_editor">Text Editor</a></h3>
+      For documents laid out like Word's, opening and saving DOCX, Markdown, text and PDF.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🎞️ Slides Editor</h3>
+      <strong>This app</strong>, for presentations, exported as a single HTML file that opens offline.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🗺️ <a href="https://github.com/mgarlabx/edukors_graph_editor">Graph Editor</a></h3>
+      For adaptive courses in the <a href="https://github.com/mgarlabx/edukors_graph">Edukors Graph</a> format.
+    </td>
+  </tr>
+</table>
+
+### One presentation, one file
+
 A presentation is a set of small web pages, one per slide, sharing a common look. The editor saves it in a single `.esf` file, and exports it as **one self-contained HTML file**: everything it needs (text, images, fonts, animations, presenter tools) travels inside it, so it opens offline, in any current browser, on any computer.
 
 <table>
