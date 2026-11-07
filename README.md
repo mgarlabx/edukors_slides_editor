@@ -29,6 +29,8 @@
 
 [Edukors.org](https://edukors.org) is a project of open tools for teaching and learning. The Slides Editor is its presentation editor: made for teachers and speakers who want rich, interactive slides without depending on an online service or a heavy office suite.
 
+The Edukors editors form a **suite of three free apps** for teachers, each for one kind of material: **documents**, **presentations** and **adaptive courses**. They run on your computer, are installed separately, and share the AI accounts you connect, so signing in once serves all three.
+
 <table>
   <tr>
     <td width="33%" valign="top">
