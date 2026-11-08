@@ -56,6 +56,14 @@ try{
   await page.keyboard.press('Escape');
   await page.waitForFunction(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);return/Headless text edit/.test(c.deck.slides[0].html)&&/<(b|strong)\b/.test(c.deck.slides[0].html);});
   assert.equal(await page.evaluate(()=>EdukorsDocuments.active().modified),true);
+  // Pasting copied text into a text keeps its font, size and color (not the page markup around it).
+  await canvas.locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(400);
+  await canvas.locator('p b').dblclick();await canvas.locator('[contenteditable]').waitFor();
+  await canvas.locator('[contenteditable]').evaluate(p=>{const r=document.createRange();r.selectNodeContents(p);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);
+    const data=new DataTransfer();data.setData('text/html','<meta charset="utf-8"><div style="text-align:center"><span style="font-family: Georgia; font-size: 20px; color: rgb(255, 0, 0); position: absolute">Pasted look</span></div>');data.setData('text/plain','Pasted look');
+    document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);const h=c.deck.slides[0].html;return/Pasted look/.test(h)&&/Georgia[^>]*>Pasted look|font-size: 20px[^>]*>Pasted look/.test(h)&&!/position: absolute[^>]*>Pasted/.test(h);});
   // The object menu (right click on the canvas) closes on a click inside the canvas, which never reaches the page.
   {const box=await page.locator('#document-placeholder iframe:not(.preview-stale)').boundingBox();
     await page.waitForTimeout(300);await canvas.locator('p').click({button:'right'});
@@ -107,6 +115,18 @@ try{
   for(const label of ['Align top','Align left','Distribute horizontally','Cut','Duplicate'])assert.equal(await page.locator('.context-menu [role=menuitem]',{hasText:label}).count(),1,label);
   await page.locator('.context-menu [role=menuitem]',{hasText:'Align left'}).click();
   await page.waitForFunction(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);return(c.deck.slides[0].html.match(/translate:/g)||[]).length>=1;});
+  // Several objects resize together from the group's handles (two stars; the bold text is inline and has no box).
+  {await canvas.locator('[data-shape="star"]').click({button:'right'});await page.locator('.context-menu [role=menuitem]',{hasText:'Duplicate'}).click();
+    await page.waitForFunction(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);return(c.deck.slides[0].html.match(/data-shape="star"/g)||[]).length===2;});
+    const stars=canvas.locator('[data-shape="star"]'),widths=()=>stars.evaluateAll(list=>list.map(e=>e.getBoundingClientRect().width));
+    await canvas.locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    await page.evaluate(()=>document.querySelector('#document-placeholder iframe:not(.preview-stale)').contentWindow.postMessage({app:'esf-editor-command',type:'selectAll'},'*'));
+    const handle=canvas.locator('[data-esf-ui="resize"][data-corner="se"]');await handle.waitFor();await page.waitForTimeout(200);
+    const before=await widths(),html=await html0(),h=await handle.boundingBox();
+    await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+60,h.y+h.height/2+30,{steps:6});await page.mouse.up();
+    await page.waitForFunction(async previous=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);return c.deck.slides[0].html!==previous;},html);
+    await canvas.locator('html[data-esf-ready=true]').waitFor();
+    const after=await widths();assert.equal(after.length,2);before.forEach((w,i)=>assert.ok(after[i]>w*1.05,`star ${i} resized with the group (${w} → ${after[i]})`));}
   await page.keyboard.press('Escape');
   // The slide list (Common's left panel): new slide through the layout picker, duplicate, delete, undo.
   if(await page.locator('.toolbar [data-command="sidebar"]').getAttribute('aria-pressed')!=='true')await page.locator('.toolbar [data-command="sidebar"]').click();
@@ -129,6 +149,12 @@ try{
   assert.equal(await rail.locator('.slide-item').count(),3);
   await page.keyboard.press('Delete');
   assert.equal(await rail.locator('.slide-item').count(),2);
+  // Text selected on the page (an assistant message) is copied as text, not as the selected slides.
+  await page.evaluate(()=>{const p=document.createElement('p');p.id='copy-probe';p.textContent='Text from the assistant';document.body.append(p);getSelection().selectAllChildren(p);});
+  await page.keyboard.press(mod+'+c');await page.keyboard.press(mod+'+v');await page.waitForTimeout(200);
+  assert.equal(await rail.locator('.slide-item').count(),2,'copying page text did not copy slides');
+  await page.evaluate(()=>{getSelection().removeAllRanges();document.getElementById('copy-probe').remove();});
+  await rail.locator('.slide-item button').nth(1).click();
   assert.equal((await page.locator('.notes-bar label').innerText()).trim(),'','notes have no label');
   await page.locator('.notes-bar textarea').fill('Presenter notes in Common');
   assert.equal((await content(page)).deck.slides[1].notes,'Presenter notes in Common');
@@ -139,7 +165,14 @@ try{
   await master.locator('.master-tabs [role=tab]').first().click();
   await master.locator('.rail-tools button').first().click();
   assert.equal(await master.locator('.slide-item').count(),2);
-  await master.locator('.master-activate').nth(1).click();
+  // The base selected in the panel is the active (checked) one: a new base, a click on another base.
+  {const c=(await content(page)).deck;assert.equal(c.activeMaster,c.masters[1].id);}
+  assert.equal(await master.locator('.master-activate').nth(1).getAttribute('aria-pressed'),'true');
+  await master.locator('.master-preview').first().click();
+  {const c=(await content(page)).deck;assert.equal(c.activeMaster,c.masters[0].id);}
+  assert.equal(await master.locator('.master-activate').first().getAttribute('aria-pressed'),'true');
+  await master.locator('.master-preview').nth(1).click();
+  assert.equal(await master.locator('.master-activate').first().isVisible(),false,'only the active base shows its badge');
   const c1=(await content(page)).deck;assert.equal(c1.activeMaster,c1.masters[1].id);
   await master.locator('.rail-tools button[aria-label="Duplicate"]').click();
   assert.equal(await master.locator('.slide-item').count(),3);

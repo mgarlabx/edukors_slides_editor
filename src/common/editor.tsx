@@ -107,15 +107,28 @@ document.addEventListener('edukors:document-saved',((event:CustomEvent)=>{
 // A document Common creates by itself (its own New, without the gallery) starts as a blank presentation.
 function ensureTabs(){
   const ids=new Set(docs().map(d=>d.id));
-  for(const tab of store.list())if(!ids.has(tab.doc))store.remove(tab.doc);
+  for(const tab of store.list())if(!ids.has(tab.doc)){store.remove(tab.doc);void api.invoke('presentClose',tab.doc).catch(()=>{});}
   for(const doc of docs())if(!store.has(doc.id))store.add(doc.id,newDeck(doc.name||translator(language())('untitled'),defaultNames[language()]),{saved:true});
 }
+// read_image: the page draws the image (SVG and AVIF included) and scales it to 1568 px at most on its longer side, the
+// size models read best; small PNG, JPEG, GIF and WebP go as they are.
+async function imageForModel(asset:Asset){
+  const bytes=Uint8Array.from(atob(asset.data),c=>c.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:asset.mime}));
+  try{
+    const img=new Image();img.src=url;await img.decode();
+    const w=img.naturalWidth||1920,h=img.naturalHeight||1080,k=Math.min(1,1568/Math.max(w,h));
+    if(k===1&&['image/png','image/jpeg','image/gif','image/webp'].includes(asset.mime)&&asset.data.length<=4_500_000)return{mimeType:asset.mime,data:asset.data,width:w,height:h};
+    const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*k));c.height=Math.max(1,Math.round(h*k));c.getContext('2d')!.drawImage(img,0,0,c.width,c.height);
+    let out=c.toDataURL(asset.mime==='image/jpeg'?'image/jpeg':'image/png',.85);if(out.length>4_500_000)out=c.toDataURL('image/jpeg',.8);
+    return{mimeType:out.slice(5,out.indexOf(';')),data:out.slice(out.indexOf(',')+1),width:c.width,height:c.height};
+  }finally{URL.revokeObjectURL(url);}
+}
 common.EdukorsAiAssistant.configure({
-  instructions:'You are the assistant of Edukors Slides Editor, a presentation editor whose slides are small HTML/CSS/JS documents (16:9, 1920×1080 design size) that inherit a base (master) and a layout. Work only on the presentation of this conversation, only through its tools: read_document returns the slides, bases and layouts with the revision; apply_changes changes them (pass that revision as expectedRevision; send only what changes; never delete slides; never add interactive questions). Images you need come in with import_image and are referenced as asset:ID; no other external resource (https URLs, CDN fonts or scripts) works in the exported file. Each request carries the selected slides, the index of all slides and what the person is looking at; follow documentInstructions when present. Respond briefly, in the language of the request.',
+  instructions:'You are the assistant of Edukors Slides Editor, a presentation editor whose slides are small HTML/CSS/JS documents (16:9, 1920×1080 design size) that inherit a base (master) and a layout. Work only on the presentation of this conversation, only through its tools: read_document returns the slides, bases and layouts with the revision; apply_changes changes them (pass that revision as expectedRevision; send only what changes; never delete slides; never add interactive questions). Images you need come in with import_image and are referenced as asset:ID (read_image shows you an image already in the presentation); no other external resource (https URLs, CDN fonts or scripts) works in the exported file. Each request carries the selected slides, the index of all slides and what the person is looking at; follow documentInstructions when present. Respond briefly, in the language of the request.',
   documentId:(doc:CommonDoc)=>`slides-${doc.id}`,
   // No documentPath: the agent works in Common's private folder for this document, never in the folder of the file.
   context:(doc:CommonDoc)=>assistantContext(store,doc.id),
-  tools:createSlidesTools(store,desktop()?{downloadImage:url=>api.invoke('downloadImage',url)}:{})
+  tools:createSlidesTools(store,{showImage:imageForModel,...desktop()?{downloadImage:(url:string)=>api.invoke('downloadImage',url)}:{}})
 });
 
 // In the desktop app the slide frames load images and fonts from the frame scheme (registered once per presentation
@@ -229,7 +242,10 @@ function Editor(){
   function changeLayout(layoutId:string){if(!deck||!tab)return;const layout=layoutOf(deck,layoutId);setLayoutPick(null);if(deck.slides.some(s=>tab.selected.includes(s.id)&&s.layoutId!==layoutId))mutate(d=>{d.slides=d.slides.map(s=>tab.selected.includes(s.id)&&s.layoutId!==layoutId?relayout(s,layout):s);});}
   // Slide master view: bases and layouts are added, renamed and deleted there; at least one of each remains. A new base
   // is only a new main slide (the layouts are shared); the person chooses which base is active.
-  function addMasterItem(){if(!deck)return;const m=newMaster(`${t('masterName')} ${deck.masters.length+1}`);mutate(d=>{d.masters.push(m);});setMasterView('m:'+m.id);}
+  function addMasterItem(){if(!deck)return;const m=newMaster(`${t('masterName')} ${deck.masters.length+1}`);mutate(d=>{d.masters.push(m);d.activeMaster=m.id;d.layouts.forEach(l=>delete l.masterId);});setMasterView('m:'+m.id);}
+  // The base selected in the panel is the active one (checked): choosing a base activates it.
+  function pickMasterItem(item:string){setMasterView(item);if(item.startsWith('m:'))activateMaster(item.slice(2));}
+  const activatePasted=(d:Deck,item:string|undefined)=>{if(item?.startsWith('m:')){d.activeMaster=item.slice(2);d.layouts.forEach(l=>delete l.masterId);}};
   function activateMaster(id:string){if(!deck||id===deck.activeMaster&&!deck.layouts.some(l=>l.masterId))return;mutate(d=>{d.activeMaster=id;d.layouts.forEach(l=>delete l.masterId);});}
   function addLayoutItem(){if(!deck)return;const l={id:uid('l'),name:`${t('layoutName')} ${deck.layouts.length+1}`,html:blankHtml};
     mutate(d=>{const at=d.layouts.findIndex(x=>'l:'+x.id===masterItem);d.layouts.splice(at<0?d.layouts.length:at+1,0,l);});setMasterView('l:'+l.id);}
@@ -248,7 +264,7 @@ function Editor(){
     mutate(d=>{d.layouts=d.layouts.filter(l=>l.id!==id);d.slides=d.slides.map(s=>s.layoutId===id?relayout(s,layoutOf(d,to)):s);});setMasterView('l:'+to);
   }
   function moveMasterItem(direction:number){if(!masterItem)return;const id=masterItem.slice(2),bases=masterItem.startsWith('m:');mutate(d=>{const list:{id:string}[]=bases?d.masters:d.layouts,i=list.findIndex(x=>x.id===id),to=i+direction;if(i<0||to<0||to>=list.length)return;const [x]=list.splice(i,1);list.splice(to,0,x);});}
-  function duplicateMasterItem(){if(masterItem)mutate(d=>{setMasterView(pasteMasterItems(d,copyMasterItem(d,masterItem))[0]);});}
+  function duplicateMasterItem(){if(masterItem)mutate(d=>{const item=pasteMasterItems(d,copyMasterItem(d,masterItem))[0];activatePasted(d,item);setMasterView(item);});}
   function deleteSlides(){if(!deck||!tab)return;if(deck.slides.length===tab.selected.length){notice(t('deleteLast'));return;}const last=Math.max(...tab.selected.map(id=>deck.slides.findIndex(s=>s.id===id))),next=deck.slides.filter(s=>!tab.selected.includes(s.id));railScroll.current=railRef.current?.scrollTop??null;mutate(d=>{d.slides=next;},[(deck.slides[last+1]||next.at(-1)!).id]);}
   function toggleMaster(){setMasterView(v=>v?null:deck&&slide?'l:'+layoutOf(deck,slide.layoutId).id:null);setLayoutPick(null);setRenaming(null);}
   function selectMasterTab(value:'bases'|'layouts'){if(!deck||value===masterTab)return;setRenaming(null);setMasterView(value==='bases'?'m:'+deck.activeMaster:'l:'+layoutOf(deck,slide?.layoutId||'').id);}
@@ -331,7 +347,7 @@ function Editor(){
   }
   async function paste(payload?:any){
     if(!deck||!slide)return;const p=payload||await api.invoke('clipboardRead');if(!p)return;
-    if(p.format==='esf-objects'){pasteObjects(p);return;}if(masterItem){mutate(d=>{const items=pasteMasterItems(d,p);if(items[0])setMasterView(items[0]);});return;}
+    if(p.format==='esf-objects'){pasteObjects(p);return;}if(masterItem){mutate(d=>{const items=pasteMasterItems(d,p);activatePasted(d,items[0]);if(items[0])setMasterView(items[0]);});return;}
     mutate(d=>pasteSlides(d,p,slide.id).map(s=>s.id));
   }
   // The slide list toolbar pastes slides, bases or layouts, never canvas objects.
@@ -422,7 +438,7 @@ function Editor(){
     const out=output as {path:string;fonts?:{missing?:string[]}};(doc as any).lastExport=out.path;
     common.EdukorsFileDialogs.toast({t:commonT,message:out.fonts?.missing?.length?t('fontsMissing')+' '+out.fonts.missing.join(', '):commonT('exportedToast').replace('{name}',String(out.path).split(/[\\/]/).at(-1)),action:{label:commonT('reveal'),onClick:()=>void api.invoke('revealOutput',out.path)}});
   }
-  const present=()=>{if(deck&&slide)void run(()=>api.invoke('present',deck,Math.max(0,deck.slides.indexOf(slide)),lang));};
+  const present=()=>{if(deck&&slide)void run(()=>api.invoke('present',deck,Math.max(0,deck.slides.indexOf(slide)),lang,active));};
   const canvasEditing=()=>canvasSel.current.editing&&canvasSel.current.slide===editSlide?.id;
   const deleteSelection=()=>{if(canvasEditing())return;if(selModeRef.current==='slides'){if(masterItem)deleteMasterItem();else deleteSlides();return;}const sel=canvasSel.current;if(sel.slide===editSlide?.id&&sel.indices.length)canvasEdit?.onOps(sel.indices.map(index=>({type:'delete',index})),[],false);};
   function shapeMenu(box:DOMRect){common.EdukorsShapes.pick({x:box.left,y:box.bottom+4,t:commonT,onPick:(type:string)=>addManual('shape',type),restoreFocus:shellButton('insertShape')});}
@@ -431,12 +447,14 @@ function Editor(){
     if(name.startsWith('insertShapeMenu:')){if(tab)shapeMenu(JSON.parse(name.slice(16)));return;}
     if(!tab||!deck||!slide||active===null)return;
     const typing=!!(document.activeElement as Element|null)?.closest('input,textarea,select,[contenteditable]');
+    // Text selected on the page (the assistant's messages, help…) is copied as text, not as slides or objects.
+    const pageText=()=>{const s=document.getSelection();return !!s&&!s.isCollapsed&&!!s.toString().trim()&&!(document.activeElement instanceof HTMLIFrameElement);};
     if(name==='undo'||name==='redo'){if(canvasEditing()){void api.invoke('nativeEdit',name);return;}if(typing){document.execCommand(name);return;}store.undo(active,name==='redo');return;}
     // ⌘A: text fields and text being edited keep the native select all; otherwise the slide list or the canvas objects.
     if(name==='selectAll'){if(typing||canvasEditing()){void api.invoke('nativeEdit','selectAll');return;}if(selModeRef.current==='slides'&&!masterItem){updateTab(active,x=>({...x,selected:[slide.id,...deck.slides.map(s=>s.id).filter(id=>id!==slide.id)]}));return;}frameCommand({type:'selectAll'});return;}
     // Copy, cut and paste follow the selection mode: slides (or the master item) from the list, objects from the canvas.
     if(name==='copy'||name==='cut'||name==='paste'){
-      if(typing||canvasEditing()){void api.invoke('nativeEdit',name);return;}
+      if(typing||canvasEditing()||name!=='paste'&&pageText()){void api.invoke('nativeEdit',name);return;}
       if(name==='paste'){void run(async()=>{const p=await api.invoke('clipboardRead');if(p)await paste(p);else if(selModeRef.current==='canvas'){const asset=await api.invoke('clipboardImage') as Asset|null;if(asset)addManual('image','asset:'+asset.id,asset);}});return;}
       if(selModeRef.current==='slides'){void run(()=>copy(name==='cut'));return;}
       void run(async()=>{await copyObjects(name==='cut');});return;
@@ -470,7 +488,7 @@ function Editor(){
       // With canvas objects selected, arrows move them and ⌘+arrows resize them, even with the keyboard outside the frame.
       if(e.key.startsWith('Arrow')&&selModeRef.current==='canvas'){const sel=canvasSel.current;if(sel.slide===editSlide?.id&&!sel.editing&&sel.indices.length){e.preventDefault();frameCommand({type:'arrow',key:e.key,shift:e.shiftKey,meta:e.metaKey||e.ctrlKey});return;}}
       if((e.target as Element)?.closest?.('.toolbar,.document-tabs,#assistant-panel-side'))return;
-      if(masterItem&&['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const items=visibleMasterItems,i=items.indexOf(masterItem),to=e.key==='Home'?0:e.key==='End'?items.length-1:i+(e.key==='ArrowDown'?1:-1);if(items[to])setMasterView(items[to]);return;}
+      if(masterItem&&['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const items=visibleMasterItems,i=items.indexOf(masterItem),to=e.key==='Home'?0:e.key==='End'?items.length-1:i+(e.key==='ArrowDown'?1:-1);if(items[to])pickMasterItem(items[to]);return;}
       if((e.key==='ArrowDown'||e.key==='ArrowUp')&&mod){e.preventDefault();move(e.key==='ArrowDown'?1:-1);return;}
       if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const i=deck.slides.indexOf(slide)+(e.key==='ArrowDown'?1:-1);if(deck.slides[i])selectSlide(deck.slides[i].id);}
       if(e.key==='Home'||e.key==='End'){e.preventDefault();selectSlide(deck.slides[e.key==='Home'?0:deck.slides.length-1].id);}
@@ -597,8 +615,8 @@ function Editor(){
       <ToolButton icon="graph-Trash" label={masterItem?t(bases?'deleteMaster':'deleteLayout'):t('remove')} keys="⌫" className="tool-delete" disabled={last} onClick={masterItem?deleteMasterItem:deleteSlides}/>
     </div>;})();
   const rail=tab&&deck&&slide&&(masterItem?<div className="slide-rail master-rail" onPointerDown={toSlides} onFocus={toSlides} aria-label={t('editMaster')}>{railTools}<div className="rail-caption"><span>{t('editMaster')}</span><ToolButton icon="graph-Close" label={t('closeMaster')} onClick={toggleMaster}/></div>
-      <div className="master-tabs" role="tablist" aria-label={t('editMaster')}>{(['bases','layouts'] as const).map(value=><button key={value} id={'master-tab-'+value} type="button" role="tab" aria-selected={masterTab===value} aria-controls="master-items" tabIndex={masterTab===value?0:-1} onClick={()=>selectMasterTab(value)} onKeyDown={e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();e.stopPropagation();const next=e.key==='Home'?'bases':e.key==='End'?'layouts':value==='bases'?'layouts':'bases';selectMasterTab(next);document.getElementById('master-tab-'+next)?.focus();}}}>{t(value==='bases'?'basesCaption':'layoutsCaption')}</button>)}</div>
-      <div className="slide-list" id="master-items" role="tabpanel" aria-labelledby={'master-tab-'+masterTab} ref={railRef}>{visibleMasterItems.map(item=>{const label=itemName(deck,item),isMaster=item.startsWith('m:'),isActive=item==='m:'+deck.activeMaster;return <div key={item} className={'slide-item '+(isMaster?'master-item':'layout-item')+(item===masterItem?' selected':'')+(isActive?' active-master':'')}><button className="master-preview" onClick={()=>setMasterView(item)} onDoubleClick={()=>setRenaming(item)} aria-label={label+(isActive?` (${t('activeMasterBadge')})`:'')} title={label}><LazyPreview deck={masterDeck(deck,item)} slide={masterSlide(deck,item)}/></button>
+      <div className="master-tabs" role="tablist" aria-label={t('editMaster')}>{(['bases','layouts'] as const).map(value=><button key={value} id={'master-tab-'+value} type="button" className="master-tab" role="tab" aria-selected={masterTab===value} aria-controls="master-items" tabIndex={masterTab===value?0:-1} onClick={()=>selectMasterTab(value)} onKeyDown={e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();e.stopPropagation();const next=e.key==='Home'?'bases':e.key==='End'?'layouts':value==='bases'?'layouts':'bases';selectMasterTab(next);document.getElementById('master-tab-'+next)?.focus();}}}>{t(value==='bases'?'basesCaption':'layoutsCaption')}</button>)}</div>
+      <div className="slide-list" id="master-items" role="tabpanel" aria-labelledby={'master-tab-'+masterTab} ref={railRef}>{visibleMasterItems.map(item=>{const label=itemName(deck,item),isMaster=item.startsWith('m:'),isActive=item==='m:'+deck.activeMaster;return <div key={item} className={'slide-item '+(isMaster?'master-item':'layout-item')+(item===masterItem?' selected':'')+(isActive?' active-master':'')}><button className="master-preview" onClick={()=>pickMasterItem(item)} onDoubleClick={()=>setRenaming(item)} aria-label={label+(isActive?` (${t('activeMasterBadge')})`:'')} title={label}><LazyPreview deck={masterDeck(deck,item)} slide={masterSlide(deck,item)}/></button>
         <div className="master-item-caption">{renaming===item?<input className="item-name" autoFocus defaultValue={label} maxLength={200} aria-label={t('renameItem')} onBlur={e=>renameItem(item,e.target.value)} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.stopPropagation();e.currentTarget.value=label;e.currentTarget.blur();}}}/>:<span className="item-name" title={label} onDoubleClick={()=>setRenaming(item)}>{label}</span>}{isMaster&&<button type="button" className="master-activate" aria-label={`${t('activateMaster')}: ${label}`} title={`${t('activateMaster')}: ${label}`} aria-pressed={isActive} onClick={()=>activateMaster(item.slice(2))}><span className="slides-contents" dangerouslySetInnerHTML={{__html:commonIcon('graph-Check',16)}}/></button>}</div></div>;})}</div></div>
     :<div className={'slide-rail'+(selMode==='canvas'?' inactive':'')} aria-label={t('slidePanel')} onPointerDown={toSlides} onFocus={toSlides}>{railTools}<div className="rail-caption"><span>{t('slides')}</span><span>{deck.slides.length}</span></div><div className="slide-list" ref={railRef}>{deck.slides.map((s,index)=><div key={s.id} data-id={s.id} draggable onDragStart={e=>e.dataTransfer.setData('text/esf-slide',s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData('text/esf-slide');if(!id||id===s.id)return;mutate(d=>{const from=d.slides.findIndex(x=>x.id===id);if(from<0)return;const [moved]=d.slides.splice(from,1);d.slides.splice(d.slides.findIndex(x=>x.id===s.id)+(from<index?1:0),0,moved);});}} className={'slide-item '+(tab.selected.includes(s.id)?'selected':'')}><span className="slide-number">{index+1}</span><button aria-label={`${t('slide')} ${index+1}: ${s.title}`} aria-current={s.id===slide.id?'true':undefined} onClick={e=>selectSlide(s.id,e)}><LazyPreview deck={deck} slide={s}/></button></div>)}</div></div>);
   const workbench=tab&&deck&&slide&&<div className="esf-workbench" onDragOver={e=>e.preventDefault()} onDrop={e=>void run(()=>dropFiles(e))}>

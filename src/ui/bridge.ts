@@ -10,6 +10,7 @@ const preview:Bridge={invoke:async(method,...args)=>{
     case'clipboardRead':return memory?structuredClone(memory):null;
     case'clipboardText':return'';
     case'clipboardImage':return null;
+    case'presentClose':return true;
     case'nativeEdit':document.execCommand(String(args[0]));return;
     default:throw Error('Not available in this preview.');
   }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 26.11.8
+
+- **Slide master:** the base selected in the panel is the active one (a ✓ badge marks it); the active tab (Bases or Layouts) is now clearly highlighted.
+- **Resize several objects together** from the handles on the group's outline (images keep their proportions).
+- **Pasting into a text keeps the copied font,** size, weight and color.
+- **Copying text from the assistant's messages** copies the text, not the selected slides.
+- **One Present window at a time;** it closes with its presentation's tab and when the app quits.
+- **The assistant can look at images inside the presentation** (`read_image`).
+
 ## 26.11.4
 
 Versions are now numbered by date (YY.M.D), as in the other Edukors apps.

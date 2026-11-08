@@ -88,3 +88,16 @@ test('Assistant: import_image adds the downloaded image as a resource of that do
   assert.equal(store.get(1)!.deck.assets.length,1);
   assert.equal(createSlidesTools(store).some(t=>t.name==='import_image'),false);
 });
+
+test('Assistant: read_image shows an image of the presentation to the model',async()=>{
+  const store=new Store(),deck=newDeck('Images');deck.assets.push({id:'asset-img1',name:'a.png',mime:'image/png',data:'iVBORw0KGgo='},{id:'asset-svg1',name:'b.svg',mime:'image/svg+xml',data:'PHN2Zy8+'});store.add(1,deck);
+  const read=createSlidesTools(store).find(t=>t.name==='read_image')!;
+  assert.equal(read.changes,false);
+  const r=await read.run({id:1},{asset:'asset:asset-img1'});
+  assert.deepEqual(r.images,[{mimeType:'image/png',data:'iVBORw0KGgo='}]);assert.equal(r.asset,'asset:asset-img1');
+  await assert.rejects(read.run({id:1},{asset:'nope'}),/no image asset:nope/);
+  await assert.rejects(read.run({id:1},{asset:'asset-svg1'}),/cannot be shown/);
+  const drawn=createSlidesTools(store,{showImage:async a=>({mimeType:'image/png',data:'drawn-'+a.id,width:10,height:5})}).find(t=>t.name==='read_image')!;
+  const s=await drawn.run({id:1},{asset:'asset-svg1'});
+  assert.deepEqual(s.images,[{mimeType:'image/png',data:'drawn-asset-svg1'}]);assert.equal(s.shownWidth,10);
+});

@@ -65,7 +65,7 @@ O slide funciona como no PowerPoint ou no Google Slides:
 
 - **Selecionar.** Clique num objeto (texto, imagem, forma, link) para selecioná-lo; ⇧ ou ⌘ + clique acrescenta outro; arrastar a partir de um espaço vazio seleciona tudo o que ficar dentro do retângulo. ⌘A seleciona todos os objetos do slide. Tab percorre os objetos.
 - **Mover.** Arraste o objeto (num texto, pela borda). Guias rosas mostram o alinhamento com bordas e centros; segure ⌥ para desligar o encaixe e ⇧ para mover num eixo só. As setas movem 1 px (⇧, 10 px).
-- **Redimensionar.** Puxe as alças brancas; numa imagem a proporção se mantém (⇧ libera). ⌘ + setas também redimensionam.
+- **Redimensionar.** Puxe as alças brancas; numa imagem a proporção se mantém (⇧ libera). ⌘ + setas também redimensionam. Com vários objetos selecionados, as alças do contorno do grupo redimensionam todos juntos.
 - **Texto.** Clique dentro de um texto para editá-lo, mantendo a formatação. Selecione trechos para mudar fonte, tamanho ou cor na barra de formatação.
 - **Imagens.** **Inserir → Imagem** cola a imagem copiada ou, se não houver uma, pede um arquivo; também dá para arrastar imagens do computador para o slide. Se o layout tiver um espaço de imagem vazio, ela vai para ele. O botão de recorte abre uma caixa com alças: Enter confirma, Esc cancela.
 - **Formas e links.** A forma escolhida entra no slide com linha e fundo ajustáveis. O link usa o endereço copiado; a legenda substitui o endereço no slide, e a opção **QR code** põe o código ao lado.
@@ -80,7 +80,7 @@ Cada gesto é um passo do desfazer (⌘Z). Só Esc cancela um gesto em andamento
 
 **Slide mestre**, ao lado de Apresentar na barra de cima, troca a lista de slides por duas abas:
 
-- **Bases.** Cada base é uma aparência alternativa da apresentação inteira: cores, fontes e os objetos que ficam atrás de todos os slides (um logotipo, uma faixa). O ✓ abaixo da miniatura escolhe a base **ativa**, que vale para todos os slides. Assim você testa outra aparência sem mexer no conteúdo.
+- **Bases.** Cada base é uma aparência alternativa da apresentação inteira: cores, fontes e os objetos que ficam atrás de todos os slides (um logotipo, uma faixa). A base selecionada no painel é a **ativa** (marcada com ✓ abaixo da miniatura) e vale para todos os slides. Assim você testa outra aparência sem mexer no conteúdo.
 - **Layouts.** Cada layout é uma arrumação de conteúdo (capa, título e texto, duas colunas…), compartilhada por todas as bases. Um slide novo começa de um layout. O que vem do layout só se altera aqui, e a mudança chega a todos os slides que o usam; nos slides, só os textos e imagens dos espaços do layout se editam.
 
 Renomeie com duplo clique no nome. A apresentação sempre fica com pelo menos uma base e um layout; os slides de um layout excluído passam ao anterior, com o conteúdo. Para **trocar o layout** de um slide, clique no nome do layout no rodapé: os textos vão para os campos de mesmo nome do novo layout.

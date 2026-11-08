@@ -28,7 +28,11 @@ export function assistantContext(store:Store,doc:number){
   return {revision:tab.version,...view,...tab.deck.systemPrompt?{documentInstructions:tab.deck.systemPrompt}:{},...agentContext(tab.deck,tab.selected)};
 }
 
-export function createSlidesTools<D extends {id:number}>(store:Store,options:{downloadImage?:(url:string)=>Promise<Asset>}={}){
+export type ModelImage={mimeType:string;data:string;width?:number;height?:number};
+// Formats the model reads as they are, and the largest image sent unchanged (base64 characters); larger images and
+// other formats (SVG, AVIF…) go through `showImage` (the page draws them, scaled down) or are refused.
+const modelFormats=['image/png','image/jpeg','image/gif','image/webp'],modelBytes=4_500_000;
+export function createSlidesTools<D extends {id:number}>(store:Store,options:{downloadImage?:(url:string)=>Promise<Asset>;showImage?:(asset:Asset)=>Promise<ModelImage>}={}){
   const tab=(doc:D)=>{const value=store.get(doc.id);if(!value)throw Error('The presentation is no longer open.');return value;};
   const tools:any[]=[
     {
@@ -45,6 +49,18 @@ export function createSlidesTools<D extends {id:number}>(store:Store,options:{do
         const t=tab(doc),next=assistantChanges(t.deck,t.version,args);
         const changed=!!next&&store.mutate(doc.id,deck=>{for(const key of Object.keys(deck) as (keyof Deck)[])delete deck[key];Object.assign(deck,structuredClone(next));});
         return{changed,revision:tab(doc).version};
+      }
+    },
+    {
+      name:'read_image',description:'Shows you an image kept in the presentation (asset:ID, as listed in the assets of the document), so you can see what it depicts. Large images arrive scaled down.',
+      label:()=>'Viewed image',changes:false,
+      inputSchema:{type:'object',properties:{asset:{type:'string',maxLength:300,description:'asset:ID or the ID'}},required:['asset'],additionalProperties:false},
+      run:async(doc:D,args:any)=>{
+        const id=String(args?.asset||'').replace(/^asset:/,''),asset=tab(doc).deck.assets.find(a=>a.id===id);
+        if(!asset)throw Error(`There is no image asset:${id} in the presentation.`);
+        if(!asset.mime.startsWith('image/'))throw Error(`asset:${id} is not an image (${asset.mime}).`);
+        const image:ModelImage=options.showImage?await options.showImage(asset):modelFormats.includes(asset.mime)&&asset.data.length<=modelBytes?{mimeType:asset.mime,data:asset.data}:(()=>{throw Error(`asset:${id} cannot be shown here.`);})();
+        return{asset:'asset:'+id,name:asset.name,mime:asset.mime,...image.width?{shownWidth:image.width,shownHeight:image.height}:{},images:[{mimeType:image.mimeType,data:image.data}]};
       }
     }
   ];

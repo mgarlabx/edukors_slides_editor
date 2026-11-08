@@ -65,7 +65,7 @@ The slide works as in PowerPoint or Google Slides:
 
 - **Select.** Click an object (text, image, shape, link) to select it; ⇧ or ⌘ + click adds another; dragging from an empty spot selects everything inside the rectangle. ⌘A selects every object on the slide. Tab goes through the objects.
 - **Move.** Drag the object (a text, by its border). Pink guides show alignment with edges and centers; hold ⌥ to turn snapping off and ⇧ to move along one axis. The arrow keys move 1 px (⇧, 10 px).
-- **Resize.** Pull the white handles; an image keeps its proportions (⇧ frees them). ⌘ + arrows resize too.
+- **Resize.** Pull the white handles; an image keeps its proportions (⇧ frees them). ⌘ + arrows resize too. With several objects selected, the handles on the group's outline resize them all together.
 - **Text.** Click inside a text to edit it, keeping its formatting. Select a stretch to change its font, size or color in the format bar.
 - **Images.** **Insert → Image** pastes the copied image or, if there is none, asks for a file; you can also drag images from your computer onto the slide. If the layout has an empty image slot, the image goes there. The crop button opens a box with handles: Enter confirms, Esc cancels.
 - **Shapes and links.** The chosen shape lands on the slide with an adjustable line and fill. A link uses the copied address; its caption replaces the address on the slide, and the **QR code** option puts the code beside it.
@@ -80,7 +80,7 @@ Each gesture is one undo step (⌘Z). Only Esc cancels a gesture in progress.
 
 **Slide Master**, next to Present on the top bar, swaps the slide list for two tabs:
 
-- **Bases.** Each base is an alternative look for the whole presentation: colors, fonts and the objects behind every slide (a logo, a band). The ✓ below the thumbnail picks the **active** base, which applies to every slide. This way you can try another look without touching the content.
+- **Bases.** Each base is an alternative look for the whole presentation: colors, fonts and the objects behind every slide (a logo, a band). The base selected in the panel is the **active** one (checked with ✓ below the thumbnail) and applies to every slide. This way you can try another look without touching the content.
 - **Layouts.** Each layout is a content arrangement (cover, title and text, two columns…), shared by all bases. A new slide starts from a layout. What comes from the layout changes only here, and the change reaches every slide that uses it; on the slides, only the texts and images in the layout's slots can be edited.
 
 Rename with a double click on the name. A presentation always keeps at least one base and one layout; the slides of a deleted layout move to the previous one, with their content. To **change a slide's layout**, click the layout's name in the status bar: the texts go to the fields with the same name in the new layout.

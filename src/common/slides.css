@@ -8,8 +8,8 @@
 :root[data-theme="dark"]{--panel-2:#252932;--border-strong:#3f4553;--accent-soft:#2b2b4f;--ok-soft:#1d3324;--warning-soft:#392d18;--error-soft:#3a2124;--backdrop:rgba(0,0,0,.55)}
 :is(#slides-root,.slides-sidebar,.esf-workbench,.slides-settings-panel){color:var(--text,#263149);font-size:var(--fs-base);line-height:1.45}
 :is(#slides-root,.slides-sidebar,.esf-workbench,.slides-settings-panel) :is(button,input,textarea,select){font:inherit}
-:is(#slides-root,.slides-sidebar,.slides-settings-panel) button:not(.tool):not(.small-button):not(.template-card){cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:6px 12px;color:inherit;white-space:nowrap}
-:is(#slides-root,.slides-sidebar,.slides-settings-panel) button:not(.tool):not(.small-button):not(.template-card):hover{background:var(--panel-2)}
+:is(#slides-root,.slides-sidebar,.slides-settings-panel) button:not(.tool):not(.small-button):not(.template-card):not(.master-tab):not(.master-activate){cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--panel);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:6px 12px;color:inherit;white-space:nowrap}
+:is(#slides-root,.slides-sidebar,.slides-settings-panel) button:not(.tool):not(.small-button):not(.template-card):not(.master-tab):not(.master-activate):hover{background:var(--panel-2)}
 :is(#slides-root,.slides-sidebar,.slides-settings-panel) button:disabled{cursor:default;opacity:.4}
 :is(#slides-root,.slides-settings-panel,.slides-sidebar) :is(input,textarea,select){height:30px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:inherit;padding:5px 8px;max-width:100%}
 :is(#slides-root,.slides-settings-panel,.esf-workbench) textarea{height:auto;resize:vertical;line-height:1.5}
@@ -84,16 +84,15 @@ body.file-drag .preview.editable{pointer-events:none}
 .master-rail .selected .item-name{color:var(--text);font-weight:600}
 .master-rail input.item-name{width:100%;height:24px;padding:3px 5px;margin-top:3px}
 .master-tabs{display:flex;flex-shrink:0;height:36px;border-bottom:1px solid var(--border)}
-.master-tabs button{flex:1;min-width:0;padding:0 8px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);font-size:var(--fs-sm)}
+.master-tabs button{cursor:pointer;flex:1;min-width:0;padding:0 8px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);font-size:var(--fs-sm)}
 .master-tabs button[aria-selected=true]{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
 .master-tabs button:hover{background:var(--panel-2)}
 .master-item-caption{display:flex;align-items:center;gap:6px;margin-top:6px}
 .master-item-caption .item-name{flex:1;min-width:0;margin:0}
-.master-activate{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);box-shadow:var(--shadow)}
-.master-activate svg{width:16px;height:16px;opacity:0}
-.master-activate:hover svg,.master-activate:focus-visible svg{opacity:.5}
-.master-activate[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.master-activate[aria-pressed=true] svg{opacity:1}
+/* The active base carries a check badge; the others none (selecting a base activates it). */
+.master-activate{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:50%;background:var(--accent);color:var(--on-accent);cursor:default}
+.master-activate svg{width:14px;height:14px}
+.master-activate[aria-pressed=false]{visibility:hidden}
 .master-rail .active-master .preview{outline:2px solid var(--accent);outline-offset:-2px}
 /* Modals. */
 .modal-subtitle{color:var(--muted);font-size:var(--fs-sm);margin:-6px 0 16px}
@@ -169,8 +168,6 @@ body.file-drag .preview.editable{pointer-events:none}
 .rail-tools .tool-delete:hover:not(:disabled){color:var(--error)}
 .rail-tools .tool:first-child .tooltip{left:0;transform:none}
 .rail-caption .tool{width:22px;height:22px}
-.master-activate{color:var(--muted)}
-.master-activate svg{width:16px;height:16px}
 /* Slide frames: a new document loads behind the visible one and replaces it once drawn (no blank flash). */
 .preview-stack{position:relative;width:100%;height:100%}
 .preview-stack>.preview{position:absolute;inset:0}

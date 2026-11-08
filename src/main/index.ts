@@ -85,19 +85,27 @@ handle('clipboardImage',async()=>{
 });
 
 // Present: the player in its own window, from the selected slide, in the interface language. Its tools (pen, lens,
-// presenter view…) stay in the exported HTML.
-handle('present',async(_e,deck:Deck,start:unknown,lang:unknown)=>{
+// presenter view…) stay in the exported HTML. One player window at a time: presenting again replaces it; it closes with
+// its presentation's tab, with the window that opened it and when the app quits.
+let player:{win:BrowserWindow;owner:number;doc:unknown}|null=null;
+const closePlayer=()=>{const p=player;player=null;if(p&&!p.win.isDestroyed())p.win.close();};
+handle('presentClose',(event,doc:unknown)=>{if(player&&player.owner===event.sender.id&&(doc===undefined||player.doc===doc))closePlayer();return true;});
+app.on('will-quit',closePlayer);
+handle('present',async(event,deck:Deck,start:unknown,lang:unknown,doc:unknown)=>{
   validateDeck(deck);
   const file=path.join(tempDir,uid('present')+'.html');
   await atomic(file,playerDocument(deck,{tools:false,start:Number.isInteger(start)?start as number:0,lang:['pt','en','es'].includes(lang as string)?lang as any:'en',pollServer:prefs.pollServer}));
+  closePlayer();
   const p=new BrowserWindow({width:1440,height:900,title:deck.title,backgroundColor:'#141b29',show:!hidden,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
+  const owner=event.sender,gone=()=>{if(player?.win===p)closePlayer();};player={win:p,owner:owner.id,doc};owner.once('destroyed',gone);
+  p.webContents.on('did-create-window',w=>p.once('closed',()=>{if(!w.isDestroyed())w.close();}));
   p.webContents.setWindowOpenHandler(({url})=>{
     if(url==='about:blank')return{action:'allow',overrideBrowserWindowOptions:{show:!hidden,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}}};
     if(/^https?:|^mailto:/i.test(url))void shell.openExternal(url);return{action:'deny'};
   });
   // Without an Edit menu of its own, the editing shortcuts are applied here (e.g. pasting the presenter key).
   p.webContents.on('before-input-event',(e,i)=>{const act=i.type==='keyDown'&&(i.meta||i.control)&&!i.alt&&!i.shift?({x:'cut',c:'copy',v:'paste',a:'selectAll'} as any)[i.key.toLowerCase()]:undefined;if(act){e.preventDefault();(p.webContents as any)[act]();}});
-  p.on('closed',()=>{void fs.rm(file,{force:true});});
+  p.on('closed',()=>{if(player?.win===p)player=null;if(!owner.isDestroyed())owner.removeListener('destroyed',gone);void fs.rm(file,{force:true});});
   void p.loadFile(file).catch(()=>{});return true;
 });
 

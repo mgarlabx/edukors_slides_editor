@@ -140,6 +140,19 @@ try{
   assert.equal(await windows(),count+1);
   assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().some(w=>w.isVisible())),false);
   pass('Present opens the player window (hidden in tests)');
+  // One player at a time: presenting again replaces it; closing the presentation's tab closes it.
+  {const players=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(w=>/present-[^/]*\.html$/.test(w.webContents.getURL())).length);
+    for(let i=0;i<50&&await players()!==1;i++)await new Promise(r=>setTimeout(r,100));
+    assert.equal(await players(),1);
+    await page.locator('.slides-view-actions .tool-present').click();await new Promise(r=>setTimeout(r,1500));
+    assert.equal(await players(),1);assert.equal(await windows(),count+1);
+    await page.keyboard.press(mod+'+n');await page.locator('.template-card').first().dblclick();await page.locator('#document-placeholder iframe:not(.preview-stale)').waitFor();
+    await page.locator('.slides-view-actions .tool-present').click();await new Promise(r=>setTimeout(r,1500));
+    assert.equal(await players(),1);
+    await page.evaluate(()=>EdukorsDocuments.close(EdukorsDocuments.active().id));
+    for(let i=0;i<50&&await players();i++)await new Promise(r=>setTimeout(r,100));
+    assert.equal(await players(),0);}
+  pass('one player window at a time; it closes with its presentation');
   // Templates: save the presentation as a template; the gallery lists it.
   await page.keyboard.press(mod+'+n');
   await page.locator('#slides-root .file-footer button',{hasText:/template/i}).click();

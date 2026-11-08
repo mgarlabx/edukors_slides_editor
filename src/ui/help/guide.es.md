@@ -65,7 +65,7 @@ La diapositiva funciona como en PowerPoint o Google Slides:
 
 - **Seleccionar.** Haga clic en un objeto (texto, imagen, forma, enlace) para seleccionarlo; ⇧ o ⌘ + clic añade otro; arrastrar desde un espacio vacío selecciona todo lo que quede dentro del rectángulo. ⌘A selecciona todos los objetos de la diapositiva. Tab recorre los objetos.
 - **Mover.** Arrastre el objeto (un texto, por el borde). Guías rosas muestran la alineación con bordes y centros; mantenga ⌥ para desactivar el ajuste y ⇧ para mover en un solo eje. Las flechas mueven 1 px (⇧, 10 px).
-- **Redimensionar.** Tire de los tiradores blancos; una imagen mantiene la proporción (⇧ la libera). ⌘ + flechas también redimensionan.
+- **Redimensionar.** Tire de los tiradores blancos; una imagen mantiene la proporción (⇧ la libera). ⌘ + flechas también redimensionan. Con varios objetos seleccionados, los tiradores del contorno del grupo los redimensionan todos juntos.
 - **Texto.** Haga clic dentro de un texto para editarlo, manteniendo el formato. Seleccione un fragmento para cambiar la fuente, el tamaño o el color en la barra de formato.
 - **Imágenes.** **Insertar → Imagen** pega la imagen copiada o, si no la hay, pide un archivo; también puede arrastrar imágenes del equipo a la diapositiva. Si el diseño tiene un espacio de imagen vacío, la imagen va a él. El botón de recorte abre un cuadro con tiradores: Enter confirma, Esc cancela.
 - **Formas y enlaces.** La forma elegida entra en la diapositiva con línea y relleno ajustables. El enlace usa la dirección copiada; la leyenda reemplaza la dirección en la diapositiva, y la opción **Código QR** pone el código al lado.
@@ -80,7 +80,7 @@ Cada gesto es un paso de deshacer (⌘Z). Solo Esc cancela un gesto en curso.
 
 **Patrón de diapositivas**, junto a Presentar en la barra superior, cambia la lista de diapositivas por dos pestañas:
 
-- **Bases.** Cada base es una apariencia alternativa de toda la presentación: colores, fuentes y los objetos que quedan detrás de todas las diapositivas (un logotipo, una franja). El ✓ debajo de la miniatura elige la base **activa**, que vale para todas las diapositivas. Así puede probar otra apariencia sin tocar el contenido.
+- **Bases.** Cada base es una apariencia alternativa de toda la presentación: colores, fuentes y los objetos que quedan detrás de todas las diapositivas (un logotipo, una franja). La base seleccionada en el panel es la **activa** (marcada con ✓ debajo de la miniatura) y vale para todas las diapositivas. Así puede probar otra apariencia sin tocar el contenido.
 - **Diseños.** Cada diseño es una organización del contenido (portada, título y texto, dos columnas…), compartida por todas las bases. Una diapositiva nueva parte de un diseño. Lo que viene del diseño solo se cambia aquí, y el cambio llega a todas las diapositivas que lo usan; en las diapositivas, solo se editan los textos e imágenes de los espacios del diseño.
 
 Renombre con doble clic en el nombre. La presentación siempre conserva al menos una base y un diseño; las diapositivas de un diseño eliminado pasan al anterior, con su contenido. Para **cambiar el diseño** de una diapositiva, haga clic en su nombre en la barra de estado: los textos van a los campos del mismo nombre del nuevo diseño.

@@ -29,9 +29,12 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   type GestureBase={pointer:number;x:number;y:number;moved:boolean};
   type MoveGesture=GestureBase&{type:'move';items:Snapshot[];bounds:DOMRect;targets:DOMRect[];before:HTMLElement[];toggle?:HTMLElement;click:{chain:HTMLElement[];k:number}|null};
   type ResizeGesture=GestureBase&{type:'resize';item:Snapshot;frac:number[];corner:string;text:boolean;free:boolean;width:number;height:number;matrix:EditMatrix;anchor:{x:number;y:number};fx:number;fy:number};
+  // Several objects resized together: each keeps its place relative to the group's opposite corner or side.
+  type ScaleItem=Snapshot&{width:number;height:number;text:boolean;image:boolean;cx:number;cy:number};
+  type ScaleGesture=GestureBase&{type:'scale';items:ScaleItem[];rect:DOMRect;corner:string;free:boolean};
   type BandGesture=GestureBase&{type:'band';keep:HTMLElement[];before:HTMLElement[];targets:{el:HTMLElement;r:DOMRect}[]};
   type CropGesture=GestureBase&{type:'crop';corner:string;base:number[];width:number;height:number;matrix:EditMatrix};
-  let gesture:MoveGesture|ResizeGesture|BandGesture|CropGesture|null=null;
+  let gesture:MoveGesture|ResizeGesture|ScaleGesture|BandGesture|CropGesture|null=null;
   let crop:{el:HTMLElement;style:string|null;inset:number[];start:number[]}|null=null;
   let selection:HTMLElement[]=[],editing:HTMLElement|null=null,original='',pending:EditOp[]=[],nudge=0;
   const nudged=new Set<HTMLElement>(),resized=new Map<HTMLElement,boolean>();
@@ -73,6 +76,7 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   const kind=(el:Element)=>el.getAttribute('data-esf-kind');
   // A layout field in a slide: its text is edited, but it is not moved, resized, restyled or deleted (the layout owns it).
   const fixed=(el:Element)=>el.hasAttribute('data-esf-fixed'),free=(list:HTMLElement[])=>list.filter(el=>!fixed(el));
+  const scalable=()=>free(outer()).filter(el=>isImage(el)||getComputedStyle(el).display!=='inline');
   const isImage=(el:Element)=>/^(img|svg)$/i.test(el.tagName)||/url\(/i.test(getComputedStyle(el).backgroundImage);
   const imageIn=(chain:HTMLElement[])=>[...chain].reverse().find(isImage);
   // Text boxes resize freely from corners and sides (inline elements have no box to size); images only from corners.
@@ -130,7 +134,10 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     // A resizable text box shows its real box, the one the handles change.
     boxes.forEach((d,i)=>show(d,selection[i]?(selection[i]===text?text.getBoundingClientRect():rect(selection[i])):null));
     show(group,selection.length>1?bounds(outer()):null);
-    handles.forEach(h=>{const c=h.dataset.corner!,[t,ri,b,l]=sized?insetOf(sized):[0,0,0,0];
+    const several=selection.length>1&&scalable().length?bounds(outer()):null,sides=several&&!scalable().some(isImage);
+    if(several){handles.forEach(h=>{const c=h.dataset.corner!,x=c.includes('w')?several.left:c.includes('e')?several.right:several.left+several.width/2,y=c.includes('n')?several.top:c.includes('s')?several.bottom:several.top+several.height/2;
+      show(h,sides||c.length===2?{left:x-5+(c.includes('w')?-4:c.includes('e')?4:0),top:y-5+(c.includes('n')?-4:c.includes('s')?4:0),width:10,height:10}:null,0);});}
+    else handles.forEach(h=>{const c=h.dataset.corner!,[t,ri,b,l]=sized?insetOf(sized):[0,0,0,0];
       const p=sized?point(sized,c.includes('w')?l/100:c.includes('e')?1-ri/100:(1+l/100-ri/100)/2,c.includes('n')?t/100:c.includes('s')?1-b/100:(1+t/100-b/100)/2):null;
       show(h,p&&(text||box||c.length===2)?{left:p.x-5,top:p.y-5,width:10,height:10}:null,0);});
     boxes.forEach(d=>d.style.borderStyle=editing?'dashed':'solid');
@@ -370,6 +377,11 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
       const fx=corner.includes('w')?1-ir/100:il/100,fy=corner.includes('n')?1-ib/100:it/100;
       capture(e,{type:'resize',item:snapshot(el),frac:[(100-il-ir)/100,(100-it-ib)/100],corner,text:textBox(el),free:!isImage(el),pointer:e.pointerId,x:e.clientX,y:e.clientY,width:m.width,height:m.height,matrix:m.matrix,anchor:point(el,fx,fy),fx,fy,moved:false});return;
     }
+    if(handles.includes(t as HTMLDivElement)&&selection.length>1){
+      const list=scalable();if(!list.length)return;e.preventDefault();collectNudge();finish();
+      const items=list.map(el=>{const r=rect(el);return{...snapshot(el),...size(el),text:textBox(el),image:isImage(el),cx:r.left+r.width/2,cy:r.top+r.height/2};});
+      capture(e,{type:'scale',items,rect:bounds(list),corner:(t as HTMLElement).dataset.corner!,free:!list.some(isImage),pointer:e.pointerId,x:e.clientX,y:e.clientY,moved:false});return;
+    }
     if(t.hasAttribute('data-esf-edge')){startDrag(e,outer(),null);cursor('move');return;}
     const chain=chainOf(t);let k=chain.length-1;while(k>=0&&!selection.includes(chain[k]))k--;
     // Objects poking out of the slide (an entrance animation's start position, a slide-wide SVG) count by their visible part.
@@ -417,6 +429,16 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
       // Fix the opposite VISIBLE corner after layout reflow, text wrapping and transform-origin changes.
       const current=point(el,g.fx,g.fy),delta=geometry.inverse(parent,g.anchor.x-current.x,g.anchor.y-current.y);
       if(delta)setPosition(el,base[0]+delta.x,base[1]+delta.y);
+    }else if(g.type==='scale'){
+      const next=resize(g.rect.width,g.rect.height,dx,dy,g.corner,g.free||e.shiftKey),sx=next.width/g.rect.width,sy=next.height/g.rect.height;
+      const ax=g.corner.includes('w')?g.rect.right:g.rect.left,ay=g.corner.includes('n')?g.rect.bottom:g.rect.top;
+      for(const item of g.items){
+        // Images keep their proportion (with Shift the group may stretch; each image then takes the mean scale).
+        const kx=item.image?Math.sqrt(sx*sy):sx,ky=item.image?kx:sy;
+        setBox(item.el,Math.max(4,item.width*kx),Math.max(4,item.height*ky),item.base[0],item.base[1],item.text);
+        const r=rect(item.el),d=geometry.inverse(item.parent,ax+(item.cx-ax)*sx-(r.left+r.width/2),ay+(item.cy-ay)*sy-(r.top+r.height/2));
+        if(d)setPosition(item.el,item.base[0]+d.x,item.base[1]+d.y);
+      }
     }else if(g.type==='band'){
       // The slide fills the canvas edge to edge: near an edge, the band reaches it (objects cut off there count).
       const v=root.getBoundingClientRect(),near=(a:number,b:number)=>Math.abs(a-b)<=8?b:a;
@@ -444,6 +466,8 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
       const {el,style}=g.item;
       if(commit&&g.moved){const [x,y]=offset(el);pending.push({type:'resize',index:index(el),width:parseFloat(el.style.width),height:parseFloat(g.text?el.style.minHeight:el.style.height),x,y,...g.text?{fit:true}:{}});}
       else restore(el,style);
+    }else if(g.type==='scale'){
+      for(const {el,style,text} of g.items){if(commit&&g.moved){const [x,y]=offset(el);pending.push({type:'resize',index:index(el),width:parseFloat(el.style.width),height:parseFloat(text?el.style.minHeight:el.style.height),x,y,...text?{fit:true}:{}});}else restore(el,style);}
     }else if(g.type==='band'){if(!commit)selection=g.before;show(band,null);}
     else if(!commit){g.items.forEach(({el,style})=>restore(el,style));selection=g.before;}
     else if(g.moved){for(const {el,base,style,inline} of g.items){const [x,y]=offset(el);if(Math.abs(x-base[0])>.001||Math.abs(y-base[1])>.001)pending.push({type:'move',index:index(el),x,y,...inline?{inline:true}:{}});else restore(el,style);}}
@@ -501,7 +525,29 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     else if(e.key==='Enter'&&selection.length===1&&kind(selection[0])==='text'&&!isImage(selection[0])){e.preventDefault();begin(selection[0]);}
   });
   addEventListener('keyup',e=>{if(e.key.startsWith('Arrow'))arrowUp();});
-  addEventListener('paste',e=>{if(!editing)return;e.preventDefault();(e.clipboardData?.getData('text/plain')||'').split(/\r?\n/).forEach((l,i)=>{if(i)document.execCommand('insertLineBreak');if(l)document.execCommand('insertText',false,l);});});
+  // Pasting into a text keeps the copied look of the characters (font, size, weight, color…), not the page's markup:
+  // only text, line breaks and spans with those properties go in; plain text goes in as it is.
+  const pasteLook=['font-family','font-size','font-weight','font-style','color','text-decoration-line','text-decoration-color','text-decoration-style','letter-spacing','word-spacing','text-transform','text-shadow','vertical-align'];
+  function pasteHtml(html:string){
+    const src=new DOMParser().parseFromString(html,'text/html'),out=document.createDocumentFragment();
+    const walk=(node:Node,into:Node)=>{for(const c of [...node.childNodes]){
+      if(c.nodeType===3){into.appendChild(document.createTextNode(c.textContent||''));continue;}if(c.nodeType!==1)continue;
+      const el=c as HTMLElement,tag=el.tagName;if(/^(SCRIPT|STYLE|TEMPLATE|IFRAME|OBJECT|EMBED|NOSCRIPT|META|LINK|HEAD|TITLE|IMG|SVG|VIDEO|AUDIO|CANVAS)$/.test(tag))continue;
+      if(tag==='BR'){into.appendChild(document.createElement('br'));continue;}
+      if(/^(DIV|P|LI|H[1-6]|TR|BLOCKQUOTE|PRE)$/.test(tag)&&into.lastChild&&into.lastChild.nodeName!=='BR'&&(into.textContent||'').trim())into.appendChild(document.createElement('br'));
+      const span=document.createElement('span'),st=el.style;for(const k of pasteLook){const v=st.getPropertyValue(k);if(v&&!/url\(|var\(|expression/i.test(v))span.style.setProperty(k,v);}
+      if(/^(B|STRONG)$/.test(tag)&&!span.style.fontWeight)span.style.fontWeight='700';if(/^(I|EM)$/.test(tag)&&!span.style.fontStyle)span.style.fontStyle='italic';
+      if(tag==='U'&&!span.style.textDecorationLine)span.style.textDecorationLine='underline';if(/^(S|STRIKE|DEL)$/.test(tag)&&!span.style.textDecorationLine)span.style.textDecorationLine='line-through';
+      if(tag==='SUB'&&!span.style.verticalAlign)span.style.verticalAlign='sub';if(tag==='SUP'&&!span.style.verticalAlign)span.style.verticalAlign='super';
+      if(span.getAttribute('style')){walk(el,span);into.appendChild(span);}else walk(el,into);
+    }};
+    walk(src.body,out);while(out.lastChild?.nodeName==='BR')out.lastChild.remove();
+    const box=document.createElement('div');box.appendChild(out);return box.innerHTML;
+  }
+  addEventListener('paste',e=>{if(!editing)return;e.preventDefault();
+    const html=e.clipboardData?.getData('text/html')||'',clean=html?pasteHtml(html):'';
+    if(clean&&/<span/.test(clean)){document.execCommand('insertHTML',false,clean);return;}
+    (e.clipboardData?.getData('text/plain')||'').split(/\r?\n/).forEach((l,i)=>{if(i)document.execCommand('insertLineBreak');if(l)document.execCommand('insertText',false,l);});});
   addEventListener('resize',()=>{if(gesture)endGesture(true);place();});new ResizeObserver(place).observe(html);document.fonts.ready.then(place);
   root.addEventListener('load',place,true);addEventListener('esf-slide-ready',place);
   // Structural edits and undo/redo reload the frame and restore its selection.
