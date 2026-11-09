@@ -1,18 +1,18 @@
 import type {Slide} from './model';
 import {boxStyle} from './geometry';
-export type SelectionDetails={index:number;kind:'text'|'image'|'link'|'shape'|'box';crop:boolean;fonts?:string[];style:Partial<Record<'fontFamily'|'fontSize'|'fontWeight'|'fontStyle'|'textDecorationLine'|'verticalAlign'|'color'|'borderWidth'|'borderColor'|'borderStyle'|'backgroundColor'|'boxShadow'|'filter'|'opacity'|'textAlign'|'alignContent',string>>};
-export type ObjectStyle=Partial<Record<'border-width'|'border-color'|'border-style'|'background-color'|'box-shadow'|'filter'|'opacity'|'z-index'|'position'|'isolation'|'text-align'|'align-content'|'justify-content'|'align-items'|'font-size',string>>;
+export type SelectionDetails={index:number;kind:'text'|'image'|'link'|'shape'|'box';crop:boolean;fonts?:string[];list?:'bulleted'|'numbered'|'none';style:Partial<Record<'fontFamily'|'fontSize'|'fontWeight'|'fontStyle'|'textDecorationLine'|'verticalAlign'|'color'|'borderWidth'|'borderColor'|'borderStyle'|'backgroundColor'|'boxShadow'|'filter'|'opacity'|'textAlign'|'alignContent'|'lineHeight',string>>};
+export type ObjectStyle=Partial<Record<'border-width'|'border-color'|'border-style'|'background-color'|'box-shadow'|'filter'|'opacity'|'z-index'|'position'|'isolation'|'text-align'|'align-content'|'justify-content'|'align-items'|'font-size'|'line-height',string>>;
 // Properties the frame may set on an object: the format bar, stacking order and text alignment (context menu).
 // Images get their shadow as a drop-shadow filter, which follows transparent pixels. A text block's own font size
 // follows its text after a size change (canvas.ts, fitBlockSize), so its lines are not spaced for a larger size.
-const fixed:Record<string,RegExp>={'font-size':/^\d{1,4}(\.\d{1,2})?px$/,filter:/^(none|drop-shadow\(-?[\d.]+(px)? -?[\d.]+(px)? [\d.]+(px)? #[\da-f]{3,8}\))$/i,'z-index':/^-?\d{1,6}$/,position:/^relative$/,isolation:/^isolate$/,'text-align':/^(left|center|right|justify)$/,opacity:/^(0(\.\d{1,3})?|1(\.0{1,3})?)$/,'align-content':/^(start|center|end)$/,'justify-content':/^(flex-start|center|flex-end)$/,'align-items':/^(flex-start|center|flex-end)$/};
+const fixed:Record<string,RegExp>={'font-size':/^\d{1,4}(\.\d{1,2})?px$/,filter:/^(none|drop-shadow\(-?[\d.]+(px)? -?[\d.]+(px)? [\d.]+(px)? #[\da-f]{3,8}\))$/i,'z-index':/^-?\d{1,6}$/,position:/^relative$/,isolation:/^isolate$/,'text-align':/^(left|center|right|justify)$/,opacity:/^(0(\.\d{1,3})?|1(\.0{1,3})?)$/,'align-content':/^(start|center|end)$/,'justify-content':/^(flex-start|center|flex-end)$/,'align-items':/^(flex-start|center|flex-end)$/,'line-height':/^[0-5](\.\d{1,2})?$/};
 export const objectStyleKeys=['border-width','border-color','border-style','background-color','box-shadow',...Object.keys(fixed)];
 const styleValue=(key:string,value:unknown)=>objectStyleKeys.includes(key)&&typeof value==='string'&&value.length<=256&&!/[;{}<>]|url\s*\(/i.test(value)&&(!fixed[key]||fixed[key].test(value));
 export function cleanSelection(value:any,index:number|undefined):SelectionDetails|undefined{
   if(!value||value.index!==index||!Number.isInteger(index)||!['text','image','link','shape','box'].includes(value.kind))return;
   const style:SelectionDetails['style']={};
-  for(const key of ['fontFamily','fontSize','fontWeight','fontStyle','textDecorationLine','verticalAlign','color','borderWidth','borderColor','borderStyle','backgroundColor','boxShadow','filter','opacity','textAlign','alignContent'] as const)if(typeof value.style?.[key]==='string')style[key]=value.style[key].slice(0,512);
-  return{index:index!,kind:value.kind,crop:value.crop===true,style,fonts:Array.isArray(value.fonts)?value.fonts.filter((f:unknown)=>typeof f==='string'&&f.length<200).slice(0,200):[]};
+  for(const key of ['fontFamily','fontSize','fontWeight','fontStyle','textDecorationLine','verticalAlign','color','borderWidth','borderColor','borderStyle','backgroundColor','boxShadow','filter','opacity','textAlign','alignContent','lineHeight'] as const)if(typeof value.style?.[key]==='string')style[key]=value.style[key].slice(0,512);
+  return{index:index!,kind:value.kind,crop:value.crop===true,style,fonts:Array.isArray(value.fonts)?value.fonts.filter((f:unknown)=>typeof f==='string'&&f.length<200).slice(0,200):[],...['bulleted','numbered','none'].includes(value.list)?{list:value.list}:{}};
 }
 // Direct editing on the canvas. Every element of the slide HTML is addressed by its position in document order, the same
 // on the annotated canvas document and on the saved HTML, so the frame only sends small operations (browser only: DOMParser).

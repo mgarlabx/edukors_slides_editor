@@ -37,6 +37,44 @@ try{
   assert.equal(await page.evaluate(()=>EdukorsDocuments.list().length),1);
   assert.equal(await page.evaluate(()=>EdukorsDocuments.active().modified),false);
   assert.equal(await page.locator('.slides-view-actions .tool-present').count(),1);
+  // Several texts selected: the format bar formats them all (bold, alignment, line spacing, lists); in a list, Enter starts an item.
+  {
+    await page.evaluate(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].html='<section class="slide"><div data-manual="text" data-field="a" style="position:absolute;left:100px;top:100px;width:500px;font-size:40px">One<br>Two</div><div data-manual="text" data-field="b" style="position:absolute;left:100px;top:500px;width:500px;font-size:40px">Three</div></section>';
+      const next=EdukorsDocuments.add({name:'Several texts'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);});
+    const frame=page.frameLocator('#document-placeholder iframe:not(.preview-stale)'),html=async()=>(await content(page)).deck.slides[0].html,bar=page.locator('#context-toolbar');
+    await frame.locator('html[data-esf-ready=true]').waitFor();await page.locator('#sidebar-panel').evaluate(panel=>Promise.all(panel.getAnimations().map(a=>a.finished)));await page.waitForTimeout(500);
+    await frame.locator('[data-field=a]').click({position:{x:3,y:3},force:true});await frame.locator('[data-field=b]').click({position:{x:3,y:3},modifiers:['Shift'],force:true});
+    // The compact bar: alignment and paragraph (lists, line spacing) are menus.
+    const choose=async(menu,option)=>{await bar.locator(`[data-control="${menu}"]`).click();await (typeof option==='number'?page.locator('.pick-menu [role=option]').nth(option):page.locator('.pick-menu [role=option]').filter({hasText:option}).first()).click();await page.waitForTimeout(700);};
+    await bar.locator('[data-control="bold"]').click();await page.waitForTimeout(700);
+    await choose('alignMenu',1);await choose('paragraphMenu',/^1\.5$/);await choose('paragraphMenu',0);
+    const look=await page.evaluate(h=>{const doc=new DOMParser().parseFromString(h,'text/html');return['a','b'].map(f=>{const el=doc.querySelector(`[data-field=${f}]`);return{style:el.getAttribute('style'),list:!!el.querySelector(':scope>ul>li>b'),items:el.querySelectorAll('li').length};});},await html());
+    for(const x of look){assert.ok(/text-align: center/.test(x.style)&&/line-height: 1.5/.test(x.style),'alignment and line spacing on every text');assert.ok(x.list,'bold bulleted list in every text');}
+    assert.equal(look[0].items,2,'each line is an item, also inside the bold');
+    // A bigger font (typed: 48) on list texts keeps their items (it used to wrap the items in a span and add new bullets).
+    await bar.locator('[data-control="fontSize"]').fill('48');await bar.locator('[data-control="fontSize"]').press('Enter');await page.waitForTimeout(700);
+    {const h=await html();assert.equal(h.match(/<li\b/g).length,3,'font size keeps the list items');const li=h.match(/<li style="([^"]*)"/)[1];assert.ok(/--edukors-marker-font-size: 48px/.test(li)&&/--edukors-marker-font-weight: 700/.test(li),'the marker has the size and weight of its text');}
+    await frame.locator('html[data-esf-ready=true]').waitFor();
+    assert.deepEqual(await frame.locator('[data-field=a] li').first().evaluate(li=>{const m=getComputedStyle(li,'::marker');return[m.fontWeight,m.fontSize];}),['700','48px'],'the marker is drawn bold and at 48 px');
+    await page.keyboard.press('Escape');await page.waitForTimeout(300);
+    await frame.locator('[data-field=a] li').nth(1).dblclick({force:true});await frame.locator('[contenteditable]').waitFor();
+    await frame.locator('[contenteditable]').evaluate(el=>{const r=document.createRange();r.selectNodeContents(el.querySelectorAll('li')[1]);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);});
+    // A color on characters from one item to the next colors them without new items.
+    await frame.locator('[contenteditable]').evaluate(el=>{const text=(li)=>document.createTreeWalker(li,NodeFilter.SHOW_TEXT).nextNode(),[a,b]=el.querySelectorAll('li'),r=document.createRange();r.setStart(text(a),1);r.setEnd(text(b),2);getSelection().removeAllRanges();getSelection().addRange(r);});
+    await page.waitForTimeout(200);await bar.locator('[data-control="color"]').click();await page.locator('.pick-menu [aria-label*="#FF0000"]').click();await page.waitForTimeout(700);
+    {const h=await html();assert.equal(h.split('data-field="b"')[0].match(/<li\b/g).length,2,'a color across items keeps them');assert.match(h,/One.*color: rgb\(255, 0, 0\)|color: (red|#ff0000|rgb\(255, 0, 0\))[^>]*>ne/,'the characters are colored');}
+    await frame.locator('[contenteditable]').evaluate(el=>{const r=document.createRange();r.selectNodeContents(el.querySelectorAll('li')[1]);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);});
+    await page.keyboard.press('Enter');await page.keyboard.type('Four');await page.keyboard.press('Escape');
+    await page.waitForFunction(async()=>(await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html.match(/<li>/g)?.length===4);
+    await choose('paragraphMenu',0);
+    assert.ok(!/<li>/.test((await html()).split('data-field="b"')[0])&&((await html()).split('data-field="b"')[0].match(/<br>/g)||[]).length===2&&/Four/.test(await html()),'the list goes back to lines');
+    // An image file dropped on the canvas is inserted on the slide.
+    await frame.locator('html[data-esf-ready=true]').waitFor();
+    await frame.locator('body').evaluate(()=>{const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
+      const data=new DataTransfer();data.items.add(new File([png],'dropped.png',{type:'image/png'}));document.body.dispatchEvent(new DragEvent('drop',{dataTransfer:data,bubbles:true,cancelable:true,clientX:200,clientY:200}));});
+    await page.waitForFunction(async()=>/<img[^>]+src="asset:asset-/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));
+  }
   // A text object on the slide: edit, bold, then the HTML in the saved package.
   await page.evaluate(async()=>{
     const doc=EdukorsDocuments.active(),c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(doc)).bytes);
@@ -70,6 +108,41 @@ try{
     await page.locator('.context-menu').waitFor();
     await page.mouse.click(box.x+box.width*0.85,box.y+box.height*0.85);
     await page.locator('.context-menu').waitFor({state:'detached'});}
+  // Group and ungroup objects of any kind, anywhere: a text, a shape, an image in its shadow box, a text in the normal flow
+  // and a text inside a container next to another one. A group is a mark on its members (data-group-id), so nothing
+  // moves; a press on a member selects the group, a drag moves all members, ⌘D makes a new group, ungrouping removes the mark.
+  {
+    const previous=await page.evaluate(()=>EdukorsDocuments.active().id);
+    const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    await page.evaluate(async png=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].html='<section class="slide"><p data-manual="text" data-field="f" style="font-size:40px;margin:0">Flow</p><div data-manual="text" data-field="a" style="position:absolute;left:100px;top:300px;width:400px;font-size:40px">One</div><div data-manual="shape" data-shape="rect" style="position:absolute;left:600px;top:300px;width:300px;height:200px"><svg width="100%" height="100%"><rect data-shape-part="" width="100%" height="100%" style="fill:#4a6cf7"></rect></svg></div><div data-image-shadow="" style="position:absolute;inset:0;pointer-events:none;filter:drop-shadow(0 12px 18px #17203366)"><img data-manual="image" alt="" src="'+png+'" style="position:absolute;left:1000px;top:300px;width:300px;height:200px"></div><div class="pair" style="position:absolute;left:100px;top:600px;display:flex;flex-direction:column"><span data-field="t1" style="font-size:40px">Term</span><span data-field="d1" style="font-size:30px">Definition</span></div></section>';
+      const next=EdukorsDocuments.add({name:'Groups'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);},png);
+    const F='#document-placeholder iframe:not(.preview-stale)',frame=()=>page.frameLocator(F),html=async()=>(await content(page)).deck.slides[0].html,bar=page.locator('#context-toolbar');
+    const ready=async()=>{await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(500);};await ready();
+    const count=n=>page.waitForFunction(async n=>((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html.match(/data-group-id=/g)||[]).length===n,n);
+    const members=['[data-field=f]','[data-field=a]','[data-shape]','img','[data-field=t1]'],box=async f=>frame().locator(f).boundingBox(),before=await Promise.all(members.map(box));
+    await frame().locator(members[0]).click({position:{x:3,y:3},force:true});
+    for(const f of members.slice(1))await frame().locator(f).click({position:{x:3,y:3},modifiers:['Shift'],force:true});
+    await page.waitForTimeout(300);await bar.locator('[data-control=group]').click();await count(5);await ready();
+    const ids=[...(await html()).matchAll(/data-group-id="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,1,'one group id on the five members');
+    assert.ok(!/data-field="d1"[^>]*data-group-id|data-group-id[^>]*data-field="d1"/.test(await html()),'the text next to a member stays out');
+    assert.deepEqual(await Promise.all(members.map(box)),before,'grouping moves nothing');
+    await frame().locator('body').click({position:{x:5,y:5},force:true});await page.waitForTimeout(300);
+    await frame().locator('[data-shape]').click({position:{x:20,y:20},force:true});await page.waitForTimeout(400);
+    assert.equal(await bar.locator('[data-control=ungroup]').count(),1,'a press on a member selects the group (ungroup button)');
+    const s=await box('[data-shape]');
+    await page.mouse.move(s.x+20,s.y+20);await page.mouse.down();await page.mouse.move(s.x+60,s.y+40,{steps:5});await page.mouse.up();
+    await page.waitForFunction(async()=>((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html.match(/translate:/g)||[]).length>=5);await ready();
+    const after=await Promise.all(members.map(box)),d=after.map((r,i)=>[Math.round(r.x-before[i].x),Math.round(r.y-before[i].y)].join());
+    assert.ok(d.every(x=>x===d[0])&&d[0]!=='0,0','a drag on a member moves every member alike: '+d);
+    await page.keyboard.press(`${mod}+d`);await count(10);
+    assert.equal(new Set([...(await html()).matchAll(/data-group-id="([^"]+)"/g)].map(m=>m[1])).size,2,'the duplicate is a group of its own');
+    await page.keyboard.press(`${mod}+z`);await count(5);await ready();
+    await frame().locator('[data-shape]').click({position:{x:20,y:20},force:true});await page.waitForTimeout(400);
+    await bar.locator('[data-control=arrangeMenu]').click();assert.equal(await page.locator('.pick-menu [role=option]').count(),2,'the arrange menu has only the stacking order');await bar.locator('[data-control=arrangeMenu]').click();
+    await bar.locator('[data-control=ungroup]').click();await count(0);
+    await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator('#document-placeholder iframe:not(.preview-stale)').waitFor();await page.waitForTimeout(500);
+  }
   // Side panels: the inner-edge handle resizes (drag, arrows, double click restores) and the width is remembered.
   {if(await page.locator('.toolbar [data-command="sidebar"]').getAttribute('aria-pressed')!=='true')await page.locator('.toolbar [data-command="sidebar"]').click();
     await page.locator('#sidebar-panel').evaluate(panel=>Promise.all(panel.getAnimations().map(a=>a.finished)));
@@ -158,6 +231,14 @@ try{
   assert.equal((await page.locator('.notes-bar label').innerText()).trim(),'','notes have no label');
   await page.locator('.notes-bar textarea').fill('Presenter notes in Common');
   assert.equal((await content(page)).deck.slides[1].notes,'Presenter notes in Common');
+  // A press in the canvas takes the keys from a page field (the notes): Delete then removes the selected object.
+  await page.locator('.toolbar [data-command="insertShape"]').click();await page.locator('.shape-picker button').first().click();
+  await page.waitForFunction(async()=>/data-manual="shape"/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[1].html));
+  await canvas.locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(400);
+  await page.locator('.notes-bar textarea').click();await canvas.locator('[data-manual=shape]').click();await page.waitForTimeout(200);
+  await page.keyboard.press('Delete');
+  await page.waitForFunction(async()=>!/data-manual="shape"/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[1].html));
+  assert.equal((await content(page)).deck.slides[1].notes,'Presenter notes in Common','Delete did not reach the notes');
   // Slide master: a new base, activated; a duplicate undone; a new layout used by a slide (status bar).
   await page.locator('.slides-view-actions .segmented-view .tool').nth(1).click();
   const master=page.locator('.slides-sidebar .master-rail');

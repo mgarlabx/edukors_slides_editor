@@ -76,13 +76,27 @@ handle('nativeEdit',(event,action:string)=>{const w=event.sender;if(action==='de
 handle('clipboardWrite',async(_e,payload:any)=>{if(!payload||JSON.stringify(payload).length>50_000_000)throw Error('Clipboard limit.');await clipboard.writeText(JSON.stringify(payload));});
 handle('clipboardRead',async()=>{try{const data=JSON.parse(await clipboard.readText());return data?.format==='esf-slides'||data?.format==='esf-objects'?data:null;}catch{return null;}});
 handle('clipboardText',async()=>clipboard.readText());
+// An image on the clipboard: a copied image file first (Finder, Explorer: the file itself, not its icon), else the image data.
+const imageTypes:Record<string,string>={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',avif:'image/avif',svg:'image/svg+xml'};
 handle('clipboardImage',async()=>{
-  const items=await clipboard.read(),item=items.find(x=>x.types.some(t=>t.startsWith('image/')));if(!item)return null;
+  const items=await clipboard.read(),fileType=process.platform==='darwin'?'electron application/osclipboard;format="public.file-url"':'text/uri-list';
+  let file='';
+  for(const item of items){const blob=await item.getType(fileType).catch(()=>null) as Blob|null;if(!blob)continue;
+    const url=(await blob.text()).split(/\r?\n/).map(l=>l.replace(/\0/g,'').trim()).find(l=>l.startsWith('file:'));if(url){try{file=fileURLToPath(url);}catch{}break;}}
+  const ext=path.extname(file).slice(1).toLowerCase();
+  if(file&&/^(png|jpe?g|gif|webp|avif|svg|tiff?|bmp|heic)$/.test(ext)){
+    const stat=await fs.stat(file).catch(()=>null);
+    if(stat?.isFile()){if(stat.size>50_000_000)throw Error('Resource exceeds 50 MB.');
+      if(imageTypes[ext])return asset(await fs.readFile(file),path.basename(file),imageTypes[ext]);
+      const png=nativeImage.createFromPath(file).toPNG();if(png.length&&png.length<=50_000_000)return asset(png,path.basename(file,path.extname(file))+'.png','image/png');}
+  }
+  const item=items.find(x=>x.types.some(t=>t.startsWith('image/')));if(!item)return null;
   const type=['image/png','image/jpeg','image/webp','image/tiff'].find(t=>item.types.includes(t))||item.types.find(t=>t.startsWith('image/'))!;
   const bytes=Buffer.from(await (await item.getType(type) as Blob).arrayBuffer());if(bytes.length>50_000_000)throw Error('Resource exceeds 50 MB.');
   const png=type==='image/png'?bytes:nativeImage.createFromBuffer(bytes).toPNG();if(!png.length||png.length>50_000_000)throw Error('Resource exceeds 50 MB.');
   return asset(png,'clipboard.png','image/png');
 });
+
 
 // Present: the player in its own window, from the selected slide, in the interface language. Its tools (pen, lens,
 // presenter view…) stay in the exported HTML. One player window at a time: presenting again replaces it; it closes with

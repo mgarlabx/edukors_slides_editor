@@ -37,7 +37,7 @@ When a new version comes out, the editor itself says so and offers its download 
 | --- | --- |
 | **Top bar** | File (new, open, recent, save, export, show in folder), **Present** and the switch between **Slides** and **Slide Master**, undo and redo, editing (cut, copy, paste, duplicate, delete), **Insert** (text, shape, image, link, interactive question), Settings and Help. On the right, the slide list (⌥⌘0) and the **AI assistant** (⇧⌘A). |
 | **Tabs** (just below) | One open presentation per tab. The dot on a tab means unsaved changes; **+** creates another presentation. |
-| **Format bar** | Font, size, color, bold, italic, underline, line, fill, shadow and crop for the object selected on the slide. |
+| **Format bar** | Font, size, color, bold, italic, underline, alignment, bulleted or numbered lists, line spacing, line, fill, shadow and crop for the object selected on the slide. Alignment, paragraph (lists and spacing), strikethrough/subscript/superscript and arrange are menus, so the bar fits in one row. |
 | **Slide list** (left) | The thumbnails, with a bar to create, move, duplicate, copy, cut, paste and delete slides. |
 | **Slide** (center) | The slide being edited; below it, the **presenter notes**. |
 | **AI assistant** (right) | The conversation with the agent that creates and changes slides. |
@@ -64,12 +64,14 @@ To reuse a look, open the **New presentation** gallery with the presentation ope
 The slide works as in PowerPoint or Google Slides:
 
 - **Select.** Click an object (text, image, shape, link) to select it; ⇧ or ⌘ + click adds another; dragging from an empty spot selects everything inside the rectangle. ⌘A selects every object on the slide. Tab goes through the objects.
-- **Move.** Drag the object (a text, by its border). Pink guides show alignment with edges and centers; hold ⌥ to turn snapping off and ⇧ to move along one axis. The arrow keys move 1 px (⇧, 10 px).
-- **Resize.** Pull the white handles; an image keeps its proportions (⇧ frees them). ⌘ + arrows resize too. With several objects selected, the handles on the group's outline resize them all together.
-- **Text.** Click inside a text to edit it, keeping its formatting. Select a stretch to change its font, size or color in the format bar.
+- **Move.** Drag the object (a text, by its border). Pink guides show alignment with edges and centers; hold ⌥ to turn snapping off and ⇧ to move along one axis. The arrow keys move 1 px (⇧, 10 px). While dragging, the numbers next to the object show the position (top, left), in the rulers' units.
+- **Resize.** Pull the white handles; an image keeps its proportions (⇧ frees them). ⌘ + arrows resize too. With several objects selected, the handles on the group's outline resize them all together. While dragging, the numbers show the size (height, width).
+- **Rulers.** Above and to the left of the slide, the rulers measure it as 1600 × 900. Press a ruler to see a guide line across the slide (vertical from the top ruler, horizontal from the left one); drag to move it; it goes away on release.
+- **Text.** Click inside a text to edit it, keeping its formatting. Select a stretch to change its font, size or color in the format bar. With several texts selected, the bar formats them all at once (each whole text). In a list, Enter starts the next item and Shift+Enter breaks the line inside the item.
 - **Images.** **Insert → Image** pastes the copied image or, if there is none, asks for a file; you can also drag images from your computer onto the slide. If the layout has an empty image slot, the image goes there. The crop button opens a box with handles: Enter confirms, Esc cancels.
 - **Shapes and links.** The chosen shape lands on the slide with an adjustable line and fill. A link uses the copied address; its caption replaces the address on the slide, and the **QR code** option puts the code beside it.
 - **Order and alignment.** A right click on an object offers **Bring to front**, **Send to back** and, for texts, horizontal and vertical alignment.
+- **Group.** Select two or more objects and press ⌘G (or the **Group** button on the format bar, or a right click): the group moves and resizes as one object. A click on a member selects the group; another click goes into it (to edit a text, for instance). ⇧⌘G or **Ungroup** splits it again.
 - **Copy between slides and presentations.** Copied objects (⌘C) paste (⌘V) on another slide, even in another presentation, with the same look and animations.
 
 Each gesture is one undo step (⌘Z). Only Esc cancels a gesture in progress.

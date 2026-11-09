@@ -8,10 +8,10 @@ import {createRoot} from 'react-dom/client';
 import {createPortal} from 'react-dom';
 import {masterPrefix,layoutPrefix,masterItems,itemName,masterDeck,masterSlide,findSlide,putSlide} from '../shared/masters';
 import {Deck,Slide,Template,Language,Asset,newDeck,newSlide,newMaster,defaultNames,duplicateSlides,uid,layoutOf,activeMaster,masterOf,blankHtml,usedAssets} from '../shared/model';
-import {copySlides,pasteSlides,copyMasterItem,pasteMasterItems,importResources,independentObjects,joinBehavior} from '../shared/clipboard';
+import {copySlides,pasteSlides,copyMasterItem,pasteMasterItems,importResources,independentObjects,joinBehavior,pastedFonts,plainFontNames} from '../shared/clipboard';
 import {relayout} from '../shared/layout';
 import {applyEdits,editIndex,EditOp,SelectionDetails,ObjectStyle} from '../shared/edit';
-import {insertManual,editableAt,safeUrl,setLinkUrl,setLinkCaption,setLinkQr,linkHasQr,ManualKind,shapeTypes,shapeLook,setShape,setLinkStyle,linkLook,LinkStyle,setImageShadow,wrapShadow} from '../shared/manual';
+import {insertManual,editableAt,safeUrl,setLinkUrl,setLinkCaption,setLinkQr,linkHasQr,ManualKind,shapeTypes,shapeLook,setShape,setLinkStyle,linkLook,LinkStyle,setImageShadow,wrapShadow,setGroup} from '../shared/manual';
 import {PollConfig,pollWords} from '../shared/poll';
 import {encodeEslx,decodeEslx} from '../shared/eslx';
 import {setAssetUrl} from '../shared/render';
@@ -166,6 +166,28 @@ const settingsSections=(()=>{
     return{key,label,section};
   });
 })();
+// Rulers in slide units (1600 × 900): a label every 100, ticks every 50 and 10.
+const rulerMarks={x:Array.from({length:16},(_,i)=>i*100),y:Array.from({length:9},(_,i)=>i*100)};
+// Pressing a ruler shows a guide line across the slide (a vertical one from the top ruler) that follows the pointer until release.
+function Ruler({axis,onGuide}:{axis:'x'|'y';onGuide:(g:{axis:'x'|'y';at:number}|null)=>void}){
+  const n=axis==='x'?1600:900;
+  // The slide frame would take the pointer events once the pointer is over it: it ignores them during the drag.
+  const press=(e:React.PointerEvent<HTMLDivElement>)=>{
+    if(e.button!==0)return;e.preventDefault();const el=e.currentTarget;
+    const at=(x:number,y:number)=>{const r=el.getBoundingClientRect(),f=axis==='x'?(x-r.left)/r.width:(y-r.top)/r.height;onGuide({axis,at:Math.round(Math.max(0,Math.min(1,f))*n)});};
+    const move=(m:PointerEvent)=>{if(m.pointerId===e.pointerId)at(m.clientX,m.clientY);},end=(m:PointerEvent)=>{if(m.pointerId!==e.pointerId)return;
+      removeEventListener('pointermove',move,true);removeEventListener('pointerup',end,true);removeEventListener('pointercancel',end,true);document.body.classList.remove('ruler-drag');onGuide(null);};
+    addEventListener('pointermove',move,true);addEventListener('pointerup',end,true);addEventListener('pointercancel',end,true);document.body.classList.add('ruler-drag');
+    try{el.setPointerCapture(e.pointerId);}catch{}at(e.clientX,e.clientY);
+  };
+  return <div className={`ruler ruler-${axis}`} aria-hidden="true" onPointerDown={press}>
+    {rulerMarks[axis].map(v=><span key={v} style={{[axis==='x'?'left':'top']:`${v/n*100}%`}}>{v}</span>)}</div>;
+}
+function RuledCanvas({width,children}:{width:string;children:React.ReactNode}){
+  const [guide,setGuide]=useState<{axis:'x'|'y';at:number}|null>(null),pos=guide&&`${guide.at/(guide.axis==='x'?1600:900)*100}%`;
+  return <div className="canvas-ruled"><span className="ruler-corner"/><Ruler axis="x" onGuide={setGuide}/><Ruler axis="y" onGuide={setGuide}/>
+    <div className="slide-canvas" style={{width}}>{children}{guide&&<div className={`ruler-guide ruler-guide-${guide.axis}`} style={guide.axis==='x'?{left:pos!}:{top:pos!}}><span>{guide.at}</span></div>}</div></div>;
+}
 // Edit and Insert buttons of the toolbar keep the keyboard in the canvas frame, so a text being edited keeps its selection.
 for(const button of document.querySelectorAll<HTMLElement>('#edit-actions .tool,#insert-actions .tool'))button.addEventListener('mousedown',e=>e.preventDefault());
 for(const key of ['undo','redo','cut','copy','paste','duplicate','delete','insertText','insertShape','insertImage'])shellButton(key)?.addEventListener('click',e=>command(key==='insertShape'?'insertShapeMenu:'+JSON.stringify((e.currentTarget as HTMLElement).getBoundingClientRect()):key));
@@ -208,6 +230,7 @@ function Editor(){
   const lastFormat=useRef('html');
   const [pollTarget,setPollTarget]=useState<{doc:number;slide:string;poll?:PollConfig}|null>(null);
   const [layoutPick,setLayoutPick]=useState<'insert'|'change'|null>(null),[renaming,setRenaming]=useState<string|null>(null),[templateName,setTemplateName]=useState<string|null>(null),[zoom,setZoom]=useState(100);
+  const [grouping,setGrouping]=useState({group:false,ungroup:false}),groupingRef=useRef(grouping);groupingRef.current=grouping;
   const editorFrame=useRef<HTMLIFrameElement|null>(null),[manualSelection,setManualSelection]=useState<{slide:string;index:number;details?:SelectionDetails}|null>(null);
   const canvasRange=useRef<{start:number;end:number}|null>(null),[imageSel,setImageSel]=useState(false),[cropOn,setCropOn]=useState(false);
   // Selection mode: the last area clicked (slide list or canvas) owns Delete, copy/cut and ⌘D, whatever has the keyboard focus.
@@ -295,10 +318,10 @@ function Editor(){
     const clones=top.map(source=>source.cloneNode(true) as HTMLElement);
     const pairs=top.flatMap((source,i)=>{const a=[source,...source.querySelectorAll('*')],b=[clones[i],...clones[i].querySelectorAll<HTMLElement>('*')];return a.map((x,j)=>[x,b[j]] as [Element,HTMLElement]);});
     const css=sourceCss?motionCss(sourceCss,pairs):'';
-    const faces=new CSSStyleSheet(),fontNames=new Map<string,string>(),wantedFonts=new Set<string>();let fontCss='';
+    const faces=new CSSStyleSheet(),wantedFonts=new Set<string>();let fontCss='';
     for(const object of reply)for(const value of object.styles||[])if(typeof value==='string'){const el=document.createElement('span');el.setAttribute('style',value);for(const family of el.style.fontFamily.split(','))wantedFonts.add(family.trim().replace(/^["']|["']$/g,'').toLowerCase());}
     try{faces.replaceSync(sourceCss);
-      const collect=(rules:CSSRuleList)=>{for(const rule of rules){if(rule instanceof CSSFontFaceRule){const name=rule.style.fontFamily.replace(/^["']|["']$/g,'');const key=name.toLowerCase();if(!wantedFonts.has(key))continue;if(!fontNames.has(key))fontNames.set(key,name+'-'+uid('font'));rule.style.fontFamily='"'+fontNames.get(key)+'"';fontCss+=rule.cssText+'\n';}else if(rule instanceof CSSGroupingRule)collect(rule.cssRules);}};collect(faces.cssRules);
+      const collect=(rules:CSSRuleList)=>{for(const rule of rules){if(rule instanceof CSSFontFaceRule){const name=rule.style.fontFamily.replace(/^["']|["']$/g,'');const key=name.toLowerCase();if(!wantedFonts.has(key))continue;fontCss+=rule.cssText+'\n';}else if(rule instanceof CSSGroupingRule)collect(rule.cssRules);}};collect(faces.cssRules);
     }catch{}
     const html=top.map((source,i)=>{
       const o=reply?.find(x=>x?.index===all.indexOf(source)),el=clones[i];
@@ -309,7 +332,6 @@ function Editor(){
       el.style.setProperty('position','absolute');el.style.setProperty('left',o.left+'px');el.style.setProperty('top',o.top+'px');el.style.setProperty('margin','0');
       for(const [k,v] of Object.entries(o.vars||{}))if(typeof v==='string'&&!/url\(/i.test(v)&&!el.style.getPropertyValue(k))el.style.setProperty(k,v);
       el.style.setProperty('box-sizing','border-box');el.style.setProperty('width',o.width+'px');el.style.setProperty(o.text?'min-height':'height',o.height+'px');
-      for(const x of list)if('style' in x&&x.style.fontFamily)x.style.fontFamily=x.style.fontFamily.split(',').map(f=>{const name=f.trim().replace(/^["']|["']$/g,'');return fontNames.has(name.toLowerCase())?'"'+fontNames.get(name.toLowerCase())+'"':f;}).join(',');
       return el.outerHTML;
     });
     // A slide's script animation goes with its objects when it refers to them (an ID, class or data attribute).
@@ -329,17 +351,20 @@ function Editor(){
     const targetId=editSlide?.id;if(!deck||!targetId||!Array.isArray(p.html))return;
     mutate(d=>{
       const slide=findSlide(d,targetId);if(!slide)return;
-      const replace=importResources(d,Array.isArray(p.assets)?p.assets:[]),prepared=independentObjects(p.html.slice(0,200).map(String),typeof p.css==='string'?p.css:'',replace,typeof p.script==='string'&&p.slideId!==slide.id&&!targetId.startsWith(masterPrefix)&&!targetId.startsWith(layoutPrefix)?p.script:'');
+      const replace=importResources(d,Array.isArray(p.assets)?p.assets:[]),targetCss=targetId.startsWith(masterPrefix)||targetId.startsWith(layoutPrefix)?'':masterOf(d,slide).css+'\n'+(d.layouts.find(l=>l.id===slide.layoutId)?.css||'')+'\n'+slide.css,prepared=independentObjects(p.html.slice(0,200).map(String),typeof p.css==='string'?p.css:'',replace,typeof p.script==='string'&&p.slideId!==slide.id&&!targetId.startsWith(masterPrefix)&&!targetId.startsWith(layoutPrefix)?p.script:'');
       const doc=new DOMParser().parseFromString(slide.html,'text/html'),root=doc.querySelector('.slide')||doc.body,added:HTMLElement[]=[];
-      for(const h of prepared.html){const tpl=doc.createElement('template');tpl.innerHTML=h;const el=tpl.content.firstElementChild as HTMLElement|null;if(!el)continue;
+      for(const h of prepared.html){const tpl=doc.createElement('template');tpl.innerHTML=plainFontNames(h);const el=tpl.content.firstElementChild as HTMLElement|null;if(!el)continue;
         if(p.slideId===slide.id){const [x=0,y=0]=(el.style.translate||'').split(/\s+/).map(v=>parseFloat(v)||0);el.style.translate=`${x+24}px ${y+24}px`;}
         root.append(el);added.push(el);
         const shadow=/^(IMG|SVG|VIDEO|CANVAS)$/i.test(el.tagName)&&el.style.position==='absolute'&&/drop-shadow/.test(el.style.filter)?el.style.filter:'';if(shadow){el.style.removeProperty('filter');wrapShadow(doc,el,shadow);}}
       const all=added.flatMap(el=>[el,...el.querySelectorAll<HTMLElement>('*')]),ids=new Map<string,string>();
       for(const el of all)if(el.dataset.linkId){const old=el.dataset.linkId;if(!ids.has(old))ids.set(old,uid('link'));el.dataset.linkId=ids.get(old)!;}
       for(const el of all)if(el.dataset.linkQr&&ids.has(el.dataset.linkQr))el.dataset.linkQr=ids.get(el.dataset.linkQr);
+      // Pasted groups are new groups (the copies never join the originals).
+      const groupIds=new Map<string,string>();for(const el of all)if(el.dataset.groupId){const old=el.dataset.groupId;if(!groupIds.has(old))groupIds.set(old,uid('group'));el.dataset.groupId=groupIds.get(old)!;}
       if(!added.length)return;
-      const css=prepared.css,previous=targetId.startsWith(masterPrefix)?d.masters.find(m=>masterPrefix+m.id===targetId)?.css||'':targetId.startsWith(layoutPrefix)?d.layouts.find(l=>layoutPrefix+l.id===targetId)?.css||'':slide.css;
+      const previous0=targetId.startsWith(masterPrefix)?d.masters.find(m=>masterPrefix+m.id===targetId)?.css||'':targetId.startsWith(layoutPrefix)?d.layouts.find(l=>layoutPrefix+l.id===targetId)?.css||'':targetCss;
+      const css=pastedFonts(prepared.css,previous0),previous=targetId.startsWith(masterPrefix)?d.masters.find(m=>masterPrefix+m.id===targetId)?.css||'':targetId.startsWith(layoutPrefix)?d.layouts.find(l=>layoutPrefix+l.id===targetId)?.css||'':slide.css;
       putSlide(d,{...slide,html:doc.body.innerHTML,css:previous+(css&&!previous.includes(css)?'\n'+css:''),script:joinBehavior(slide.script,prepared.script),staticHtml:''});
       canvasSel.current={slide:slide.id,indices:added.map(el=>editIndex(doc,el)),editing:false};
     });
@@ -385,7 +410,8 @@ function Editor(){
   const changeObjectStyle=(style:ObjectStyle)=>frameCommand({type:'style',style});
   const toCanvas=()=>setSelMode('canvas');
   const toSlides=()=>{if(selModeRef.current==='slides')return;setSelMode('slides');if(canvasSel.current.indices.length){frameCommand({type:'deselect'});canvasSel.current={...canvasSel.current,indices:[],editing:false};setManualSelection(null);}};
-  const formatText=(cmd:string,value?:string)=>frameCommand({type:'format',command:cmd,value,range:canvasRange.current});
+  // on/script: the state the bar asks for, used when several texts are formatted together (each to the same state).
+  const formatText=(cmd:string,value?:string,extra?:{on?:boolean;script?:string})=>frameCommand({type:'format',command:cmd,value,range:canvasRange.current,...extra});
   // A right click that stops at the canvas iframe element (instead of reaching its document) is passed to the frame.
   useEffect(()=>{const down=(e:PointerEvent)=>{const f=editorFrame.current;if(e.target!==f||!f)return;toCanvas();if(e.button!==2)return;e.preventDefault();const r=f.getBoundingClientRect();frameCommand({type:'contextAt',x:e.clientX-r.left,y:e.clientY-r.top});},menu=(e:MouseEvent)=>{if(e.target===editorFrame.current)e.preventDefault();};
     document.addEventListener('pointerdown',down,true);document.addEventListener('contextmenu',menu,true);return()=>{document.removeEventListener('pointerdown',down,true);document.removeEventListener('contextmenu',menu,true);};},[]);
@@ -396,9 +422,10 @@ function Editor(){
   const controlColor=(value:string,fallback:string)=>{if(/^#[\da-f]{6}$/i.test(value))return value;const rgb=value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);return rgb?'#'+rgb.slice(1,4).map(n=>Number(n).toString(16).padStart(2,'0')).join(''):fallback;};
   const linkStyle=(key:LinkStyle,value:string)=>changeManual((s,i)=>setLinkStyle(s,i,key,value));
   const setLink=(value:string)=>{const url=safeUrl(value);if(!url){notice(t('invalidUrl'));return;}changeManual((s,i)=>setLinkUrl(s,i,url));};
-  async function dropFiles(e:React.DragEvent){
-    e.preventDefault();if(!deck)return;const assets:Asset[]=[];
-    for(const file of Array.from(e.dataTransfer.files)){
+  // Image files dropped on the canvas (or around it) are inserted like Insert → Image.
+  async function dropFiles(files:File[]){
+    if(!deck)return;const assets:Asset[]=[];
+    for(const file of files){
       if(!/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type))continue;
       if(file.size>50_000_000)throw Error('Resource exceeds 50 MB.');
       const buffer=await file.arrayBuffer(),hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))].map(n=>n.toString(16).padStart(2,'0')).join('');
@@ -455,7 +482,7 @@ function Editor(){
     // Copy, cut and paste follow the selection mode: slides (or the master item) from the list, objects from the canvas.
     if(name==='copy'||name==='cut'||name==='paste'){
       if(typing||canvasEditing()||name!=='paste'&&pageText()){void api.invoke('nativeEdit',name);return;}
-      if(name==='paste'){void run(async()=>{const p=await api.invoke('clipboardRead');if(p)await paste(p);else if(selModeRef.current==='canvas'){const asset=await api.invoke('clipboardImage') as Asset|null;if(asset)addManual('image','asset:'+asset.id,asset);}});return;}
+      if(name==='paste'){void run(async()=>{const p=await api.invoke('clipboardRead');if(p)await paste(p);else{const asset=await api.invoke('clipboardImage') as Asset|null;if(asset)addManual('image','asset:'+asset.id,asset);}});return;}
       if(selModeRef.current==='slides'){void run(()=>copy(name==='cut'));return;}
       void run(async()=>{await copyObjects(name==='cut');});return;
     }
@@ -481,6 +508,7 @@ function Editor(){
       if(mod&&!e.altKey&&!e.shiftKey&&(k==='='||k==='+'||k==='-'||k==='0')){e.preventDefault();setZoom(z=>k==='0'?100:k==='-'?[...zoomSteps].reverse().find(v=>v<z)??z:zoomSteps.find(v=>v>z)??z);return;}
       if(field)return;
       if(mod&&!e.altKey&&k==='z'){e.preventDefault();command(e.shiftKey?'redo':'undo');return;}
+      if(mod&&!e.altKey&&k==='g'){e.preventDefault();if(selModeRef.current==='canvas')frameCommand({type:e.shiftKey?'ungroup':'group'});return;}
       if(mod&&!e.altKey&&!e.shiftKey&&['c','x','v','d','a'].includes(k)){e.preventDefault();command(({c:'copy',x:'cut',v:'paste',d:'duplicate',a:'selectAll'} as Record<string,string>)[k]);return;}
       // The crop box confirms (Enter) or cancels (Esc) even when the keyboard is not in the canvas frame.
       if(cropOn&&(e.key==='Enter'||e.key==='Escape')){e.preventDefault();frameCommand({type:e.key==='Enter'?'crop':'cropCancel'});return;}
@@ -497,7 +525,9 @@ function Editor(){
   });
   const blankDeck=useMemo(()=>newDeck(t('untitled'),defaultNames[lang]),[lang]);
   // A press inside the canvas never reaches this page: Common closes its open menus and pickers as on a click outside.
-  const relayPress=()=>common.EdukorsMenus.pressIn(editorFrame.current);
+  // A press in the frame does not take the focus from the page: a field that still has it (notes, the assistant's composer,
+  // the format bar) would keep Delete and the other keys, so it lets go, as on any click outside it.
+  const relayPress=()=>{const field=document.activeElement as HTMLElement|null;if(field?.matches?.(typingField))field.blur();common.EdukorsMenus.pressIn(editorFrame.current);};
   const canvasEdit:CanvasEdit|undefined=editSlide&&active!==null?(target=>({
     select:()=>canvasSel.current.slide===target.id?{...canvasSel.current,range:canvasSel.current.editing?canvasRange.current:null}:{indices:[],editing:false},
     onCrop:setCropOn,
@@ -513,16 +543,20 @@ function Editor(){
       const sep={separator:true},px=r.left+x,py=r.top+y;
       const items=count?[run('cut',key('X')),run('copy',key('C')),run('paste',key('V')),run('duplicate',key('D')),run('delete',mac?'⌫':'Del'),sep,
           frame('bringToFront',{type:'order',value:'front'}),frame('sendToBack',{type:'order',value:'back'}),
+          ...groupingRef.current.group||groupingRef.current.ungroup?[sep,{label:commonT('fmtGroup'),shortcut:key('G'),disabled:!groupingRef.current.group,action:()=>frameCommand({type:'group'})},{label:commonT('fmtUngroup'),shortcut:key('G',true),disabled:!groupingRef.current.ungroup,action:()=>frameCommand({type:'ungroup'})}]:[],
           ...count>1?[sep,...(['top','middle','bottom'] as const).map(v=>frame('align'+v[0].toUpperCase()+v.slice(1),{type:'arrange',value:v})),sep,
             ...(['left','center','right'] as const).map(v=>frame('align'+v[0].toUpperCase()+v.slice(1),{type:'arrange',value:v})),sep,
             frame('distributeH',{type:'arrange',value:'distributeH'},count<3),frame('distributeV',{type:'arrange',value:'distributeV'},count<3)]:[],
           ...count===1&&text?[sep,{label:commonT('editText'),shortcut:mac?'↩':'Enter',action:()=>frameCommand({type:'edit'})}]:[]]
         :[run('paste',key('V')),sep,run('insertText'),{label:commonT('insertShape'),action:()=>common.EdukorsShapes.pick({x:px,y:py,t:commonT,onPick:(type:string)=>addManual('shape',type)})},run('insertImage')];
       common.EdukorsContextMenu.open({x:px,y:py,label:commonT('objectActions'),items,restoreFocus:editorFrame.current});},
+    onFiles:files=>{toCanvas();void run(()=>dropFiles(files));},
     onRange:(start,end)=>{canvasRange.current=end>start?{start,end}:null;},
-    onState:(indices,editing,details)=>{if(indices.length)setSelMode('canvas');if(canvasSel.current.slide!==target.id||canvasSel.current.indices[0]!==indices[0])canvasRange.current=null;canvasSel.current={slide:target.id,indices,editing};setManualSelection(indices.length===1?{slide:target.id,index:indices[0],details}:null);setImageSel(!!details?.crop);},
+    onState:(indices,editing,details,g)=>{setGrouping(x=>g&&(x.group!==g.group||x.ungroup!==g.ungroup)?g:x);if(indices.length)setSelMode('canvas');if(canvasSel.current.slide!==target.id||canvasSel.current.indices[0]!==indices[0])canvasRange.current=null;canvasSel.current={slide:target.id,indices,editing};setManualSelection(indices.length===1||indices.length>1&&details?{slide:target.id,index:indices[0],details}:null);setImageSel(!!details?.crop);},
+    onGroup:(type,indices)=>{const id=target.id;mutate(d=>{const s=findSlide(d,id);if(!s)return;const next=setGroup(s,indices,type==='group'?uid('group'):null);if(next.html===s.html)return;
+      putSlide(d,next);canvasSel.current={slide:id,indices,editing:false};});},
     // All operations of one gesture (a text commit followed by a drag) become a single undo step.
-    onOps:(ops,indices,editing,range)=>{canvasSel.current={slide:target.id,indices,editing};if(range!==undefined)canvasRange.current=range&&range.end>range.start?range:null;setManualSelection(previous=>indices.length===1?{slide:target.id,index:indices[0],details:previous?.slide===target.id&&previous.index===indices[0]?previous.details:undefined}:null);
+    onOps:(ops,indices,editing,range)=>{canvasSel.current={slide:target.id,indices,editing};if(range!==undefined)canvasRange.current=range&&range.end>range.start?range:null;setManualSelection(previous=>indices.length===1?{slide:target.id,index:indices[0],details:previous?.slide===target.id&&previous.index===indices[0]?previous.details:undefined}:indices.length>1&&previous?.details&&previous.slide===target.id&&previous.index===indices[0]?previous:null);
       mutate(d=>{const current=findSlide(d,target.id);if(!current)return;const edited=applyEdits(current,ops);if(edited.html===current.html&&edited.staticHtml===current.staticHtml&&edited.title===current.title)return;putSlide(d,edited);});}
   }))(editSlide):undefined;
 
@@ -533,7 +567,9 @@ function Editor(){
   useEffect(()=>{
     const bar=document.getElementById('context-toolbar');if(!bar)return;
     bar.onpointerdown=e=>{if((e.target as Element).closest('.pick-button,.color-chip,input'))frameCommand({type:'hold'});};
-    if(!tab||!editSlide||(!details&&!imageSel)){bar.replaceChildren();return;}
+    if(!tab||!editSlide||(!details&&!imageSel&&!grouping.group&&!grouping.ungroup)){bar.replaceChildren();return;}
+    // Several objects (or a group): only the arrange menu (stacking order, group and ungroup).
+    const arrangeOnly=!details&&!imageSel;
     const kind=details?.kind||(imageSel?'image':'box'),st=details?.style||{},px=(v?:string)=>parseFloat(v||'')||0;
     const hex=(v?:string,fallback='#172033')=>controlColor(v||'',fallback);
     const transparent=(v?:string)=>!v||/(?:transparent|rgba\([^)]*,\s*0\))$/.test(v);
@@ -545,9 +581,12 @@ function Editor(){
       align:({start:'left',left:'left',center:'center',right:'right',end:'right',justify:'justify'} as Record<string,string>)[st.textAlign||'']||'left',valign:({center:'middle',end:'bottom'} as Record<string,string>)[st.alignContent||'']||'top',
       lineWidth:look?look.width:px(st.borderWidth),lineStyle:['dashed','dotted'].includes(st.borderStyle||'')?st.borderStyle:'solid',lineColor:look?hex(look.stroke,'#2f4fd0'):hex(st.borderColor),
       fill:look?(look.fill==='none'?'transparent':hex(look.fill,'#4a6cf7')):transparent(st.backgroundColor)?'transparent':hex(st.backgroundColor,'#ffffff'),
-      shadow:look?look.shadow:!!st.boxShadow&&st.boxShadow!=='none'||/drop-shadow/.test(st.filter||''),opacity,imageOpacity:opacity,crop:cropOn,keepRatio:kind==='image',link:manualEl?.dataset.url||''
+      shadow:look?look.shadow:!!st.boxShadow&&st.boxShadow!=='none'||/drop-shadow/.test(st.filter||''),opacity,imageOpacity:opacity,crop:cropOn,keepRatio:kind==='image',link:manualEl?.dataset.url||'',list:details?.list||'none',lineHeight:parseFloat(st.lineHeight||'')||1.2
     };
-    const groups=kind==='text'?['text','align','valign','shape','arrange']:kind==='link'?['text','align','link','arrange']:kind==='image'?['image','arrange']:['shape','arrange'];
+    // Compact groups (Common's dropdowns), so the bar fits in one row.
+    // Group and ungroup are buttons of their own (below), not entries of the arrange menu.
+    state.list=details?.list;if(kind==='link')delete state.valign;
+    const groups=arrangeOnly?['arrangeMenu']:kind==='text'?['textCompact','alignMenu','paragraphMenu','shape','arrangeMenu']:kind==='link'?['textCompact','alignMenu','link','arrangeMenu']:kind==='image'?['image','arrangeMenu']:['shape','arrangeMenu'];
     const border=(property:string,value:any)=>{
       const none=!state.lineWidth||st.borderStyle==='none';
       if(property==='lineWidth')changeObjectStyle({'border-width':value+'px','border-style':value?state.lineStyle:'none'});
@@ -555,16 +594,19 @@ function Editor(){
       if(property==='lineColor')changeObjectStyle({'border-color':value,...none?{'border-width':'2px','border-style':'solid'}:{}});
     };
     const onChange=(property:string,value:any)=>{
+      if(property==='group'||property==='ungroup'){frameCommand({type:property});return;}
       if(property==='bringToFront'||property==='sendToBack'){frameCommand({type:'order',value:property==='bringToFront'?'front':'back'});return;}
       if(property==='align'){if(value==='justify')formatText('justifyFull');else frameCommand({type:'align',axis:'x',value:({left:'start',center:'center',right:'end'} as Record<string,string>)[value]});return;}
+      if(property==='list'){formatText('list',value);return;}
+      if(property==='lineHeight'){changeObjectStyle({'line-height':String(value)});return;}
       if(property==='valign'){frameCommand({type:'align',axis:'y',value:({top:'start',middle:'center',bottom:'end'} as Record<string,string>)[value]});return;}
       if(kind==='link'){
         const link:Record<string,()=>void>={bold:()=>linkStyle('fontWeight',value?'700':'400'),italic:()=>linkStyle('fontStyle',value?'italic':'normal'),underline:()=>linkStyle('textDecoration',value?'underline':'none'),
           fontSize:()=>linkStyle('fontSize',value+'px'),fontFamily:()=>linkStyle('fontFamily',value),color:()=>linkStyle('color',value),link:()=>{if(value)setLink(value);},createQr:()=>changeManual((s,i)=>setLinkQr(s,i,true))};
         link[property]?.();return;
       }
-      const text:Record<string,()=>void>={bold:()=>formatText('bold'),italic:()=>formatText('italic'),underline:()=>formatText('underline'),strike:()=>formatText('strikeThrough'),
-        script:()=>formatText(value==='sub'||value==='none'&&st.verticalAlign==='sub'?'subscript':'superscript'),fontSize:()=>formatText('fontSize',value+'px'),fontFamily:()=>formatText('fontFamily',value),color:()=>formatText('color',value)};
+      const text:Record<string,()=>void>={bold:()=>formatText('bold',undefined,{on:!!value}),italic:()=>formatText('italic',undefined,{on:!!value}),underline:()=>formatText('underline',undefined,{on:!!value}),strike:()=>formatText('strikeThrough',undefined,{on:!!value}),
+        script:()=>formatText(value==='sub'||value==='none'&&st.verticalAlign==='sub'?'subscript':'superscript',undefined,{script:value}),fontSize:()=>formatText('fontSize',value+'px'),fontFamily:()=>formatText('fontFamily',value),color:()=>formatText('color',value)};
       if(text[property]){text[property]();return;}
       if(property==='opacity'||property==='imageOpacity'){changeObjectStyle({opacity:String(Math.max(0,Math.min(100,Number(value)||0))/100)});return;}
       if(kind==='shape'){
@@ -583,9 +625,9 @@ function Editor(){
       if(property==='fill')changeObjectStyle({'background-color':value});
       if(property==='shadow')changeObjectStyle({'box-shadow':value?'0 12px 30px #17203355':'none'});
     };
-    common.EdukorsFormat.render(bar,{groups,state,t:commonT,onChange,options:{fontFamilies:[...new Set([state.fontFamily,...(details?.fonts||[]),...common.EdukorsFormat.defaults.fontFamilies])]}});
+    common.EdukorsFormat.render(bar,{groups,state,t:commonT,onChange,options:{compact:true,fontFamilies:[...new Set([state.fontFamily,...(details?.fonts||[]),...common.EdukorsFormat.defaults.fontFamilies])]}});
     // Shapes also change their type, with Common's shape picker.
-    if(kind==='shape'&&look){
+    if(kind==='shape'&&look&&!arrangeOnly){
       const group=document.createElement('div');group.className='format-group';group.dataset.group='shapeType';group.setAttribute('role','group');
       const button=document.createElement('button');button.type='button';button.className='format-button icon';button.dataset.control='shapeType';button.setAttribute('aria-label',commonT('shapeType'));
       button.innerHTML=common.EdukorsShapes.icon(look.type,18)+`<span class="tooltip" aria-hidden="true">${commonT('shapeType')}</span>`;
@@ -594,7 +636,18 @@ function Editor(){
       const sep=document.createElement('span');sep.className='separator';sep.setAttribute('aria-hidden','true');
       group.append(button);bar.prepend(group,sep);
     }
-  },[tab?.version,active,editSlide?.id,details,manualSelection?.index,imageSel,cropOn,lang,!!tab]);
+    // Group and ungroup as buttons of their own, shown when they apply (also ⌘G/⇧⌘G and the context menu).
+    const actions=([['group','fmtGroup','common-group',grouping.group],['ungroup','fmtUngroup','common-ungroup',grouping.ungroup]] as const).filter(x=>x[3]);
+    if(actions.length){
+      const group=document.createElement('div');group.className='format-group';group.dataset.group='grouping';group.setAttribute('role','group');
+      for(const [type,label,icon] of actions){
+        const button=document.createElement('button');button.type='button';button.className='format-button icon';button.dataset.control=type;button.setAttribute('aria-label',commonT(label));
+        button.innerHTML=common.EdukorsIcons.svg(icon,16)+`<span class="tooltip" aria-hidden="true">${commonT(label)} (${common.EdukorsPlatform?.mac!==false?(type==='group'?'⌘G':'⇧⌘G'):(type==='group'?'Ctrl+G':'Ctrl+Shift+G')})</span>`;
+        button.addEventListener('mousedown',e=>e.preventDefault());button.addEventListener('click',()=>frameCommand({type}));group.append(button);
+      }
+      const sep=document.createElement('span');sep.className='separator';sep.setAttribute('aria-hidden','true');bar.append(sep,group);
+    }
+  },[tab?.version,active,editSlide?.id,details,manualSelection?.index,imageSel,cropOn,lang,!!tab,grouping]);
   // Replaces the selected image with another one (a file, or the image on the clipboard first).
   async function replaceImage(){
     if(!editSlide||!selectedManual)return;const index=selectedManual.index,id=editSlide.id;
@@ -619,9 +672,9 @@ function Editor(){
       <div className="slide-list" id="master-items" role="tabpanel" aria-labelledby={'master-tab-'+masterTab} ref={railRef}>{visibleMasterItems.map(item=>{const label=itemName(deck,item),isMaster=item.startsWith('m:'),isActive=item==='m:'+deck.activeMaster;return <div key={item} className={'slide-item '+(isMaster?'master-item':'layout-item')+(item===masterItem?' selected':'')+(isActive?' active-master':'')}><button className="master-preview" onClick={()=>pickMasterItem(item)} onDoubleClick={()=>setRenaming(item)} aria-label={label+(isActive?` (${t('activeMasterBadge')})`:'')} title={label}><LazyPreview deck={masterDeck(deck,item)} slide={masterSlide(deck,item)}/></button>
         <div className="master-item-caption">{renaming===item?<input className="item-name" autoFocus defaultValue={label} maxLength={200} aria-label={t('renameItem')} onBlur={e=>renameItem(item,e.target.value)} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.stopPropagation();e.currentTarget.value=label;e.currentTarget.blur();}}}/>:<span className="item-name" title={label} onDoubleClick={()=>setRenaming(item)}>{label}</span>}{isMaster&&<button type="button" className="master-activate" aria-label={`${t('activateMaster')}: ${label}`} title={`${t('activateMaster')}: ${label}`} aria-pressed={isActive} onClick={()=>activateMaster(item.slice(2))}><span className="slides-contents" dangerouslySetInnerHTML={{__html:commonIcon('graph-Check',16)}}/></button>}</div></div>;})}</div></div>
     :<div className={'slide-rail'+(selMode==='canvas'?' inactive':'')} aria-label={t('slidePanel')} onPointerDown={toSlides} onFocus={toSlides}>{railTools}<div className="rail-caption"><span>{t('slides')}</span><span>{deck.slides.length}</span></div><div className="slide-list" ref={railRef}>{deck.slides.map((s,index)=><div key={s.id} data-id={s.id} draggable onDragStart={e=>e.dataTransfer.setData('text/esf-slide',s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData('text/esf-slide');if(!id||id===s.id)return;mutate(d=>{const from=d.slides.findIndex(x=>x.id===id);if(from<0)return;const [moved]=d.slides.splice(from,1);d.slides.splice(d.slides.findIndex(x=>x.id===s.id)+(from<index?1:0),0,moved);});}} className={'slide-item '+(tab.selected.includes(s.id)?'selected':'')}><span className="slide-number">{index+1}</span><button aria-label={`${t('slide')} ${index+1}: ${s.title}`} aria-current={s.id===slide.id?'true':undefined} onClick={e=>selectSlide(s.id,e)}><LazyPreview deck={deck} slide={s}/></button></div>)}</div></div>);
-  const workbench=tab&&deck&&slide&&<div className="esf-workbench" onDragOver={e=>e.preventDefault()} onDrop={e=>void run(()=>dropFiles(e))}>
+  const workbench=tab&&deck&&slide&&<div className="esf-workbench" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const files=[...e.dataTransfer.files];void run(()=>dropFiles(files));}}>
     {deck.importReport&&<ImportNotice deck={deck} t={t} onDismiss={()=>mutate(d=>{delete d.importReport;})}/>}
-    <div className="canvas-scroll"><div className="slide-canvas" style={{width:`calc(min(100cqw, 100cqh * 16 / 9) * ${zoom/100})`}}><Preview deck={canvasDeck!} slide={editSlide!} edit={canvasEdit} frameRef={editorFrame}/></div></div>
+    <div className="canvas-scroll"><RuledCanvas width={`calc(min(100cqw - var(--ruler), (100cqh - var(--ruler)) * 16 / 9) * ${zoom/100})`}><Preview deck={canvasDeck!} slide={editSlide!} edit={canvasEdit} frameRef={editorFrame}/></RuledCanvas></div>
     {!masterItem&&<div className="notes-bar"><label><textarea aria-label={t('notes')} rows={2} value={slide.notes} placeholder={t('notes')} onChange={e=>{const id=slide.id;mutate(d=>{d.slides.find(s=>s.id===id)!.notes=e.target.value;},undefined,promptStep.current==='notes:'+id+':'+tab.version);promptStep.current='notes:'+id+':'+store.get(active!)!.version;}}/></label></div>}
   </div>;
   const placeholder=document.getElementById('document-placeholder');

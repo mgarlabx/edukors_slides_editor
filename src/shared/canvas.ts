@@ -7,18 +7,18 @@ import type {EditOp,SelectionDetails,ObjectStyle} from './edit';
 // inside a selected one goes one level down (a card, then its text); a click on a text that ends up selected edits it.
 // Elements carry data-esf-edit (annotate in edit.ts); the frame reports operations ({type:'ops'}) and the selection
 // ({type:'state'}) to the editor, which applies them to the saved HTML.
-export function editRuntime(config:{select:number[];editing:boolean;range?:{start:number;end:number}|null},align:typeof alignMovement,resize:typeof resizeImage,boxStyle:typeof import('./geometry').boxStyle,geometry:ReturnType<typeof canvasGeometry>){
+export function editRuntime(config:{select:number[];editing:boolean;range?:{start:number;end:number}|null},align:typeof alignMovement,resize:typeof resizeImage,boxStyle:typeof import('./geometry').boxStyle,geometry:ReturnType<typeof canvasGeometry>,markers:(root:Element)=>void){
   const send=(type:string,extra:any={})=>parent.postMessage({app:'esf-edit',type,...extra},'*');
   const root=(document.querySelector('.slide')||document.body) as HTMLElement,html=document.documentElement;
   const css=document.createElement('style');
   // Objects stay clickable even when the slide CSS turns their pointer events off (an inline SVG only where it paints, so its empty box does not cover what is behind).
-  css.textContent='html{touch-action:none}[data-esf-kind]:not(svg){pointer-events:auto!important}svg[data-esf-kind] *{pointer-events:visiblePainted!important}*{-webkit-user-select:none;user-select:none}[contenteditable],[contenteditable] *{-webkit-user-select:text;user-select:text;cursor:text}[contenteditable]{outline:none!important}[data-esf-ui]{position:fixed;z-index:2147483646;box-sizing:border-box;pointer-events:none;border-radius:2px;display:none}[data-esf-ui=resize]{pointer-events:auto;background:white;border:1.5px solid #2f6fed;touch-action:none;z-index:2147483647}[data-esf-ui=crop]{border:1.5px solid #fff;outline:1px solid #2f6fed;box-shadow:0 0 0 100vmax #10182680;border-radius:0}[data-esf-ui=cropgrip]{pointer-events:auto;background:#fff;border:2px solid #10182a;border-radius:1px;touch-action:none;z-index:2147483647}[data-esf-ui=sel]{border:1.5px solid #2f6fed}[data-esf-ui=group]{border:1px dashed #2f6fed}[data-esf-ui=guide]{background:#d946b4;border-radius:0}[data-esf-ui=hover]{border:1px solid #2f6fed88}[data-esf-ui=band]{border:1px solid #2f6fed;background:#2f6fed14}[data-esf-edge]{position:absolute;pointer-events:auto;cursor:move;touch-action:none}[data-esf-edge=n],[data-esf-edge=s]{left:0;right:0;height:8px}[data-esf-edge=n]{top:-4px}[data-esf-edge=s]{bottom:-4px}[data-esf-edge=e],[data-esf-edge=w]{top:0;bottom:0;width:8px}[data-esf-edge=e]{right:-4px}[data-esf-edge=w]{left:-4px}html[data-esf-cursor],html[data-esf-cursor] *{cursor:var(--esf-cursor)!important}::highlight(esf-sel){background-color:#b4d3fd}';
+  css.textContent='html{touch-action:none}[data-esf-kind]:not(svg){pointer-events:auto!important}svg[data-esf-kind] *{pointer-events:visiblePainted!important}*{-webkit-user-select:none;user-select:none}[contenteditable],[contenteditable] *{-webkit-user-select:text;user-select:text;cursor:text}[contenteditable]{outline:none!important}[data-esf-ui]{position:fixed;z-index:2147483646;box-sizing:border-box;pointer-events:none;border-radius:2px;display:none}[data-esf-ui=resize]{pointer-events:auto;background:white;border:1.5px solid #2f6fed;touch-action:none;z-index:2147483647}[data-esf-ui=crop]{border:1.5px solid #fff;outline:1px solid #2f6fed;box-shadow:0 0 0 100vmax #10182680;border-radius:0}[data-esf-ui=cropgrip]{pointer-events:auto;background:#fff;border:2px solid #10182a;border-radius:1px;touch-action:none;z-index:2147483647}[data-esf-ui=sel]{border:1.5px solid #2f6fed}[data-esf-ui=group]{border:1px dashed #2f6fed}[data-esf-ui=guide]{background:#d946b4;border-radius:0}[data-esf-ui=hover]{border:1px solid #2f6fed88}[data-esf-ui=tip]{border-radius:0;font:600 12px/1 system-ui,sans-serif;color:#2f6fed;white-space:nowrap;font-variant-numeric:tabular-nums;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 4px #fff}[data-esf-ui=band]{border:1px solid #2f6fed;background:#2f6fed14}[data-esf-edge]{position:absolute;pointer-events:auto;cursor:move;touch-action:none}[data-esf-edge=n],[data-esf-edge=s]{left:0;right:0;height:8px}[data-esf-edge=n]{top:-4px}[data-esf-edge=s]{bottom:-4px}[data-esf-edge=e],[data-esf-edge=w]{top:0;bottom:0;width:8px}[data-esf-edge=e]{right:-4px}[data-esf-edge=w]{left:-4px}html[data-esf-cursor],html[data-esf-cursor] *{cursor:var(--esf-cursor)!important}::highlight(esf-sel){background-color:#b4d3fd}';
   document.head.appendChild(css);
   // Isolate handles from arbitrary slide CSS (including div/img rules and !important declarations).
   const overlay=document.createElement('esf-editor-overlay');overlay.style.cssText='all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important';html.appendChild(overlay);
   const shadow=overlay.attachShadow({mode:'open'});shadow.appendChild(css.cloneNode(true));
   const ui=(kind:string)=>{const d=document.createElement('div');d.setAttribute('data-esf-ui',kind);shadow.appendChild(d);return d;};
-  const hover=ui('hover'),band=ui('band'),group=ui('group'),guides=[ui('guide'),ui('guide')],boxes:HTMLElement[]=[];
+  const hover=ui('hover'),band=ui('band'),group=ui('group'),guides=[ui('guide'),ui('guide')],tip=ui('tip'),boxes:HTMLElement[]=[];
   function edges(d:HTMLElement){for(const side of ['n','s','e','w']){const edge=document.createElement('span');edge.dataset.esfEdge=side;d.appendChild(edge);}return d;}
   edges(group);
   const cursor=(value:string)=>{html.style.setProperty('--esf-cursor',value);html.toggleAttribute('data-esf-cursor',!!value);};
@@ -74,6 +74,12 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   const snapshot=(el:HTMLElement):Snapshot=>{const zoom=parseFloat(getComputedStyle(el).zoom)||1;return{el,bounds:el.getBoundingClientRect(),style:el.getAttribute('style'),base:offset(el),parent:geometry.multiply(matrix(el.parentElement),{a:zoom,b:0,c:0,d:zoom}),inline:getComputedStyle(el).display==='inline'&&!/^(IMG|SVG|VIDEO|CANVAS)$/i.test(el.tagName)};};
   const index=(el:Element)=>Number(el.getAttribute('data-esf-edit'));
   const kind=(el:Element)=>el.getAttribute('data-esf-kind');
+  // Groups are a mark on their members (data-group-id), so any objects group without changing the slide's structure or
+  // layout: a press on a member selects the whole group (a second press, only that member).
+  const gid=(el:Element)=>el.getAttribute('data-group-id')||'';
+  const groupOf=(el:HTMLElement)=>{const id=gid(el);return id?free([...root.querySelectorAll<HTMLElement>('[data-group-id]')].filter(x=>gid(x)===id&&isObject(x))):[el];};
+  const withGroups=(list:HTMLElement[])=>[...new Set(list.flatMap(groupOf))];
+  const entry=(chain:HTMLElement[])=>chain.find(el=>gid(el))||imageIn(chain)||chain[0];
   // A layout field in a slide: its text is edited, but it is not moved, resized, restyled or deleted (the layout owns it).
   const fixed=(el:Element)=>el.hasAttribute('data-esf-fixed'),free=(list:HTMLElement[])=>list.filter(el=>!fixed(el));
   const scalable=()=>free(outer()).filter(el=>isImage(el)||getComputedStyle(el).display!=='inline');
@@ -96,8 +102,37 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   // Nested selected objects move with their selected ancestor, never twice.
   const outer=()=>selection.filter(el=>!selection.some(o=>o!==el&&o.contains(el)));
   const indices=()=>selection.filter(el=>el.isConnected).map(index);
+  // Several texts selected: the bar shows the first one and formats them all (whole texts).
+  const texts=()=>{const list=free(outer());return selection.length>1&&list.length===selection.length&&list.every(el=>kind(el)==='text'&&!isImage(el))?list:null;};
+  // Bulleted and numbered lists: the text's lines become the items of a <ul>/<ol> (and back). Only a text field that is a
+  // block able to hold a list (inserted texts are <div>s); a <p> or heading would be split by the HTML parser.
+  const listOf=(el:HTMLElement)=>!el.hasAttribute('data-field')||!/^(DIV|SECTION|ARTICLE|ASIDE|BLOCKQUOTE|TD|TH|FIGCAPTION|HEADER|FOOTER)$/.test(el.tagName)?undefined
+    :el.querySelector(':scope>ul')?'bulleted' as const:el.querySelector(':scope>ol')?'numbered' as const:'none' as const;
+  function setList(el:HTMLElement,type:string){
+    // Lists and blocks become lines separated by <br>; each line keeps its formatting (a <b> around two lines is split).
+    const br=()=>document.createElement('br');
+    for(const block of [...el.querySelectorAll<HTMLElement>(':scope>ul,:scope>ol,:scope>div,:scope>p')]){
+      const parts=/^(UL|OL)$/.test(block.tagName)?[...block.children].flatMap((li,i)=>i?[br(),...li.childNodes]:[...li.childNodes]):[...block.childNodes];
+      if(block.previousSibling)parts.unshift(br());if(block.nextSibling)parts.push(br());block.replaceWith(...parts);}
+    if(type!=='bulleted'&&type!=='numbered')return;
+    const lines:DocumentFragment[]=[],breaks=[...el.querySelectorAll('br')];
+    for(let i=0;i<=breaks.length;i++){const r=document.createRange();if(i)r.setStartAfter(breaks[i-1]);else r.setStart(el,0);if(i<breaks.length)r.setEndBefore(breaks[i]);else r.setEnd(el,el.childNodes.length);
+      const f=r.cloneContents();if((f.textContent||'').trim()||f.querySelector('img,svg'))lines.push(f);}
+    const list=document.createElement(type==='numbered'?'ol':'ul');list.setAttribute('style','margin:0;padding-left:1.2em');
+    for(const f of lines.length?lines:[document.createDocumentFragment()]){const li=document.createElement('li');li.append(f);list.append(li);}
+    el.replaceChildren(list);
+  }
+  // Texts rewritten together gain or lose inner elements (<b>, <li>…): the reloaded slide numbers its elements anew, so
+  // the ones after each rewritten text move by the difference (the operations already carry the old numbers).
+  function rewrite(list:HTMLElement[],change:(el:HTMLElement)=>void){
+    const shifts:{at:number;el:HTMLElement;by:number}[]=[];
+    for(const el of list){const before=el.innerHTML,count=el.querySelectorAll('*').length;change(el);markers(el);
+      if(el.innerHTML!==before){pending.push({type:'text',index:index(el),html:el.innerHTML});shifts.push({at:index(el),el,by:el.querySelectorAll('*').length-count});}}
+    if(shifts.some(x=>x.by))for(const node of document.querySelectorAll<HTMLElement>('[data-esf-edit]')){
+      const n=index(node),by=shifts.reduce((sum,x)=>sum+(x.at<n&&!x.el.contains(node)?x.by:0),0);if(by)node.setAttribute('data-esf-edit',String(n+by));}
+  }
   function details():SelectionDetails|undefined{
-    const el=selection.length===1?selection[0]:null;if(!el)return;
+    const el=selection.length===1||texts()?selection[0]:null;if(!el)return;
     // Formatting goes on spans inside the box: without a caret in it, the bar shows the look of its first characters.
     const node=getSelection()?.anchorNode,walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let first:Element|null=null;
     for(let n=walk.nextNode();n&&!first;n=walk.nextNode())if(n.textContent!.trim())first=n.parentElement;
@@ -105,14 +140,20 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     const s=getComputedStyle(el),font=getComputedStyle(text&&el.contains(text)?text:el),style:SelectionDetails['style']={};
     for(const key of ['fontFamily','fontSize','fontWeight','fontStyle','textDecorationLine','verticalAlign','color'] as const)style[key]=font[key];
     for(const key of ['borderWidth','borderColor','borderStyle','backgroundColor','boxShadow','filter','opacity','textAlign','alignContent'] as const)style[key]=s[key];
+    // Line spacing as a multiple of the box's font size ("normal" is about 1.2).
+    style.lineHeight=String(Math.round((parseFloat(s.lineHeight)/(parseFloat(s.fontSize)||1)||1.2)*100)/100);
     if(el.parentElement?.matches('[data-image-shadow]'))style.filter=getComputedStyle(el.parentElement).filter;
-    return{index:index(el),kind:kind(el)==='link'?'link':kind(el)==='shape'?'shape':isImage(el)||kind(el)==='media'?'image':kind(el)==='text'?'text':'box',crop:isImage(el),fonts:[...new Set([...document.fonts].map(f=>f.family.replace(/["']/g,'')))],style};
+    const list=kind(el)==='text'&&!isImage(el)?listOf(el):undefined;
+    return{...list&&{list},index:index(el),kind:kind(el)==='link'?'link':kind(el)==='shape'?'shape':isImage(el)||kind(el)==='media'?'image':kind(el)==='text'?'text':'box',crop:isImage(el),fonts:[...new Set([...document.fonts].map(f=>f.family.replace(/["']/g,'')))],style};
   }
-  const state=()=>send('state',{indices:indices(),editing:!!editing,details:details()});
+  // Grouping: two or more objects of the slide (not already exactly one group); ungrouping: the groups in the selection.
+  const groupable=()=>{const list=outer();return list.length>1&&free(list).length===list.length&&!(gid(list[0])&&groupOf(list[0]).length===list.length&&list.every(el=>gid(el)===gid(list[0])))?list:null;};
+  const groups=()=>{const ids=new Set(selection.map(gid).filter(Boolean));return ids.size?[...root.querySelectorAll<HTMLElement>('[data-group-id]')].filter(x=>ids.has(gid(x))):[];};
+  const state=()=>send('state',{indices:indices(),editing:!!editing,details:details(),group:!!groupable(),ungroup:groups().length>0});
   const flush=()=>{if(!pending.length||gesture||crop||nudged.size)return;send('ops',{ops:pending,indices:indices(),editing:!!editing,range:editing&&savedRange?chars(editing,savedRange):null});pending=[];};
   // Selection, snapping and hit zones use the same object bounds.
   // A cropped image is selected, snapped and resized by its visible part.
-  const rect=(el:HTMLElement)=>{
+  const rect=(el:HTMLElement):DOMRect=>{
     const r=el.getBoundingClientRect(),[t,ri,b,l]=insetOf(el);if(!t&&!ri&&!b&&!l)return r;
     const points=[[l/100,t/100],[1-ri/100,t/100],[l/100,1-b/100],[1-ri/100,1-b/100]].map(([x,y])=>point(el,x,y));
     const left=Math.min(...points.map(p=>p.x)),top=Math.min(...points.map(p=>p.y));
@@ -173,7 +214,7 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   // only commits after a short wait; the selection stays painted while the frame has no focus.
   let held=false,blurTimer=0;
   function blurText(){clearTimeout(blurTimer);blurTimer=setTimeout(()=>{if(!held&&!document.hasFocus()){finish();flush();}paint();},150) as any;}
-  function finish(){const el=editing;if(!el)return;editing=null;savedRange=null;el.removeEventListener('blur',blurText);el.removeAttribute('contenteditable');getSelection()?.removeAllRanges();paint();const html=el.innerHTML;if(html!==original)pending.push({type:'text',index:index(el),html});place();state();}
+  function finish(){const el=editing;if(!el)return;editing=null;savedRange=null;el.removeEventListener('blur',blurText);el.removeAttribute('contenteditable');getSelection()?.removeAllRanges();paint();markers(el);const html=el.innerHTML;if(html!==original)pending.push({type:'text',index:index(el),html});place();state();}
   let savedRange:Range|null=null;
   const highlights=(window as any).CSS?.highlights,Highlight=(window as any).Highlight;
   function paint(){if(!highlights||!Highlight)return;if(editing&&savedRange&&!savedRange.collapsed&&!document.hasFocus())highlights.set('esf-sel',new Highlight(savedRange));else highlights.delete('esf-sel');}
@@ -241,20 +282,21 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     if(m.type==='deselect'){if(crop)endCrop(true);select([]);flush();return;}
     if(m.type==='selectAll'){if(crop)endCrop(true);finish();select(free(tops()));flush();return;}
     if(m.type==='crop'){if(crop)endCrop(true);else startCrop();return;}
+    if(m.type==='group'||m.type==='ungroup'){if(crop)endCrop(true);collectNudge();finish();flush();const list=m.type==='group'?groupable():groups();if(list?.length)send(m.type,{indices:list.map(index)});return;}
     if(m.type==='cropCancel'){endCrop(false);return;}
     // Pressed anywhere else in the editor: an edit the bar kept open is committed.
     if(m.type==='release'){held=false;if(crop)endCrop(true);if(editing&&!document.hasFocus()){finish();flush();}return;}
-    if(m.type==='style'&&selection.length===1&&!fixed(selection[0])&&m.style&&typeof m.style==='object'){
+    if(m.type==='style'&&(selection.length===1&&!fixed(selection[0])||texts())&&m.style&&typeof m.style==='object'){
       const entries=Object.entries(m.style);
-      if(!entries.length||!entries.every(([key,value])=>['border-width','border-color','border-style','background-color','box-shadow','filter','opacity'].includes(key)&&typeof value==='string'&&CSS.supports(key,value)))return;
-      const el=selection[0];collectNudge();finish();
-      for(const [key,value] of entries)el.style.setProperty(key,value as string,'important');
-      pending.push({type:'style',index:index(el),style:m.style as ObjectStyle});place();state();flush();return;
+      if(!entries.length||!entries.every(([key,value])=>(['border-width','border-color','border-style','background-color','box-shadow','filter','opacity'].includes(key)||key==='line-height'&&/^[0-5](\.\d{1,2})?$/.test(String(value)))&&typeof value==='string'&&CSS.supports(key,value)))return;
+      collectNudge();finish();
+      for(const el of texts()||[selection[0]]){for(const [key,value] of entries)el.style.setProperty(key,value as string,'important');pending.push({type:'style',index:index(el),style:m.style as ObjectStyle});}
+      place();state();flush();return;
     }
     // Several objects aligned to each other (their common box) or spread with equal gaps (three or more), as in Common.
     if(m.type==='arrange'&&['left','center','right','top','middle','bottom','distributeH','distributeV'].includes(m.value)){
       collectNudge();finish();const items=free(outer());if(items.length<2)return;
-      const rects=items.map(el=>el.getBoundingClientRect()),L=Math.min(...rects.map(r=>r.left)),R=Math.max(...rects.map(r=>r.right)),T=Math.min(...rects.map(r=>r.top)),B=Math.max(...rects.map(r=>r.bottom));
+      const rects=items.map(rect),L=Math.min(...rects.map(r=>r.left)),R=Math.max(...rects.map(r=>r.right)),T=Math.min(...rects.map(r=>r.top)),B=Math.max(...rects.map(r=>r.bottom));
       const moves=rects.map(r=>({dx:m.value==='left'?L-r.left:m.value==='center'?(L+R)/2-(r.left+r.right)/2:m.value==='right'?R-r.right:0,dy:m.value==='top'?T-r.top:m.value==='middle'?(T+B)/2-(r.top+r.bottom)/2:m.value==='bottom'?B-r.bottom:0}));
       if(m.value==='distributeH'||m.value==='distributeV'){
         if(items.length<3)return;const h=m.value==='distributeH',order=rects.map((r,i)=>i).sort((a,b)=>h?rects[a].left-rects[b].left:rects[a].top-rects[b].top);
@@ -294,39 +336,68 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
       }
       place();state();flush();return;
     }
-    if(m.type!=='format'||selection.length!==1||kind(selection[0])!=='text')return;
+    if(m.type!=='format')return;
+    if(m.command==='list'){
+      const list=(texts()||(selection.length===1&&kind(selection[0])==='text'?selection:[])).filter(el=>listOf(el));if(!list.length)return;
+      collectNudge();finish();
+      rewrite(list,el=>setList(el,m.value));
+      place();state();flush();return;
+    }
+    // Several texts: each one is formatted whole, all to the same state (bold on or off as the bar asks, not toggled one by one).
+    const many=texts();
+    if(many){
+      collectNudge();finish();
+      rewrite(many,el=>{
+        el.setAttribute('contenteditable','true');el.focus({preventScroll:true});
+        const sel=getSelection()!,r=document.createRange();r.selectNodeContents(el);sel.removeAllRanges();sel.addRange(r);
+        if(['bold','italic','underline','strikeThrough'].includes(m.command)){if(document.queryCommandState(m.command)!==!!m.on)document.execCommand(m.command,false);}
+        else if(m.command==='subscript'||m.command==='superscript')for(const c of ['subscript','superscript']){if(document.queryCommandState(c)!==(m.script===c.slice(0,-6)))document.execCommand(c,false);}
+        else formatRange(el,sel,m);
+        sel.removeAllRanges();el.removeAttribute('contenteditable');el.blur();
+      });
+      place();state();flush();return;
+    }
+    if(selection.length!==1||kind(selection[0])!=='text')return;
     const el=selection[0];if(editing!==el){begin(el);if(m.range&&Number.isInteger(m.range.start)&&Number.isInteger(m.range.end))selectChars(el,m.range.start,m.range.end);}
     const sel=getSelection()!;if(savedRange&&el.contains(savedRange.commonAncestorContainer)){sel.removeAllRanges();sel.addRange(savedRange);}
     // Without a selection the whole text is formatted.
     if(!sel.rangeCount||sel.isCollapsed){const r=document.createRange();r.selectNodeContents(el);sel.removeAllRanges();sel.addRange(r);}
     if(['bold','italic','underline','strikeThrough','subscript','superscript'].includes(m.command))document.execCommand(m.command,false);
-    else if(['justifyLeft','justifyCenter','justifyRight','justifyFull'].includes(m.command)){
+    else formatRange(el,sel,m);
+    // Commit now (one undoable slide edit); the reloaded frame resumes the edit with the same characters selected.
+    markers(el);const range=sel.rangeCount?chars(el,sel.getRangeAt(0)):null,html=el.innerHTML;
+    if(html!==original)pending.push({type:'text',index:index(el),html});original=html;
+    if(pending.length){send('ops',{ops:pending,indices:indices(),editing:true,range});pending=[];}
+    savedRange=sel.rangeCount?sel.getRangeAt(0).cloneRange():null;paint();
+  });
+  // Text alignment, color, font and size on the selected characters of one text.
+  function formatRange(el:HTMLElement,sel:Selection,m:any){
+    if(['justifyLeft','justifyCenter','justifyRight','justifyFull'].includes(m.command)){
       const value=({justifyLeft:'left',justifyCenter:'center',justifyRight:'right',justifyFull:'justify'} as Record<string,string>)[m.command];
       el.style.setProperty('text-align',value,'important');
       pending.push({type:'style',index:index(el),style:{'text-align':value}});
     }
     else if(['color','fontFamily','fontSize'].includes(m.command)&&typeof m.value==='string'){
-      const r=sel.getRangeAt(0),span=document.createElement('span');
-      if(m.command==='color')span.style.setProperty('color',m.value,'important');
-      if(m.command==='fontFamily')span.style.setProperty('font-family',m.value,'important');
-      if(m.command==='fontSize')span.style.setProperty('font-size',m.value,'important');
-      // Nested spans of the same property would hide the new value.
-      const frag=r.extractContents();frag.querySelectorAll<HTMLElement>('[style]').forEach(x=>{x.style.removeProperty(m.command==='color'?'color':m.command==='fontFamily'?'font-family':'font-size');if(!x.getAttribute('style'))x.removeAttribute('style');});
-      span.append(frag);r.insertNode(span);
-      // Splitting the selection leaves empty inline wrappers behind.
+      // Each selected run of text gets the property (its own span, or a span holding only it), never a span around
+      // blocks: wrapping list items would split them into new items (markers follow their text: Common's EdukorsListMarkers).
+      const prop=m.command==='color'?'color':m.command==='fontFamily'?'font-family':'font-size',r=sel.getRangeAt(0),runs:Text[]=[];
+      const all:Text[]=[],walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);for(let n=walk.nextNode();n;n=walk.nextNode())all.push(n as Text);
+      for(const n of all.filter(n=>n.length&&r.intersectsNode(n))){
+        const start=n===r.startContainer?r.startOffset:0,end=n===r.endContainer?r.endOffset:n.length;if(start>=end)continue;
+        let t=n;if(end<t.length)t.splitText(end);if(start>0)t=t.splitText(start);runs.push(t);
+      }
+      if(!runs.length)return;
+      for(const t of runs){const p=t.parentElement;
+        if(p&&p!==el&&p.tagName==='SPAN'&&p.childNodes.length===1)p.style.setProperty(prop,m.value,'important');
+        else{const span=document.createElement('span');span.style.setProperty(prop,m.value,'important');t.replaceWith(span);span.append(t);}}
       el.querySelectorAll('span,b,i,u,s,strike,strong,em,font').forEach(x=>{if(!x.textContent&&!x.querySelector('img,br,svg'))x.remove();});
-      r.selectNodeContents(span);sel.removeAllRanges();sel.addRange(r);
+      r.setStart(runs[0],0);r.setEnd(runs.at(-1)!,runs.at(-1)!.length);sel.removeAllRanges();sel.addRange(r);
       if(m.command==='fontSize'){
         const keep=chars(el,r),size=fitBlockSize(el);
         if(size){pending.push({type:'style',index:index(el),style:{'font-size':size}});selectChars(el,keep.start,keep.end);}
       }
     }
-    // Commit now (one undoable slide edit); the reloaded frame resumes the edit with the same characters selected.
-    const range=sel.rangeCount?chars(el,sel.getRangeAt(0)):null,html=el.innerHTML;
-    if(html!==original)pending.push({type:'text',index:index(el),html});original=html;
-    if(pending.length){send('ops',{ops:pending,indices:indices(),editing:true,range});pending=[];}
-    savedRange=sel.rangeCount?sel.getRangeAt(0).cloneRange():null;paint();
-  });
+  }
   function insetOf(el:HTMLElement){const m=getComputedStyle(el).clipPath.match(/inset\(\s*([\d.]+)%(?:\s+([\d.]+)%)?(?:\s+([\d.]+)%)?(?:\s+([\d.]+)%)?\s*\)/);if(!m)return[0,0,0,0];const t=+m[1],r=m[2]!==undefined?+m[2]:t,b=m[3]!==undefined?+m[3]:t,l=m[4]!==undefined?+m[4]:r;return[t,r,b,l];}
   function startCrop(){
     const el=selection.length===1&&isImage(selection[0])?selection[0]:null;if(!el||crop)return;collectNudge();finish();
@@ -340,7 +411,25 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   }
   function bounds(items:HTMLElement[]){const rs=items.map(rect),left=Math.min(...rs.map(r=>r.left)),top=Math.min(...rs.map(r=>r.top));return new DOMRect(left,top,Math.max(...rs.map(r=>r.right))-left,Math.max(...rs.map(r=>r.bottom))-top);}
   function clearGuides(){guides.forEach(g=>show(g,null));}
-  function release(pointer:number){if(html.hasPointerCapture(pointer))html.releasePointerCapture(pointer);cursor('');clearGuides();}
+  function release(pointer:number){if(html.hasPointerCapture(pointer))html.releasePointerCapture(pointer);cursor('');clearGuides();tip.style.display='none';}
+  // While moving or resizing: the position (top, left) or the size (height, width) in slide units (1600 × 900), always just
+  // outside the object (or the group): above it when moving; past the dragged side when resizing; the other side when there is no room.
+  function readout(e:PointerEvent,g:NonNullable<typeof gesture>){
+    const v=root.getBoundingClientRect(),k=v.width/1600||1,n=(x:number)=>Math.round(x);
+    if(g.type!=='move'&&g.type!=='resize'&&g.type!=='scale'){tip.style.display='none';return;}
+    const b=g.type==='resize'?rect(g.item.el):bounds(g.items.map(i=>i.el));let text:string;
+    if(g.type==='move')text=`${n((b.top-v.top)/k)}, ${n((b.left-v.left)/k)}`;
+    else if(g.type==='resize'){const z=size(g.item.el);text=`${n(z.height)}, ${n(z.width)}`;}
+    else text=`${n(b.height/k)}, ${n(b.width/k)}`;
+    tip.textContent=text;tip.style.display='block';
+    const w=tip.offsetWidth,h=tip.offsetHeight,gap=10,W=innerWidth,H=innerHeight,c=g.type==='move'?'':g.corner;
+    const ax=c.includes('e')?b.right-w:c.includes('w')?b.left:g.type==='move'?b.left:b.left+(b.width-w)/2,ay=c&&!/[ns]/.test(c)?e.clientY-h/2:b.top;
+    const sides={above:[ax,b.top-h-gap],below:[ax,b.bottom+gap],right:[b.right+gap,ay],left:[b.left-w-gap,ay]} as Record<string,number[]>;
+    const order=c.includes('n')?['above','below','right','left']:c.includes('s')?['below','above','right','left']:c==='e'?['right','left','below','above']:c==='w'?['left','right','below','above']:['above','below','right','left'];
+    const fits=(side:string)=>{const [x,y]=sides[side];return side==='above'||side==='below'?y>=2&&y+h<=H-2:x>=2&&x+w<=W-2;};
+    const [x,y]=sides[order.find(fits)||order[0]];
+    Object.assign(tip.style,{left:Math.max(2,Math.min(W-w-2,x))+'px',top:Math.max(2,Math.min(H-h-2,y))+'px'});
+  }
   function capture(e:PointerEvent,next:NonNullable<typeof gesture>){
     gesture=next;
     try{html.setPointerCapture(e.pointerId);}catch{endGesture(false);}
@@ -357,7 +446,7 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     return[result.dx,result.dy];
   }
   // What a click would pick: the outermost object, or one level below the deepest selected one.
-  function target(chain:HTMLElement[]){let k=chain.length-1;while(k>=0&&!selection.includes(chain[k]))k--;return k<0?imageIn(chain)||chain[0]:chain[k+1]||chain[k];}
+  function target(chain:HTMLElement[]){let k=chain.length-1;while(k>=0&&!selection.includes(chain[k]))k--;return k<0?entry(chain):chain[k+1]||chain[k];}
   const textInterior=(el:HTMLElement,e:PointerEvent)=>{const r=el.getBoundingClientRect(),edge=fixed(el)?0:Math.min(6,r.width/4,r.height/4);return kind(el)==='text'&&!isImage(el)&&e.clientX>r.left+edge&&e.clientX<r.right-edge&&e.clientY>r.top+edge&&e.clientY<r.bottom-edge;};
   addEventListener('pointerdown',e=>{
     // Any press in the slide closes the editor's context menu.
@@ -389,16 +478,17 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     // The band selects only the slide's own objects: layout fields (text-only, fixed) and master/layout objects stay unmarked.
     if(!chain.length){e.preventDefault();select(e.shiftKey||e.metaKey||e.ctrlKey?selection:[]);capture(e,{type:'band',x:e.clientX,y:e.clientY,keep:selection.slice(),before,targets:bandTargets(),pointer:e.pointerId,moved:false});return;}
     if(e.shiftKey||e.metaKey||e.ctrlKey){
-      const el=k>=0?chain[k]:imageIn(chain)||chain[0];
+      const el=k>=0?chain[k]:entry(chain);
       if(selection.includes(el)){startDrag(e,outer(),null,before,el);return;}
-      select([...selection.filter(x=>!x.contains(el)&&!el.contains(x)),el]);startDrag(e,outer(),null,before);return;
+      const add=groupOf(el);select([...selection.filter(x=>!add.some(a=>x.contains(a)||a.contains(x))),...add]);startDrag(e,outer(),null,before);return;
     }
     const picked=target(chain);
-    if(!(k>=0&&selection.length>1)&&textInterior(picked,e)){
+    const set=k<0?groupOf(picked):[picked];
+    if(!(k>=0&&selection.length>1)&&set.length<2&&textInterior(picked,e)){
       if(editing!==picked){finish();select([picked]);begin(picked,e.clientX,e.clientY);}cursor('text');return;
     }
     if(k>=0){startDrag(e,outer(),selection.length===1&&kind(picked)==='text'?null:{chain,k});return;}
-    select([picked]);startDrag(e,[picked],null,before);
+    select(set);startDrag(e,set,null,before);
   },true);
   // Right click selects the object under the pointer (keeping a selection that contains it) and asks the editor for the menu.
   // It opens on the press (the contextmenu event is not always delivered to the frame); Ctrl+click is a right click on macOS.
@@ -407,7 +497,7 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     if(gesture||crop||!(t instanceof Element))return;
     if(!handles.includes(t as HTMLDivElement)&&!t.hasAttribute('data-esf-edge')){
       const chain=chainOf(t);if(!chain.length){select([]);flush();send('context',{x,y,text:false,count:0});return;}
-      if(!chain.some(el=>selection.includes(el)))select([target(chain)]);
+      if(!chain.some(el=>selection.includes(el)))select(groupOf(target(chain)));
     }
     if(selection.length)send('context',{x,y,text:outer().some(el=>kind(el)==='text'||kind(el)==='link'),count:free(outer()).length});
   }
@@ -455,7 +545,7 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
         setPosition(item.el,item.base[0]+local.x,item.base[1]+local.y);
       }
     }
-    place();
+    place();readout(e,g);
   }
   function endGesture(commit:boolean,e?:PointerEvent){
     if(!gesture||e&&gesture.pointer!==e.pointerId)return;
@@ -468,12 +558,12 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
       else restore(el,style);
     }else if(g.type==='scale'){
       for(const {el,style,text} of g.items){if(commit&&g.moved){const [x,y]=offset(el);pending.push({type:'resize',index:index(el),width:parseFloat(el.style.width),height:parseFloat(text?el.style.minHeight:el.style.height),x,y,...text?{fit:true}:{}});}else restore(el,style);}
-    }else if(g.type==='band'){if(!commit)selection=g.before;show(band,null);}
+    }else if(g.type==='band'){selection=commit?withGroups(selection):g.before;show(band,null);}
     else if(!commit){g.items.forEach(({el,style})=>restore(el,style));selection=g.before;}
     else if(g.moved){for(const {el,base,style,inline} of g.items){const [x,y]=offset(el);if(Math.abs(x-base[0])>.001||Math.abs(y-base[1])>.001)pending.push({type:'move',index:index(el),x,y,...inline?{inline:true}:{}});else restore(el,style);}}
     else if(g.toggle)select(selection.filter(el=>el!==g.toggle));
     else if(g.click){
-      const {chain,k}=g.click,multi=selection.length>1,el=multi?chain[Math.max(k,0)]:imageIn(chain)||(k<0?chain[0]:chain[k+1]||chain[k]);
+      const {chain,k}=g.click,multi=selection.length>1,el=multi?chain[Math.max(k,0)]:k<0?entry(chain):imageIn(chain.slice(k+1))||chain[k+1]||chain[k];
       if(multi||selection[0]!==el)select([el]);
       if(e&&!multi&&textInterior(el,e)&&editing!==el)begin(el,e.clientX,e.clientY);
     }
@@ -500,7 +590,9 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
   // Double click goes straight to the innermost text.
   addEventListener('dblclick',e=>{const t=e.target as Element;if(editing?.contains(t))return;const el=chainOf(t).at(-1);if(el&&kind(el)==='text'&&!isImage(el)){select([el]);begin(el,e.clientX,e.clientY);}});
   addEventListener('click',e=>{if((e.target as Element).closest('a'))e.preventDefault();});
-  addEventListener('dragstart',e=>e.preventDefault());addEventListener('dragover',e=>e.preventDefault());addEventListener('drop',e=>e.preventDefault());
+  addEventListener('dragstart',e=>e.preventDefault());addEventListener('dragover',e=>{e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect=e.dataTransfer.types.includes('Files')?'copy':'none';});
+  // Files dropped on the slide (images) go to the editor, which inserts them.
+  addEventListener('drop',e=>{e.preventDefault();const files=[...(e.dataTransfer?.files||[])];if(files.length)send('files',{files});});
   addEventListener('keydown',e=>{
     // The window's shortcuts (save, duplicate, copy objects, present…) reach the editor, which has no menu bar for
     // them; the frame keeps select all and, while a text is edited, the text's own editing keys.
@@ -512,7 +604,11 @@ export function editRuntime(config:{select:number[];editing:boolean;range?:{star
     if(editing){
       if(e.key==='Escape'){e.preventDefault();finish();place();flush();}
       // Every new line is a <br>, the same structure the saved text uses.
-      else if(e.key==='Enter'&&!e.metaKey&&!e.ctrlKey){e.preventDefault();document.execCommand('insertLineBreak');}
+      else if(e.key==='Enter'&&!e.metaKey&&!e.ctrlKey){
+        // In a list item, Enter starts the next item (the browser's own behavior); Shift+Enter is a line inside it.
+        const n=getSelection()?.anchorNode,item=(n?.nodeType===1?n as Element:n?.parentElement)?.closest('li');
+        if(!e.shiftKey&&item&&editing.contains(item))return;
+        e.preventDefault();document.execCommand('insertLineBreak');}
       else if((e.metaKey||e.ctrlKey)&&/^[biu]$/i.test(e.key))return;
       return;
     }

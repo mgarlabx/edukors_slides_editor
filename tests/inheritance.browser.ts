@@ -1,7 +1,7 @@
 import {newDeck,newSlide,masterOf,validateDeck} from '../src/shared/model';
 import {applyLayout,syncLayouts,cleanLayout,relayout} from '../src/shared/layout';
 import {applyEdits,annotate,editIndex} from '../src/shared/edit';
-import {copySlides,pasteSlides,copyMasterItem,pasteMasterItems,independentObjects,importResources} from '../src/shared/clipboard';
+import {copySlides,pasteSlides,copyMasterItem,pasteMasterItems,independentObjects,importResources,pastedFonts,plainFontNames} from '../src/shared/clipboard';
 import {slideDocument} from '../src/shared/render';
 export {newDeck,newSlide,copySlides,pasteSlides,syncLayouts,slideDocument};
 const parse=(html:string)=>new DOMParser().parseFromString(html,'text/html');
@@ -72,6 +72,9 @@ export async function run(){
   check(!fragment.html[0].includes('data-from-layout')&&fragment.html[0].includes('data-slide-owned'),'pasted object becomes independently editable');
   check(id!=='shape'&&fragmentDoc.querySelector('a')!.getAttribute('href')==='#'+id&&fragment.css.includes('#'+id)&&fragmentDoc.querySelector('[clip-path]')!.getAttribute('clip-path')===`url(#${clip})`,'pasted DOM IDs, SVG references, links and CSS remapped together');
   check(independentObjects(fragment.html,fragment.css,x=>x).html[0]!==fragment.html[0],'repeated object paste gets distinct IDs');
+  const face='@font-face{font-family:"Platypi";src:url("asset:a1")}';
+  check(pastedFonts(face,'')===face&&pastedFonts(face,'@font-face{font-family:Platypi;src:url("asset:a2")}')==='','pasted fonts keep their name; a family the destination declares is not repeated');
+  check(plainFontNames('<p style="font-family: &quot;Manrope-font-a02826be-a51e-4f52-b562-d378e3664ade&quot;, Arial">x</p>')==='<p style="font-family: &quot;Manrope&quot;, Arial">x</p>','old copies get the font name back');
   const itemsTarget=newDeck('Master destination'),savedSlides=JSON.stringify(itemsTarget.slides),active=itemsTarget.activeMaster;
   const mainItem=copyMasterItem(d,'m:'+d.activeMaster),mainIds=pasteMasterItems(itemsTarget,mainItem);
   check(mainIds[0].startsWith('m:')&&itemsTarget.masters.length===2&&itemsTarget.activeMaster===active,'copying a whole master creates an independent inactive master');

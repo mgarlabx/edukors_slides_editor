@@ -70,13 +70,31 @@ body.slides-open #document-placeholder{width:100%;height:100%;max-height:none;as
 .slide-rail.inactive .slide-item.selected>button{outline-color:var(--border-strong)}
 .slide-rail.inactive .slide-item.selected .slide-number{color:var(--muted)}
 .canvas-scroll{container-type:size;display:flex;flex-direction:column;justify-content:flex-start;align-items:safe center;flex:1;min-height:0;overflow:auto;padding:0 4px 24px}
+.canvas-ruled{--ruler:20px;display:grid;grid-template-columns:var(--ruler) auto;grid-template-rows:var(--ruler) auto;flex-shrink:0}
+.ruler-corner{grid-area:1/1}
+.ruler{position:relative;overflow:hidden;color:var(--muted);font-size:var(--fs-xs);font-variant-numeric:tabular-nums;user-select:none;touch-action:none;--tick:var(--border-strong)}
+.ruler-x{cursor:col-resize}.ruler-y{cursor:row-resize}
+.ruler span{pointer-events:none}
+.ruler-x{grid-area:1/2;background:linear-gradient(to right,var(--tick) 1px,transparent 1px) 0 100%/6.25% 100% repeat-x,linear-gradient(to right,var(--tick) 1px,transparent 1px) 0 100%/3.125% 40% repeat-x,linear-gradient(to right,var(--tick) 1px,transparent 1px) 0 100%/.625% 20% repeat-x}
+.ruler-y{grid-area:2/1;background:linear-gradient(to bottom,var(--tick) 1px,transparent 1px) 100% 0/100% 11.1111% repeat-y,linear-gradient(to bottom,var(--tick) 1px,transparent 1px) 100% 0/40% 5.5556% repeat-y,linear-gradient(to bottom,var(--tick) 1px,transparent 1px) 100% 0/20% 1.1111% repeat-y}
+.ruler span{position:absolute;line-height:1}
+.ruler-x span{top:2px;margin-left:3px}
+.ruler-y span{left:2px;margin-top:3px;writing-mode:vertical-rl;transform:rotate(180deg);transform-origin:center}
+.canvas-ruled>.slide-canvas{grid-area:2/2}
+.canvas-ruled>.slide-canvas{position:relative}
+.ruler-guide{position:absolute;z-index:2;pointer-events:none;background:var(--accent)}
+.ruler-guide-x{top:0;bottom:0;width:1px;margin-left:-.5px}
+.ruler-guide-y{left:0;right:0;height:1px;margin-top:-.5px}
+.ruler-guide span{position:absolute;color:var(--accent);font-size:var(--fs-xs);font-weight:600;font-variant-numeric:tabular-nums;line-height:1;text-shadow:0 0 2px var(--panel),0 0 2px var(--panel),0 0 4px var(--panel)}
+.ruler-guide-x span{top:4px;left:5px}
+.ruler-guide-y span{left:4px;top:5px}
 .slide-canvas{aspect-ratio:16/9;flex-shrink:0;box-shadow:var(--shadow);outline:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--panel);cursor:text}
 .notes-bar{margin:12px -24px 0;padding:8px 24px;background:var(--panel);border-top:1px solid var(--border)}
 .notes-bar label{font-size:var(--fs-xs);color:var(--muted);font-weight:400;gap:4px}
 .notes-bar textarea{font-size:var(--fs-base);background:transparent;border:0;resize:none;outline:none;box-shadow:none;padding:3px 0;color:var(--text);width:100%}
 .preview{display:block;width:100%;height:100%;border:0;pointer-events:none;background:var(--panel)}
 .preview.editable{pointer-events:auto}
-body.file-drag .preview.editable{pointer-events:none}
+body.file-drag .preview.editable,body.ruler-drag .preview.editable{pointer-events:none}
 /* Slide master view. */
 .master-rail .slide-list{padding:8px 12px 12px}
 .master-rail .slide-item{cursor:pointer;margin-bottom:12px}

@@ -114,3 +114,11 @@ export function setLinkQr(slide:Slide,index:number,enabled:boolean){return updat
   qr.style.cssText=`position:absolute;left:${Math.min(left+width+32,1220)}px;top:${top}px;width:360px;height:360px;z-index:10;box-sizing:border-box;object-fit:contain`;
   if(el.style.translate)qr.style.translate=el.style.translate;el.after(qr);
 });}
+
+// Groups are a mark on their members (data-group-id): the slide's structure and layout stay as they are.
+export function setGroup(slide:Slide,indices:number[],id:string|null):Slide{
+  const doc=parse(slide.html),all=[...doc.body.querySelectorAll('*')],els=indices.map(i=>all[i]).filter((el):el is Element=>!!el&&!el.matches('.slide'));
+  if(!els.length)return slide;
+  for(const el of els)if(id)el.setAttribute('data-group-id',id);else el.removeAttribute('data-group-id');
+  return{...slide,html:doc.body.innerHTML,staticHtml:''};
+}

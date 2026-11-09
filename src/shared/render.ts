@@ -1,6 +1,9 @@
 import {Deck,Slide,Language,safeJson,masterOf} from './model';
 import {alignMovement,boxStyle,resizeImage,canvasGeometry} from './geometry';
 import {editRuntime} from './canvas';
+import 'edukors-common-ux/src/format/list-markers.js';
+// Common's list markers: bullets and numbers take the look of their item's text (rule in every slide document, sync in the canvas).
+const listMarkers=(globalThis as any).EdukorsListMarkers as {sync:(root:Element)=>void;css:string};
 import {pollCss,pollMarkup,pollViewRuntime,pollWords} from './poll';
 
 function slideRuntime(config:{token:string;staticMode:boolean;steps:number;id:string;edit:boolean}){
@@ -85,11 +88,12 @@ export function slideDocument(deck:Deck,slide:Slide,staticMode=false,token='',st
   const style=inlineAssets(master.css+'\n'+(deck.layouts.find(l=>l.id===slide.layoutId)?.css||'')+'\n'+slide.css,deck,inline).replace(/<\/style/gi,'<\\/style');
   const behavior=inlineAssets(slide.poll?'':min&&slide.script.trim()?min(slide.script):slide.script,deck,inline).replace(/<\/script/gi,'<\\/script');
   const config={token,staticMode,steps,id:slide.id,edit:!!edit,poll:slide.poll};
-  const runtime=(edit||!min?`(${slideRuntime.toString()})(${safeJson(config)});`+(slide.poll?`\n(${pollViewRuntime.toString()})(${safeJson(config)},${safeJson(pollWords[lang])});`:''):fill(min(`(${slideRuntime.toString()})(__ESF_CONFIG__);`+(slide.poll?`\n(${pollViewRuntime.toString()})(__ESF_CONFIG__,__ESF_WORDS__);`:'')),{__ESF_CONFIG__:safeJson(config),__ESF_WORDS__:safeJson(pollWords[lang])}))+(edit&&!slide.poll?`\n(${editRuntime.toString()})(${safeJson(edit)},(${alignMovement.toString()}),(${resizeImage.toString()}),(${boxStyle.toString()}),(${canvasGeometry.toString()})());`:'');
+  const runtime=(edit||!min?`(${slideRuntime.toString()})(${safeJson(config)});`+(slide.poll?`\n(${pollViewRuntime.toString()})(${safeJson(config)},${safeJson(pollWords[lang])});`:''):fill(min(`(${slideRuntime.toString()})(__ESF_CONFIG__);`+(slide.poll?`\n(${pollViewRuntime.toString()})(__ESF_CONFIG__,__ESF_WORDS__);`:'')),{__ESF_CONFIG__:safeJson(config),__ESF_WORDS__:safeJson(pollWords[lang])}))+(edit&&!slide.poll?`\n(${editRuntime.toString()})(${safeJson(edit)},(${alignMovement.toString()}),(${resizeImage.toString()}),(${boxStyle.toString()}),(${canvasGeometry.toString()})(),(${listMarkers.sync.toString()}));`:'');
   const served=inline&&assetUrl?' esf-frame:':'';
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:${served}; font-src data:${served}; media-src data: blob:${served}; connect-src 'none'; base-uri 'none'; form-action 'none';"><style>${style}
+${listMarkers.css}
 html,body{width:100%;height:100%;overflow:hidden}.slide{position:absolute;top:50%;left:50%;transform-origin:center;transform:translate(-50%,-50%)}
-.esf-master{position:absolute;inset:0;padding:inherit;z-index:-1;pointer-events:none}${edit?'':'.esf-master>*{pointer-events:auto}'}
+.esf-master{position:absolute;inset:0;padding:inherit;z-index:-1;pointer-events:none}[data-manual=group]{display:contents}${edit?'':'.esf-master>*{pointer-events:auto}'}
 ${staticMode?'*{animation:none!important;transition:none!important}[data-step]{opacity:1!important;transform:none!important}':''}
 ${slide.poll?pollCss:''}
 </style></head><body>${html}<script>${behavior}\n</script><script>${runtime.replace(/<\/script/gi,'<\\/script')}</script></body></html>`;

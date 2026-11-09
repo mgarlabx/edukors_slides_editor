@@ -65,6 +65,15 @@ export function independentObjects(html:string[],css:string,replace:(text:string
   return{html:[...container.children].map(el=>el.outerHTML),css,script};
 }
 
+// Copied text keeps its font's own name. Older copies renamed it to "<name>-font-<uuid>"; pasting gives the name back.
+const fontId=/-font-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])/gi;
+export const plainFontNames=(text:string)=>text.replace(fontId,'');
+const faceFamily=(rule:string)=>(/font-family\s*:\s*(["']?)([^;"'}]+)\1/i.exec(rule)?.[2]||'').trim().toLowerCase();
+// A copied @font-face is left out when the destination already declares that family.
+export function pastedFonts(css:string,target:string){
+  const declared=new Set((target.match(/@font-face\s*\{[^}]*\}/gi)||[]).map(faceFamily));
+  return plainFontNames(css).replace(/@font-face\s*\{[^}]*\}\s*/gi,rule=>declared.has(faceFamily(rule))?'':rule);
+}
 // A pasted behavior joins the slide's own: each script sets window.slideBehavior, and both run on every hook.
 export function joinBehavior(own:string,pasted:string){
   if(!pasted.trim()||own.includes(pasted))return own;if(!own.trim())return pasted;

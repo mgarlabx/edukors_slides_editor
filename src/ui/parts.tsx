@@ -94,7 +94,7 @@ export function TemplatePreview({id}:{id:string}){
 }
 // The editor canvas renders in edit mode: the frame selects, edits and drags elements (editRuntime) and reports operations.
 export type CharRange={start:number;end:number};
-export type CanvasEdit={select:()=>{indices:number[];editing:boolean;range?:CharRange|null};onState:(indices:number[],editing:boolean,details?:SelectionDetails)=>void;onRange:(start:number,end:number)=>void;onOps:(ops:EditOp[],indices:number[],editing:boolean,range?:CharRange|null)=>void;onCrop:(active:boolean)=>void;onContext:(x:number,y:number,text:boolean,count:number)=>void;onPress:()=>void};
+export type CanvasEdit={select:()=>{indices:number[];editing:boolean;range?:CharRange|null};onState:(indices:number[],editing:boolean,details?:SelectionDetails,grouping?:{group:boolean;ungroup:boolean})=>void;onGroup?:(type:'group'|'ungroup',indices:number[])=>void;onRange:(start:number,end:number)=>void;onOps:(ops:EditOp[],indices:number[],editing:boolean,range?:CharRange|null)=>void;onCrop:(active:boolean)=>void;onContext:(x:number,y:number,text:boolean,count:number)=>void;onPress:()=>void;onFiles?:(files:File[])=>void};
 export const previewKey=(deck:Deck,slide:Slide,editing:boolean)=>{const master=slide.layoutId?masterOf(deck,slide):activeMaster(deck);return[deck.id,slide.id,slide.layoutId,slide.html,slide.css,slide.script,slide.staticHtml,JSON.stringify(slide.poll),master.css,master.html,deck.layouts.find(l=>l.id===slide.layoutId)?.css||'',deck.assets.length,document.documentElement.lang,editing].join('\u0000');};
 export function Preview({deck,slide,className='',edit,frameRef}:{deck:Deck;slide:Slide;className?:string;edit?:CanvasEdit;frameRef?:React.RefObject<HTMLIFrameElement|null>}){
   // Assets are content-addressed, so their count is enough to detect changes in the key.
@@ -115,9 +115,11 @@ export function Preview({deck,slide,className='',edit,frameRef}:{deck:Deck;slide
   const generation=useMemo(()=>++previewGeneration,[doc,reload.current]);
   useEffect(()=>{if(!edit)return;const listen=(e:MessageEvent)=>{const m=e.data,x=editRef.current;if(!x||e.source!==frame.current?.contentWindow||m?.app!=='esf-edit')return;
     const indices=Array.isArray(m.indices)?m.indices.filter(Number.isInteger).slice(0,1000):[],editing=!!m.editing;
-    if(m.type==='state')x.onState(indices,editing,cleanSelection(m.details,indices[0]));
+    if(m.type==='state')x.onState(indices,editing,cleanSelection(m.details,indices[0]),{group:m.group===true,ungroup:m.ungroup===true});
+    if((m.type==='group'||m.type==='ungroup')&&indices.length)x.onGroup?.(m.type,indices);
     if(m.type==='crop')x.onCrop(!!m.active);
     if(m.type==='press')x.onPress();
+    if(m.type==='files'&&Array.isArray(m.files))x.onFiles?.(m.files.filter((f:unknown):f is File=>f instanceof File).slice(0,50));
     if(m.type==='context'&&Number.isFinite(m.x)&&Number.isFinite(m.y))x.onContext(m.x,m.y,!!m.text,Number.isInteger(m.count)?m.count:1);
     if(m.type==='range'&&Number.isInteger(m.start)&&Number.isInteger(m.end))x.onRange(m.start,m.end);
     if(m.type==='ops'&&Array.isArray(m.ops)){

@@ -1,5 +1,14 @@
 # Changelog
 
+## 26.11.9
+
+- **Rulers** above and to the left of the slide, in slide units (1600 × 900). Pressing a ruler shows a guide line across the slide while the mouse is held.
+- **Position and size while dragging:** moving an object shows its top and left, resizing shows its height and width, in slide units, just outside the object.
+- **Group and ungroup** any objects (texts, images, shapes, texts inside other blocks) with the button on the format bar, the right-click menu, ⌘G and ⇧⌘G. A group never changes the slide's layout; a click on a member selects the group, a second click only that member; a drag, the handles and alignment act on the whole group; ⌘D duplicates it as a new group.
+- **Format bar in one row:** alignment, paragraph (lists and line spacing), strikethrough/subscript/superscript and stacking order are now dropdown menus.
+- **Pasting an image file copied in the Finder** (or Explorer) inserts the image itself, not its icon.
+- **Pasted texts keep their font's own name** (older copies renamed it); a font the destination already has is not added again.
+
 ## 26.11.8
 
 - **Slide master:** the base selected in the panel is the active one (a ✓ badge marks it); the active tab (Bases or Layouts) is now clearly highlighted.

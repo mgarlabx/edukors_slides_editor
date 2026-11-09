@@ -37,7 +37,7 @@ Cuando sale una versión nueva, el propio editor lo avisa y ofrece su página de
 | --- | --- |
 | **Barra superior** | Archivo (nueva, abrir, recientes, guardar, exportar, mostrar en la carpeta), **Presentar** y el cambio entre **Diapositivas** y **Patrón de diapositivas**, deshacer y rehacer, edición (cortar, copiar, pegar, duplicar, eliminar), **Insertar** (texto, forma, imagen, enlace, pregunta interactiva), Configuración y Ayuda. A la derecha, la lista de diapositivas (⌥⌘0) y el **asistente de IA** (⇧⌘A). |
 | **Pestañas** (justo debajo) | Una presentación abierta por pestaña. El punto en la pestaña indica cambios sin guardar; **+** crea otra presentación. |
-| **Barra de formato** | Fuente, tamaño, color, negrita, cursiva, subrayado, línea, relleno, sombra y recorte del objeto seleccionado. |
+| **Barra de formato** | Fuente, tamaño, color, negrita, cursiva, subrayado, alineación, listas con viñetas o numeradas, interlineado, línea, relleno, sombra y recorte del objeto seleccionado. Alineación, párrafo (listas e interlineado), tachado/subíndice/superíndice y organizar son menús, para que la barra quepa en una fila. |
 | **Lista de diapositivas** (izquierda) | Las miniaturas, con una barra para crear, mover, duplicar, copiar, cortar, pegar y eliminar diapositivas. |
 | **Diapositiva** (centro) | La diapositiva en edición; debajo, las **notas del presentador**. |
 | **Asistente de IA** (derecha) | La conversación con el agente que crea y cambia las diapositivas. |
@@ -64,12 +64,14 @@ Para reutilizar una apariencia, abra la galería de **Nueva presentación** con 
 La diapositiva funciona como en PowerPoint o Google Slides:
 
 - **Seleccionar.** Haga clic en un objeto (texto, imagen, forma, enlace) para seleccionarlo; ⇧ o ⌘ + clic añade otro; arrastrar desde un espacio vacío selecciona todo lo que quede dentro del rectángulo. ⌘A selecciona todos los objetos de la diapositiva. Tab recorre los objetos.
-- **Mover.** Arrastre el objeto (un texto, por el borde). Guías rosas muestran la alineación con bordes y centros; mantenga ⌥ para desactivar el ajuste y ⇧ para mover en un solo eje. Las flechas mueven 1 px (⇧, 10 px).
-- **Redimensionar.** Tire de los tiradores blancos; una imagen mantiene la proporción (⇧ la libera). ⌘ + flechas también redimensionan. Con varios objetos seleccionados, los tiradores del contorno del grupo los redimensionan todos juntos.
-- **Texto.** Haga clic dentro de un texto para editarlo, manteniendo el formato. Seleccione un fragmento para cambiar la fuente, el tamaño o el color en la barra de formato.
+- **Mover.** Arrastre el objeto (un texto, por el borde). Guías rosas muestran la alineación con bordes y centros; mantenga ⌥ para desactivar el ajuste y ⇧ para mover en un solo eje. Las flechas mueven 1 px (⇧, 10 px). Al arrastrar, los números junto al objeto muestran la posición (arriba, izquierda), en las medidas de las reglas.
+- **Redimensionar.** Tire de los tiradores blancos; una imagen mantiene la proporción (⇧ la libera). ⌘ + flechas también redimensionan. Con varios objetos seleccionados, los tiradores del contorno del grupo los redimensionan todos juntos. Al arrastrar, los números muestran el tamaño (alto, ancho).
+- **Reglas.** Encima y a la izquierda de la diapositiva, las reglas la miden en 1600 × 900. Presione una regla para ver una línea guía sobre la diapositiva (vertical en la de arriba, horizontal en la de la izquierda); arrástrela para moverla; desaparece al soltar.
+- **Texto.** Haga clic dentro de un texto para editarlo, manteniendo el formato. Seleccione un fragmento para cambiar la fuente, el tamaño o el color en la barra de formato. Con varios textos seleccionados, la barra les da formato a todos a la vez (cada texto entero). En una lista, Enter crea el elemento siguiente y Mayús+Enter salta de línea dentro del elemento.
 - **Imágenes.** **Insertar → Imagen** pega la imagen copiada o, si no la hay, pide un archivo; también puede arrastrar imágenes del equipo a la diapositiva. Si el diseño tiene un espacio de imagen vacío, la imagen va a él. El botón de recorte abre un cuadro con tiradores: Enter confirma, Esc cancela.
 - **Formas y enlaces.** La forma elegida entra en la diapositiva con línea y relleno ajustables. El enlace usa la dirección copiada; la leyenda reemplaza la dirección en la diapositiva, y la opción **Código QR** pone el código al lado.
 - **Orden y alineación.** El clic derecho en un objeto ofrece **Traer al frente**, **Enviar al fondo** y, en los textos, la alineación horizontal y vertical.
+- **Agrupar.** Seleccione dos o más objetos y pulse ⌘G (o el botón **Agrupar** de la barra de formato, o el clic derecho): el grupo se mueve y cambia de tamaño como un solo objeto. Un clic en un miembro selecciona el grupo; otro clic entra en él (para editar un texto, por ejemplo). ⇧⌘G o **Desagrupar** lo separa de nuevo.
 - **Copiar entre diapositivas y presentaciones.** Los objetos copiados (⌘C) se pegan (⌘V) en otra diapositiva, incluso de otra presentación, con la misma apariencia y las animaciones.
 
 Cada gesto es un paso de deshacer (⌘Z). Solo Esc cancela un gesto en curso.

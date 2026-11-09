@@ -37,7 +37,7 @@ Quando sai uma versão nova, o próprio editor avisa e oferece a página para ba
 | --- | --- |
 | **Barra de cima** | Arquivo (nova, abrir, recentes, salvar, exportar, mostrar na pasta), **Apresentar** e a troca entre **Slides** e **Slide mestre**, desfazer e refazer, edição (recortar, copiar, colar, duplicar, excluir), **Inserir** (texto, forma, imagem, link, pergunta interativa), Configurações e Ajuda. À direita, a lista de slides (⌥⌘0) e o **assistente de IA** (⇧⌘A). |
 | **Abas** (logo abaixo) | Uma apresentação aberta por aba. O ponto na aba indica alterações não salvas; o **+** cria outra apresentação. |
-| **Barra de formatação** | Fonte, tamanho, cor, negrito, itálico, sublinhado, linha, fundo, sombra e recorte do objeto selecionado no slide. |
+| **Barra de formatação** | Fonte, tamanho, cor, negrito, itálico, sublinhado, alinhamento, listas com marcadores ou numeradas, espaçamento entre linhas, linha, fundo, sombra e recorte do objeto selecionado no slide. Alinhamento, parágrafo (listas e espaçamento), tachado/subscrito/sobrescrito e organizar ficam em menus, para a barra caber numa linha. |
 | **Lista de slides** (esquerda) | As miniaturas, com uma barra para criar, mover, duplicar, copiar, recortar, colar e excluir slides. |
 | **Slide** (centro) | O slide em edição; abaixo dele, as **notas do apresentador**. |
 | **Assistente de IA** (direita) | A conversa com o agente que cria e altera os slides. |
@@ -64,12 +64,14 @@ Para reaproveitar a aparência, abra a galeria de **Nova apresentação** com a 
 O slide funciona como no PowerPoint ou no Google Slides:
 
 - **Selecionar.** Clique num objeto (texto, imagem, forma, link) para selecioná-lo; ⇧ ou ⌘ + clique acrescenta outro; arrastar a partir de um espaço vazio seleciona tudo o que ficar dentro do retângulo. ⌘A seleciona todos os objetos do slide. Tab percorre os objetos.
-- **Mover.** Arraste o objeto (num texto, pela borda). Guias rosas mostram o alinhamento com bordas e centros; segure ⌥ para desligar o encaixe e ⇧ para mover num eixo só. As setas movem 1 px (⇧, 10 px).
-- **Redimensionar.** Puxe as alças brancas; numa imagem a proporção se mantém (⇧ libera). ⌘ + setas também redimensionam. Com vários objetos selecionados, as alças do contorno do grupo redimensionam todos juntos.
-- **Texto.** Clique dentro de um texto para editá-lo, mantendo a formatação. Selecione trechos para mudar fonte, tamanho ou cor na barra de formatação.
+- **Mover.** Arraste o objeto (num texto, pela borda). Guias rosas mostram o alinhamento com bordas e centros; segure ⌥ para desligar o encaixe e ⇧ para mover num eixo só. As setas movem 1 px (⇧, 10 px). Durante o arraste, os números ao lado do objeto mostram a posição (topo, esquerda), nas medidas das réguas.
+- **Redimensionar.** Puxe as alças brancas; numa imagem a proporção se mantém (⇧ libera). ⌘ + setas também redimensionam. Com vários objetos selecionados, as alças do contorno do grupo redimensionam todos juntos. Durante o arraste, os números mostram o tamanho (altura, largura).
+- **Réguas.** Acima e à esquerda do slide, as réguas medem o slide em 1600 × 900. Pressione uma régua para ver uma linha-guia sobre o slide (vertical na de cima, horizontal na da esquerda); arraste para movê-la; ela some ao soltar.
+- **Texto.** Clique dentro de um texto para editá-lo, mantendo a formatação. Selecione trechos para mudar fonte, tamanho ou cor na barra de formatação. Com vários textos selecionados, a barra formata todos de uma vez (o texto inteiro de cada um). Numa lista, Enter cria o item seguinte e Shift+Enter quebra a linha dentro do item.
 - **Imagens.** **Inserir → Imagem** cola a imagem copiada ou, se não houver uma, pede um arquivo; também dá para arrastar imagens do computador para o slide. Se o layout tiver um espaço de imagem vazio, ela vai para ele. O botão de recorte abre uma caixa com alças: Enter confirma, Esc cancela.
 - **Formas e links.** A forma escolhida entra no slide com linha e fundo ajustáveis. O link usa o endereço copiado; a legenda substitui o endereço no slide, e a opção **QR code** põe o código ao lado.
 - **Ordem e alinhamento.** O clique direito num objeto oferece **Trazer para frente**, **Enviar para o fundo** e, nos textos, o alinhamento horizontal e vertical.
+- **Agrupar.** Selecione dois ou mais objetos e use ⌘G (ou o botão **Agrupar** da barra de formatação, ou o clique direito): o grupo se move e se redimensiona como um só objeto. Um clique num membro seleciona o grupo; outro clique entra nele (para editar um texto, por exemplo). ⇧⌘G ou **Desagrupar** separa de novo.
 - **Copiar entre slides e apresentações.** Objetos copiados (⌘C) colam (⌘V) em outro slide, mesmo de outra apresentação, com a mesma aparência e as animações.
 
 Cada gesto é um passo do desfazer (⌘Z). Só Esc cancela um gesto em andamento.
