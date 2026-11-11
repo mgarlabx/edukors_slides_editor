@@ -46,7 +46,8 @@ try{
       const next=EdukorsDocuments.add({name:'Several texts'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);});
     const frame=page.frameLocator('#document-placeholder iframe:not(.preview-stale)'),html=async()=>(await content(page)).deck.slides[0].html,bar=page.locator('#context-toolbar');
     await frame.locator('html[data-esf-ready=true]').waitFor();await page.locator('#sidebar-panel').evaluate(panel=>Promise.all(panel.getAnimations().map(a=>a.finished)));await page.waitForTimeout(500);
-    await frame.locator('[data-field=a]').click({position:{x:3,y:3},force:true});await frame.locator('[data-field=b]').click({position:{x:3,y:3},modifiers:['Shift'],force:true});
+    for(let i=0;i<3;i++){await frame.locator('[data-field=a]').click({position:{x:3,y:3},force:true});await frame.locator('[data-field=b]').click({position:{x:3,y:3},modifiers:['Shift'],force:true});
+      if(await bar.locator('[data-control="bold"]').waitFor({timeout:3000}).then(()=>true,()=>false))break;await page.keyboard.press('Escape');await page.waitForTimeout(500);}
     // The compact bar: alignment and paragraph (lists, line spacing) are menus.
     const choose=async(menu,option)=>{await bar.locator(`[data-control="${menu}"]`).click();await page.waitForTimeout(400);await (typeof option==='number'?page.locator('.pick-menu [role=option]').nth(option):page.locator('.pick-menu [role=option]').filter({hasText:option}).first()).click();await page.waitForTimeout(700);};
     await bar.locator('[data-control="bold"]').click();await page.waitForTimeout(700);

@@ -87,6 +87,7 @@ handle('capturePage',async(_e,raw:any)=>{
     ses.setPermissionRequestHandler((_w,_p,cb)=>cb(false));ses.removeAllListeners('will-download');ses.on('will-download',(_ev,item)=>item.cancel());
     ses.webRequest.onBeforeSendHeaders((d,cb)=>{if(language)d.requestHeaders['Accept-Language']=`${language},${language.split('-')[0]};q=0.9,en;q=0.5`;cb({requestHeaders:d.requestHeaders});});
     const win=new BrowserWindow({show:false,width,height:900,useContentSize:true,enableLargerThanScreen:true,paintWhenInitiallyHidden:true,webPreferences:{partition:'esf-capture',sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
+    win.setContentSize(width,900); // Windows clamps a new window to the screen.
     const pause=(ms:number)=>new Promise(r=>setTimeout(r,ms));
     const settle=async()=>{for(let i=0;i<40&&win.webContents.isLoading();i++)await pause(250);};
     try{
