@@ -11,7 +11,8 @@ import {randomUUID} from 'node:crypto';
 // Loads each slide's static state in an isolated hidden window; capture=false only checks
 // readiness and script errors (used to validate AI changes before applying them).
 async function renderSlides(deck:Deck,slides:Slide[],tempRoot:string,capture:boolean,editable=false){
-  const win=new BrowserWindow({show:false,width:1600,height:900,useContentSize:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false}});
+  const win=new BrowserWindow({show:false,width:1600,height:900,useContentSize:true,enableLargerThanScreen:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false}});
+  win.setContentSize(1600,900); // Windows and Linux clamp a new window to the screen; the capture must still be 1600 × 900.
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',e=>e.preventDefault());
   const folder=path.join(tempRoot,'capture-'+randomUUID());await fs.mkdir(folder,{recursive:true});

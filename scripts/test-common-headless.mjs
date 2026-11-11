@@ -48,7 +48,7 @@ try{
     await frame.locator('html[data-esf-ready=true]').waitFor();await page.locator('#sidebar-panel').evaluate(panel=>Promise.all(panel.getAnimations().map(a=>a.finished)));await page.waitForTimeout(500);
     await frame.locator('[data-field=a]').click({position:{x:3,y:3},force:true});await frame.locator('[data-field=b]').click({position:{x:3,y:3},modifiers:['Shift'],force:true});
     // The compact bar: alignment and paragraph (lists, line spacing) are menus.
-    const choose=async(menu,option)=>{await bar.locator(`[data-control="${menu}"]`).click();await (typeof option==='number'?page.locator('.pick-menu [role=option]').nth(option):page.locator('.pick-menu [role=option]').filter({hasText:option}).first()).click();await page.waitForTimeout(700);};
+    const choose=async(menu,option)=>{await bar.locator(`[data-control="${menu}"]`).click();await page.waitForTimeout(400);await (typeof option==='number'?page.locator('.pick-menu [role=option]').nth(option):page.locator('.pick-menu [role=option]').filter({hasText:option}).first()).click();await page.waitForTimeout(700);};
     await bar.locator('[data-control="bold"]').click();await page.waitForTimeout(700);
     await choose('alignMenu',1);await choose('paragraphMenu',/^1\.5$/);await choose('paragraphMenu',0);
     const look=await page.evaluate(h=>{const doc=new DOMParser().parseFromString(h,'text/html');return['a','b'].map(f=>{const el=doc.querySelector(`[data-field=${f}]`);return{style:el.getAttribute('style'),list:!!el.querySelector(':scope>ul>li>b'),items:el.querySelectorAll('li').length};});},await html());
