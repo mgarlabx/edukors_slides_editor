@@ -11,6 +11,7 @@ import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import {unzipSync,strFromU8} from 'fflate';
 import {DOMParser} from '@xmldom/xmldom';
+import http from 'node:http';
 const mod=process.platform==='darwin'?'Meta':'Control';
 
 const packagedArg=process.argv.indexOf('--packaged'),packaged=packagedArg>0?process.argv[packagedArg+1]:null;
@@ -48,6 +49,34 @@ try{
   await canvas.locator('html[data-esf-ready=true]').waitFor();
   assert.match(await page.locator('#document-placeholder iframe:not(.preview-stale)').getAttribute('src'),/^esf-frame:/);
   pass('new presentation; the canvas renders in an isolated esf-frame: document');
+  // Fonts kept in the presentation load in the frames through esf-frame: (CORS mode, unlike images).
+  const sample=['/System/Library/Fonts/Supplemental/Arial.ttf','C:/Windows/Fonts/arial.ttf','/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'];
+  let fontBytes=null;for(const f of sample){try{fontBytes=await fs.readFile(f);break;}catch{}}
+  if(fontBytes){
+    const deckId=await page.evaluate(async()=>(await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.id);
+    await page.evaluate(([id,data])=>slides.invoke('registerAssets',id,[{id:'asset-smoke-font',mime:'font/ttf',data}]),[deckId,fontBytes.toString('base64')]);
+    assert.equal(await canvas.locator('body').evaluate((_b,id)=>new FontFace('Smoke Font',`url("esf-frame://preview/asset/${id}/asset-smoke-font")`).load().then(f=>f.status,e=>String(e)),deckId),'loaded');
+    pass('fonts of the presentation load in the slide frames');
+  }
+  // The assistant's view_slide: the main process renders one slide to a PNG for the model.
+  const shot=await page.evaluate(async()=>{const deck=(await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck;return slides.invoke('slideImage',deck,deck.slides[0].id);});
+  assert.equal(shot.mimeType,'image/png');assert.ok(shot.width<=1568&&shot.width>=1000&&Math.abs(shot.width/shot.height-16/9)<.02,`${shot.width}x${shot.height}`);
+  assert.equal(Buffer.from(shot.data,'base64').subarray(1,4).toString(),'PNG');
+  pass('view_slide: a slide rendered to a PNG for the assistant');
+  // The assistant's capture_page: a local page 3000 px tall; the language goes as Accept-Language, a script clicks a menu.
+  {const server=http.createServer((req,res)=>{const lang=/^pt/.test(req.headers['accept-language']||'')?'pt':'en';
+      res.writeHead(200,{'content-type':'text/html; charset=utf-8'});
+      res.end(`<!doctype html><title>${lang}</title><body style="margin:0"><button id="menu" onclick="document.title='clicked-'+document.title">Language</button><div style="height:3000px;background:linear-gradient(#fff,#2f6fed)"></div></body>`);});
+    await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/page`;
+    try{
+      const a=await page.evaluate(u=>slides.invoke('capturePage',{url:u,language:'pt-BR',wait:200}),url);
+      assert.equal(a.title,'pt','the language goes to the site');assert.equal(a.width,1280);assert.ok(a.height>=3000&&a.height<3100,'whole page: '+a.height);
+      assert.equal(Buffer.from(a.asset.data,'base64').subarray(1,4).toString(),'PNG');assert.ok(a.preview.width<=1568&&a.preview.height<=7000);
+      const b=await page.evaluate(u=>slides.invoke('capturePage',{url:u,fullPage:false,width:800,wait:100,script:"document.getElementById('menu').click();"}),url);
+      assert.equal(b.title,'clicked-en','the script ran in the page before the capture');assert.deepEqual([b.width,b.height],[800,900]);
+      assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().some(w=>w.isVisible())),false);
+    }finally{server.close();}
+    pass('capture_page: a whole web page captured in a hidden window, with language and script');}
   await page.locator('#insert-actions [data-command="insertText"]').click();
   await canvas.locator('[data-manual=text][contenteditable]').waitFor();
   await page.keyboard.type('Smoke native text');

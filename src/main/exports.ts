@@ -41,6 +41,7 @@ async function renderSlides(deck:Deck,slides:Slide[],tempRoot:string,capture:boo
   }finally{win.destroy();await fs.rm(folder,{recursive:true,force:true});}
 }
 export async function captureSlides(deck:Deck,tempRoot:string){return (await renderSlides(deck,deck.slides,tempRoot,true)).images;}
+export async function captureSlide(deck:Deck,id:string,tempRoot:string){const slide=deck.slides.find(s=>s.id===id);if(!slide)throw Error(`There is no slide ${id}.`);return (await renderSlides(deck,[slide],tempRoot,true)).images[0];}
 export async function checkSlides(deck:Deck,ids:string[],tempRoot:string){return (await renderSlides(deck,deck.slides.filter(s=>ids.includes(s.id)),tempRoot,false)).errors;}
 export async function createPdf(images:Buffer[],tempRoot:string){
   const win=new BrowserWindow({show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});

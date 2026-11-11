@@ -3,8 +3,9 @@ import type {Slide} from './model';
 import {annotate,editIndex} from './edit';
 import type {SelectionDetails} from './edit';
 import {qrSvg} from './qr';
+import {tableHtml} from './table';
 
-export type ManualKind='text'|'image'|'link'|'shape';
+export type ManualKind='text'|'image'|'link'|'shape'|'line'|'table';
 export type ManualStyle='borderWidth'|'borderColor'|'backgroundColor'|'boxShadow'|'fontFamily'|'fontSize'|'color'|'objectFit'|'objectPosition'|'clipPath';
 const parse=(html:string)=>new DOMParser().parseFromString(html,'text/html');
 // Shapes are an SVG filling their box: rectangles and the ellipse in CSS pixels (round corners stay round), the others on a
@@ -34,13 +35,51 @@ export function setShape(slide:Slide,index:number,change:Partial<ShapeLook>){ret
   else{el.dataset.shape=look.type;el.innerHTML=shapeSvg(look);}
   if(change.shadow!==undefined){if(look.shadow)el.style.filter=shapeShadow;else el.style.removeProperty('filter');}
 });}
+// A line is a box as long as the line and as tall as its ends need, drawn horizontally through its middle: moving,
+// resizing (its length) and rotating (any direction) work on the box. The body is a border (solid, dashed or dotted);
+// each end is a small SVG (start mirrored): flat, arrow (filled), open arrow or dot.
+export const lineEnds=['none','arrow','open','dot'] as const;
+export type LineEnd=typeof lineEnds[number];
+export type LineLook={color:string;width:number;style:'solid'|'dashed'|'dotted';start:LineEnd;end:LineEnd};
+const lineHeight=(width:number)=>Math.max(16,Math.ceil(width*3+10));
+function lineHtml(look:LineLook){
+  const w=look.width,a=w*3+6,r=w*1.25+3,n=(x:number)=>Math.round(x*100)/100;
+  const cap=(end:LineEnd,side:'start'|'end')=>{
+    if(end==='none')return{inset:0,svg:''};
+    const size=end==='dot'?2*r:a,place=`position:absolute;${side==='end'?'right':'left'}:0;top:50%;width:${n(size)}px;height:${n(size)}px;margin-top:${n(-size/2)}px;overflow:visible${side==='start'?';transform:scaleX(-1)':''}`;
+    const body=end==='arrow'?`<path d="M0 0L${n(a)} ${n(a/2)}L0 ${n(a)}Z" style="fill:${look.color}"/>`:end==='open'?`<path d="M${n(w/2)} ${n(w/2)}L${n(a-w/2)} ${n(a/2)}L${n(w/2)} ${n(a-w/2)}" style="fill:none;stroke:${look.color};stroke-width:${n(w)}px;stroke-linecap:round;stroke-linejoin:round"/>`:`<circle cx="${n(r)}" cy="${n(r)}" r="${n(r)}" style="fill:${look.color}"/>`;
+    return{inset:end==='arrow'?a/2:end==='open'?w:r,svg:`<svg xmlns="http://www.w3.org/2000/svg" data-line-cap="${side}" width="${n(size)}" height="${n(size)}" style="${place}">${body}</svg>`};
+  };
+  const start=cap(look.start,'start'),end=cap(look.end,'end');
+  return`<span data-line-part style="position:absolute;left:${n(start.inset)}px;right:${n(end.inset)}px;top:50%;height:0;margin-top:${n(-w/2)}px;border-top:${n(w)}px ${look.style} ${look.color}"></span>${start.svg}${end.svg}`;
+}
+export function lineLook(el:Element):LineLook{
+  const part=el.querySelector<HTMLElement>('[data-line-part]'),d=(el as HTMLElement).dataset,end=(v?:string)=>(lineEnds as readonly string[]).includes(v||'')?v as LineEnd:'none';
+  const style=part?.style.borderTopStyle;
+  return{color:part?.style.borderTopColor||'#172033',width:parseFloat(part?.style.borderTopWidth||'')||4,style:style==='dashed'||style==='dotted'?style:'solid',start:end(d.lineStart),end:end(d.lineEnd)};
+}
+export function setLine(slide:Slide,index:number,change:Partial<LineLook>){return updateElement(slide,index,el=>{
+  if(el.dataset.manual!=='line')return;const before=lineLook(el),look={...before,...change};
+  look.color=color(look.color)||before.color;look.width=Math.max(0.5,Math.min(50,Number(look.width)||before.width));
+  if(!['solid','dashed','dotted'].includes(look.style))look.style=before.style;
+  for(const key of ['start','end'] as const)if(!(lineEnds as readonly string[]).includes(look[key]))look[key]=before[key];
+  el.dataset.lineStart=look.start;el.dataset.lineEnd=look.end;el.innerHTML=lineHtml(look);
+  // A thicker line needs a taller box; its middle (the line, and the center it rotates around) stays in place.
+  const height=lineHeight(look.width),old=parseFloat(el.style.height)||height,top=parseFloat(el.style.top);
+  el.style.height=height+'px';el.style.minHeight='0px';if(Number.isFinite(top)&&/px$/.test(el.style.top))el.style.top=Math.round((top+(old-height)/2)*100)/100+'px';
+});}
 // A link's text is its <a>: font, color and weight are set there (its box keeps the alignment).
 export type LinkStyle='fontSize'|'fontFamily'|'color'|'fontWeight'|'fontStyle'|'textDecoration';
 export function setLinkStyle(slide:Slide,index:number,key:LinkStyle,value:string){return updateElement(slide,index,el=>{const a=el.querySelector('a');if(a)a.style.setProperty(key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),value,'important');});}
 export const linkLook=(el:Element)=>{const a=el.querySelector('a');return{bold:/^(bold|bolder|[6-9]00)$/.test(a?.style.fontWeight||''),italic:a?.style.fontStyle==='italic',underline:!/none/.test(a?.style.textDecoration||'')};};
 const safeUrl=(value:string)=>{try{const url=new URL(value.trim());return /^(https?:|mailto:)$/.test(url.protocol)?url.href:null;}catch{return null;}};
-export function insertManual(slide:Slide,kind:ManualKind,payload=''):{slide:Slide;index:number}{
-  const doc=parse(slide.html),el=doc.createElement(kind==='image'?'img':'div');
+// size: an image's own width and height in pixels; its box then has the image's proportions (no empty bands).
+export function insertManual(slide:Slide,kind:ManualKind,payload='',size?:{width:number;height:number}):{slide:Slide;index:number}{
+  const doc=parse(slide.html);
+  // A table: payload "rows×cols" (Insert table's size picker).
+  if(kind==='table'){const [rows,cols]=payload.split(/[x×]/).map(Number),tpl=doc.createElement('template');tpl.innerHTML=tableHtml(rows,cols);const table=tpl.content.firstElementChild!;
+    (doc.querySelector('.slide')||doc.body).append(table);return{slide:{...slide,html:doc.body.innerHTML,staticHtml:''},index:editIndex(doc,table)};}
+  const el=doc.createElement(kind==='image'?'img':'div');
   el.setAttribute('data-manual',kind);
   el.style.cssText='position:absolute;left:500px;top:270px;width:600px;min-height:100px;z-index:10;box-sizing:border-box';
   if(kind==='text'){
@@ -51,9 +90,17 @@ export function insertManual(slide:Slide,kind:ManualKind,payload=''):{slide:Slid
     const type=(shapeTypes as readonly string[]).includes(payload)?payload as ShapeType:'rect',square=!/^(rect|rounded|arrow)$/.test(type);
     el.dataset.shape=type;el.style.removeProperty('min-height');el.style.width=(square?300:420)+'px';el.style.height=(square?300:260)+'px';
     el.innerHTML=shapeSvg({type,fill:'#4a6cf7',stroke:'#2f4fd0',width:0});
+  }else if(kind==='line'){
+    const look:LineLook={color:'#172033',width:4,style:'solid',start:'none',end:'none'},height=lineHeight(look.width);
+    el.dataset.lineStart=look.start;el.dataset.lineEnd=look.end;el.style.removeProperty('min-height');el.style.top=450-height/2+'px';el.style.height=height+'px';
+    el.innerHTML=lineHtml(look);
   }else if(kind==='image'){
     el.setAttribute('src',payload);el.setAttribute('alt','');
-    el.style.cssText+=';height:340px;object-fit:contain';
+    if(size&&size.width>0&&size.height>0){
+      // Its natural size, made smaller to fit 1200 × 700 of the slide, centered.
+      const k=Math.min(1,1200/size.width,700/size.height),w=Math.round(size.width*k),h=Math.round(size.height*k);
+      el.style.removeProperty('min-height');Object.assign(el.style,{left:Math.round((1600-w)/2)+'px',top:Math.round((900-h)/2)+'px',width:w+'px',height:h+'px'});
+    }else el.style.cssText+=';height:340px;object-fit:contain';
   }else{
     // A link is only its text (the caption, when given, replaces the URL); its QR code is a separate image.
     const url=safeUrl(payload)||'https://example.com/';
@@ -67,7 +114,7 @@ export function manualElement(slide:Slide,index:number){const doc=parse(slide.ht
 // Selection addresses the actual source element. Legacy objects need no data-manual marker or migration.
 export function editableAt(slide:Slide,index:number,details?:SelectionDetails){
   const doc=parse(annotate(slide.html)),el=[...doc.body.querySelectorAll('*')][index] as HTMLElement|undefined;if(!el||!('style' in el)||el.matches('.slide'))return null;
-  const kind:SelectionDetails['kind']=details?.index===index?details.kind:el.dataset.manual==='shape'?'shape':/^(img|svg|video|canvas)$/i.test(el.tagName)?'image':el.dataset.esfKind==='text'?'text':el.dataset.manual==='link'?'link':'box';
+  const kind:SelectionDetails['kind']=details?.index===index?details.kind:el.dataset.manual==='shape'?'shape':el.dataset.manual==='line'?'line':el.dataset.manual==='table'?'table':/^(img|svg|video|canvas)$/i.test(el.tagName)?'image':el.dataset.esfKind==='text'?'text':el.dataset.manual==='link'?'link':'box';
   return{kind,index,element:el};
 }
 // Image shadow: a drop-shadow, which follows transparent pixels. An image placed on the slide (absolute) gets it on a wrapper

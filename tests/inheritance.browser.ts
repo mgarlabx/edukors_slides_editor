@@ -49,6 +49,10 @@ export async function run(){
   const removed=applyEdits(image,[{type:'delete',index:editIndex(imageDoc,img)}]);
   check(!applyLayout(removed,imageLayout).html.includes('<img'),'removing a slot image does not resurrect it');
   check(parse(annotate(image.html)).querySelector('img')?.getAttribute('data-esf-kind')==='media','slot images are selectable');
+  const runs=parse(annotate('<section class="slide"><p id="runs"><span>O </span><span>crescimento</span><em> orgânico</em></p><div id="card"><span>Badge</span><span>Value</span></div><div data-manual="text" data-field="pptx-9" id="box"><p><span>Até 20%</span></p><p><span>da receita</span></p></div></section>'));
+  check(runs.querySelector('#runs')?.getAttribute('data-esf-kind')==='text'&&!runs.querySelector('#runs span[data-esf-kind]'),'a paragraph of spans is one text');
+  check(runs.querySelectorAll('#card>span[data-esf-kind=text]').length===2,'inline children of a card stay separate texts');
+  check(runs.querySelector('#box')?.getAttribute('data-esf-kind')==='text'&&!runs.querySelector('#box [data-esf-kind]'),'an imported text box with paragraphs is one text');
   d.masters[0].css+='\n:root{--custom:#aabbcc}h1{color:var(--custom);font-family:Georgia}';d.masters[0].html='<div id="master-logo">Source master</div>';
   d.layouts[0].css='h1{letter-spacing:3px}';
   d.assets=[{id:'asset-shared',name:'source.svg',mime:'image/svg+xml',data:btoa('<svg xmlns="http://www.w3.org/2000/svg"/>')}];d.masters[0].html+='<img src="asset:asset-shared">';

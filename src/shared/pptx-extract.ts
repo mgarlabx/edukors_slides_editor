@@ -11,8 +11,11 @@ export type PptxItem=
   ({type:'text';paragraphs:PptxParagraph[];anchor:'t'|'ctr'|'b';insets:[number,number,number,number];singleLine:boolean}&PptxBox&PptxLook)|
   ({type:'box'}&PptxBox&PptxLook)|
   ({type:'image';src:string;crop?:[number,number,number,number];descr?:string}&PptxBox&PptxLook)|
-  ({type:'shape';geometry:string}&PptxBox&PptxLook);
-export interface PptxBox {x:number;y:number;w:number;h:number}
+  ({type:'shape';geometry:string}&PptxBox&PptxLook)|
+  ({type:'line';head:PptxLineEnd;tail:PptxLineEnd}&PptxBox&PptxLook);
+export type PptxLineEnd='none'|'triangle'|'arrow'|'oval';
+// rot: clockwise degrees around the box's center (x, y, w, h are then the unturned box).
+export interface PptxBox {x:number;y:number;w:number;h:number;rot?:number}
 export interface PptxSlideObjects {width:number;height:number;items:PptxItem[]}
 
 export function extractSlideObjects():PptxSlideObjects{
@@ -25,7 +28,14 @@ export function extractSlideObjects():PptxSlideObjects{
     const alpha=p.length>3?p[3]:1;if(!(alpha>0))return undefined;
     return{hex:p.slice(0,3).map(n=>Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,'0')).join('').toUpperCase(),alpha};
   };
-  const box=(el:Element)=>{const r=el.getBoundingClientRect();return{x:r.left-rootRect.left,y:r.top-rootRect.top,w:r.width,h:r.height};};
+  // A turned object (CSS rotate, or a rotation in its transform) is described unturned, with its angle.
+  const angleOf=(el:Element)=>{const s=cs(el);let a=0;if(s.rotate&&s.rotate!=='none'){const v=s.rotate.split(' ').at(-1)!,n=parseFloat(v);a+=v.endsWith('rad')?n*180/Math.PI:v.endsWith('turn')?n*360:n||0;}
+    if(s.transform&&s.transform!=='none'){const m=new DOMMatrixReadOnly(s.transform);a+=(m.a*m.d-m.b*m.c<0?Math.atan2(-m.c,m.d):Math.atan2(m.b,m.a))*180/Math.PI;}return((a%360)+360)%360;};
+  const rootScale=root.offsetWidth?rootRect.width/root.offsetWidth:1;
+  const box=(el:Element)=>{const r=el.getBoundingClientRect(),rot=angleOf(el);
+    if(rot<0.05||rot>359.95)return{x:r.left-rootRect.left,y:r.top-rootRect.top,w:r.width,h:r.height};
+    const h=el as HTMLElement,k=rootScale,w=(h.offsetWidth||r.width)*k,ht=(h.offsetHeight||r.height)*k,cx=r.left+r.width/2-rootRect.left,cy=r.top+r.height/2-rootRect.top;
+    return{x:cx-w/2,y:cy-ht/2,w,h:ht,rot:Math.round(rot*100)/100};};
   const scale=(el:Element)=>{const h=el as HTMLElement;return h.offsetWidth?el.getBoundingClientRect().width/h.offsetWidth:1;};
   const shown=(el:Element)=>{const s=cs(el);if(s.display==='none'||s.visibility==='hidden'||Number(s.opacity)===0)return false;const r=el.getBoundingClientRect();return r.width>0.5&&r.height>0.5;};
   const inline=new Set(['SPAN','B','STRONG','I','EM','U','S','STRIKE','DEL','INS','SUB','SUP','A','FONT','SMALL','MARK','CODE','BR','Q','ABBR','CITE','BIG','TT','KBD','VAR','TIME','LABEL']);
@@ -81,6 +91,13 @@ export function extractSlideObjects():PptxSlideObjects{
     const tag=el.tagName.toUpperCase();
     // Slides shapes: preset geometry with the SVG's fill and line.
     const manual=(el as HTMLElement).dataset?.manual;
+    // Slides lines: a native line with its ends, through the middle of the box.
+    if(manual==='line'){
+      const part=el.querySelector('[data-line-part]'),ps=part?cs(part):null,b=box(el),width=parseFloat(ps?.borderTopWidth||'0')||0,stroke=ps?color(ps.borderTopColor):undefined;
+      const end=(v?:string):PptxLineEnd=>({arrow:'triangle',open:'arrow',dot:'oval'} as Record<string,PptxLineEnd>)[v||'']||'none',d=(el as HTMLElement).dataset;
+      if(stroke)items.push({type:'line',...b,y:b.y+b.h/2,h:0,head:end(d.lineStart),tail:end(d.lineEnd),line:{...stroke,width:width*rootScale,...ps!.borderTopStyle==='dashed'?{dash:'dash' as const}:ps!.borderTopStyle==='dotted'?{dash:'sysDot' as const}:{}},...Number(cs(el).opacity)<1?{opacity:Number(cs(el).opacity)}:{}});
+      done(el,'line');return;
+    }
     if(manual==='shape'){
       const part=el.querySelector('[data-shape-part]'),ps=part?cs(part):null,width=parseFloat(ps?.strokeWidth||'0')||0;
       const geometry=({rect:'rect',rounded:'roundRect',ellipse:'ellipse',triangle:'triangle',rightTriangle:'rtTriangle',diamond:'diamond',pentagon:'pentagon',hexagon:'hexagon',arrow:'rightArrow',star:'star5'} as Record<string,string>)[(el as HTMLElement).dataset.shape||'rect']||'rect';
@@ -127,7 +144,7 @@ export function hideExtractedObjects(){
   const flat={'background-color':'transparent','border-color':'transparent','box-shadow':'none','outline-color':'transparent'};
   for(const el of document.querySelectorAll<HTMLElement>('[data-pptx]')){
     const kind=el.dataset.pptx;
-    if(kind==='image'||kind==='shape'){set(el,{visibility:'hidden'});if(el.parentElement?.matches('[data-image-shadow]'))set(el.parentElement,{filter:'none'});continue;}
+    if(kind==='image'||kind==='shape'||kind==='line'){set(el,{visibility:'hidden'});if(el.parentElement?.matches('[data-image-shadow]'))set(el.parentElement,{filter:'none'});continue;}
     set(el,flat);
     if(kind==='text')for(const t of [el,...el.querySelectorAll<HTMLElement>('*')])set(t,{color:'transparent','-webkit-text-fill-color':'transparent','text-shadow':'none','text-decoration-color':'transparent',...t===el?{}:flat});
   }

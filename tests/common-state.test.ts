@@ -101,3 +101,23 @@ test('Assistant: read_image shows an image of the presentation to the model',asy
   const s=await drawn.run({id:1},{asset:'asset-svg1'});
   assert.deepEqual(s.images,[{mimeType:'image/png',data:'drawn-asset-svg1'}]);assert.equal(s.shownWidth,10);
 });
+
+test('Assistant: view_slide shows a rendered slide, sending only that slide and the images it uses',async()=>{
+  const store=new Store(),deck=newDeck('View');deck.assets.push({id:'asset-used1',name:'a.png',mime:'image/png',data:'AAAA'},{id:'asset-other1',name:'b.png',mime:'image/png',data:'BBBB'});
+  deck.slides[0].html+='<img src="asset:asset-used1">';store.add(1,deck);
+  assert.equal(createSlidesTools(store).some(t=>t.name==='view_slide'),false);
+  let sent:any;const view=createSlidesTools(store,{showSlide:async(d,id)=>{sent={d,id};return{mimeType:'image/png',data:'shot',width:1568,height:882};}}).find(t=>t.name==='view_slide')!;
+  assert.equal(view.changes,false);
+  const id=deck.slides[0].id,r=await view.run({id:1},{slide:id});
+  assert.deepEqual(r.images,[{mimeType:'image/png',data:'shot'}]);assert.equal(r.shownWidth,1568);
+  assert.equal(sent.id,id);assert.deepEqual(sent.d.slides.map((s:any)=>s.id),[id]);assert.deepEqual(sent.d.assets.map((a:any)=>a.id),['asset-used1']);
+  await assert.rejects(view.run({id:1},{slide:'nope'}),/no slide nope/);
+});
+
+test('Pasted image: its box has the image proportions (natural size, at most 1200 × 700), centered',async()=>{
+  const {insertManual}=await import('../src/shared/manual');
+  const slide=newSlide(newDeck('Image').layouts[0]),box=(size?:{width:number;height:number})=>{const r=insertManual(slide,'image','asset:x',size);const el=new DOMParser().parseFromString(r.slide.html,'text/html').querySelector('img[data-manual=image]') as HTMLElement;return[el.style.left,el.style.top,el.style.width,el.style.height,el.style.minHeight];};
+  assert.deepEqual(box({width:400,height:300}),['600px','300px','400px','300px','']);
+  assert.deepEqual(box({width:2400,height:600}),['200px','300px','1200px','300px','']);
+  assert.deepEqual(box({width:500,height:1400}),['675px','100px','250px','700px','']);
+});

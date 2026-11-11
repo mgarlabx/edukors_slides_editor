@@ -27,8 +27,8 @@ function quickGuide(lang:keyof typeof catalogs){
   termsVersion:TERMS_VERSION,
   // Interface in five languages (Common's registry: pt, en, es, zh, hi); help and terms in each of them.
   help:{quickGuide:{pt:quickGuide('pt'),en:quickGuide('en'),es:quickGuide('es'),zh:quickGuide('zh'),hi:quickGuide('hi')},fullGuide:{pt:guidePt,en:guideEn,es:guideEs,zh:guideZh,hi:guideHi},termsOfUse:{pt:termsPt,en:termsEn,es:termsEs,zh:termsZh,hi:termsHi}},
-  // Text, shape and image come from Common's Insert group; Slides adds link and interactive question next to them.
-  insert:['text','shape','image'],
+  // Text, shape, line and image come from Common's Insert group; Slides adds link and interactive question next to them.
+  insert:['text','table','shape','line','image'],
   // The slide list opens the first time; afterwards Common remembers the person's choice.
   sidebarOpen:true,
   file:{

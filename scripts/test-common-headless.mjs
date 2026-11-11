@@ -30,6 +30,8 @@ try{
   const errors=[];page.on('pageerror',error=>{errors.push(error.message);console.error('Renderer:',error.message);});
   await page.goto(servers.page);
   await page.waitForFunction(()=>!!globalThis.EdukorsAppDocument&&!!document.getElementById('slides-root'));
+  // Without a document the toolbar shows one separator, between the file and the utility buttons.
+  assert.equal(await page.locator('.toolbar > .separator').evaluateAll(list=>list.filter(x=>x.offsetWidth).length),1,'one separator on the empty desk');
   // New opens the gallery; Blank presentation creates on double click.
   await page.locator('.toolbar [data-command="new"]').click();
   await page.locator('.template-card').first().dblclick();
@@ -142,6 +144,164 @@ try{
     await bar.locator('[data-control=arrangeMenu]').click();assert.equal(await page.locator('.pick-menu [role=option]').count(),2,'the arrange menu has only the stacking order');await bar.locator('[data-control=arrangeMenu]').click();
     await bar.locator('[data-control=ungroup]').click();await count(0);
     await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator('#document-placeholder iframe:not(.preview-stale)').waitFor();await page.waitForTimeout(500);
+  }
+  // An animation's transparent wrapper over the slide (a spinning ring of icons) does not hide the objects under it.
+  {const previous=await page.evaluate(()=>EdukorsDocuments.active().id);
+    await page.evaluate(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].css='.spin{position:absolute;left:300px;top:150px;width:600px;height:600px;animation:sp 40s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}.dot{position:absolute;left:0;top:0;width:60px;height:60px;border-radius:50%;background:#f44}';
+      c.deck.slides[0].html='<section class="slide"><div data-manual="shape" data-shape="rect" style="position:absolute;left:500px;top:350px;width:200px;height:200px"><svg width="100%" height="100%"><rect data-shape-part="" width="100%" height="100%" style="fill:#4a6cf7"></rect></svg></div><div class="spin"><div class="dot"></div></div></section>';
+      const next=EdukorsDocuments.add({name:'Wrapper'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);});
+    const F='#document-placeholder iframe:not(.preview-stale)',frame=()=>page.frameLocator(F);
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(500);
+    const r=await frame().locator('[data-shape]').boundingBox();
+    assert.equal(await frame().locator('body').evaluate((_b,[x,y])=>document.elementFromPoint(x,y)?.className,[r.x+r.width/2-(await page.locator(F).boundingBox()).x,r.y+r.height/2-(await page.locator(F).boundingBox()).y]),'spin','the wrapper is on top of the shape');
+    await page.mouse.click(r.x+r.width/2,r.y+r.height/2);await page.waitForTimeout(400);
+    assert.equal(await page.locator('#context-toolbar [data-control=arrangeMenu]').count(),1,'a press through the wrapper selects the shape under it');
+    await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator(F).waitFor();await page.waitForTimeout(500);
+  }
+  // Rotation: the dot above the selected object turns it (the readout shows the angle), saved as its CSS rotate.
+  // Lines: Insert → Line puts one on the slide; its bar sets the ends; only the end handles resize it.
+  {const previous=await page.evaluate(()=>EdukorsDocuments.active().id);
+    await page.evaluate(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].html='<section class="slide"><div data-manual="shape" data-shape="rect" style="position:absolute;left:500px;top:350px;width:300px;height:200px"><svg width="100%" height="100%"><rect data-shape-part="" width="100%" height="100%" style="fill:#4a6cf7"></rect></svg></div></section>';
+      const next=EdukorsDocuments.add({name:'Rotate'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);});
+    const F='#document-placeholder iframe:not(.preview-stale)',frame=()=>page.frameLocator(F);
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(500);
+    const r=await frame().locator('[data-shape]').boundingBox();await page.mouse.click(r.x+r.width/2,r.y+r.height/2);await page.waitForTimeout(300);
+    const dot=frame().locator('[data-esf-ui=rotate]');assert.ok(await dot.isVisible(),'the rotation handle shows on the selected shape');
+    const d=await dot.boundingBox(),cx=r.x+r.width/2,cy=r.y+r.height/2,R=Math.hypot(d.x+d.width/2-cx,d.y+d.height/2-cy);
+    await page.mouse.move(d.x+d.width/2,d.y+d.height/2);await page.mouse.down();
+    for(let i=1;i<=6;i++){const a=-Math.PI/2+i/6*Math.PI/2*0.5;await page.mouse.move(cx+R*Math.cos(a),cy+R*Math.sin(a));}
+    assert.match(await frame().locator('[data-esf-ui=tip]').textContent(),/^\d+°$/,'the readout shows the angle');
+    await page.mouse.up();await page.waitForFunction(async()=>/rotate:\s*4[45](\.\d)?deg/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));
+    await page.keyboard.press('Escape');await page.waitForTimeout(200);
+    await page.locator('#insert-actions [data-command="insertLine"]').click();
+    await page.waitForFunction(async()=>/data-manual="line"/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));
+    await page.locator('#context-toolbar [data-control=lineEnd]').waitFor();
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    const shown=await frame().locator('[data-esf-ui=resize]').evaluateAll(hs=>hs.filter(h=>getComputedStyle(h).display!=='none').map(h=>h.dataset.corner).sort().join(','));
+    assert.equal(shown,'e,w','a line resizes only from its ends');
+    await page.locator('#context-toolbar [data-control=lineEnd]').click();await page.locator('.pick-menu [role=option][title="Seta"],.pick-menu [role=option][title="Arrow"]').first().click();
+    await page.waitForFunction(async()=>/data-line-end="arrow"[^>]*>.*data-line-cap="end"/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));
+    await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator(F).waitFor();await page.waitForTimeout(500);
+  }
+  // Groups: align and distribute move a group as one object; a whole group selected turns around its common center.
+  {const previous=await page.evaluate(()=>EdukorsDocuments.active().id);
+    const shape=(id,l,t,g)=>`<div data-manual="shape" data-shape="rect" id="${id}"${g?' data-group-id="g1"':''} style="position:absolute;left:${l}px;top:${t}px;width:100px;height:100px"><svg width="100%" height="100%"><rect data-shape-part="" width="100%" height="100%" style="fill:#4a6cf7"></rect></svg></div>`;
+    await page.evaluate(async html=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].html=html;const next=EdukorsDocuments.add({name:'Group arrange'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);},
+      '<section class="slide">'+shape('a',600,100,true)+shape('b',800,300,true)+shape('c',300,600,false)+'</section>');
+    const F='#document-placeholder iframe:not(.preview-stale)',frame=()=>page.frameLocator(F);
+    const boxes=()=>frame().locator('[data-shape]').evaluateAll(els=>Object.fromEntries(els.map(el=>{const r=el.getBoundingClientRect(),k=document.querySelector('.slide').getBoundingClientRect().width/1600;return[el.id,{x:Math.round((r.left-document.querySelector('.slide').getBoundingClientRect().left)/k),y:Math.round((r.top-document.querySelector('.slide').getBoundingClientRect().top)/k)}];})));
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(500);
+    const ra=await frame().locator('#a').boundingBox(),rc=await frame().locator('#c').boundingBox();
+    await page.mouse.click(ra.x+50*ra.width/100,ra.y+ra.height/2);await page.keyboard.down('Shift');await page.mouse.click(rc.x+rc.width/2,rc.y+rc.height/2);await page.keyboard.up('Shift');await page.waitForTimeout(300);
+    await page.evaluate(()=>document.querySelector('#document-placeholder iframe:not(.preview-stale)').contentWindow.postMessage({app:'esf-editor-command',type:'arrange',value:'left'},'*'));
+    await page.waitForTimeout(500);await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    let b=await boxes();assert.deepEqual([b.a.x,b.b.x,b.c.x],[300,500,300],'the group moves as one: its left side meets the other object');
+    await frame().locator('body').click({position:{x:5,y:5},force:true});await page.waitForTimeout(300);const r2=await frame().locator('#b').boundingBox();await page.mouse.click(r2.x+r2.width/2,r2.y+r2.height/2);await page.waitForTimeout(300);
+    const dot=frame().locator('[data-esf-ui=rotate]');assert.ok(await dot.isVisible(),'a whole group selected has a rotation handle');
+    const ga=await frame().locator('#a').boundingBox(),gb=await frame().locator('#b').boundingBox(),cx=(ga.x+gb.x+gb.width)/2,cy=(ga.y+gb.y+gb.height)/2,d=await dot.boundingBox(),R=Math.hypot(d.x+d.width/2-cx,d.y+d.height/2-cy);
+    await page.mouse.move(d.x+d.width/2,d.y+d.height/2);await page.mouse.down();
+    for(let i=1;i<=8;i++){const a=-Math.PI/2+i/8*Math.PI/2;await page.mouse.move(cx+R*Math.cos(a),cy+R*Math.sin(a));}
+    await page.mouse.up();
+    await page.waitForFunction(async()=>((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html.match(/rotate:\s*90deg/g)||[]).length===2);
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    b=await boxes();assert.deepEqual([b.a.x,b.a.y,b.b.x,b.b.y],[500,100,300,300],'the members go around the group center');
+    await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator(F).waitFor();await page.waitForTimeout(500);
+  }
+  // Tables: Insert table (size grid), typing in cells with Tab, the table menu (rows, merge), Delete clears cells.
+  {const previous=await page.evaluate(()=>EdukorsDocuments.active().id),html=async()=>(await content(page)).deck.slides[0].html;
+    await page.evaluate(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].html='<section class="slide"></section>';const next=EdukorsDocuments.add({name:'Table'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);});
+    const F='#document-placeholder iframe:not(.preview-stale)',frame=()=>page.frameLocator(F),bar=page.locator('#context-toolbar');
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    await page.locator('#insert-actions [data-command="insertTable"]').click();
+    await page.locator('.table-picker button[data-rows="3"][data-cols="2"]').hover();assert.match(await page.locator('.table-picker-size').textContent(),/3 × 2/);
+    await page.locator('.table-picker button[data-rows="3"][data-cols="2"]').click();
+    await page.waitForFunction(async()=>/data-manual="table"/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));
+    let shape=await page.evaluate(h=>{const t=new DOMParser().parseFromString(h,'text/html').querySelector('table');return{rows:t.rows.length,th:t.querySelectorAll('th').length,td:t.querySelectorAll('td').length};},await html());
+    assert.deepEqual(shape,{rows:3,th:2,td:4},'3 × 2 table with a header row');
+    await bar.locator('[data-control="tableAction"]').waitFor();
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    assert.equal(await frame().locator('[data-esf-ui=resize]').evaluateAll(hs=>hs.filter(h=>getComputedStyle(h).display!=='none').length),8,'the inserted table is selected as one object');
+    // The whole table selected: the text tools format every cell.
+    await bar.locator('[data-control="italic"]').click();
+    await page.waitForFunction(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');return [...t.querySelectorAll('td,th')].every(c=>/font-style: italic/.test(c.getAttribute('style')||''));});
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    // Borders (no borders, then a dashed one again) and the table's shadow.
+    const tableNow=()=>page.evaluate(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');return{styles:[...t.querySelectorAll('td,th')].map(c=>c.style.borderTopStyle+' '+c.style.borderTopWidth),shadow:t.style.boxShadow};});
+    await bar.locator('[data-control="borderStyle"]').click();await page.locator('.pick-menu [role=option]').filter({hasText:/Sem bordas|No borders/}).click();
+    await page.waitForFunction(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');return [...t.querySelectorAll('td,th')].every(c=>c.style.borderTopStyle==='hidden');});
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    await bar.locator('[data-control="borderStyle"]').click();await page.locator('.pick-menu [role=option]').nth(1).click();
+    await page.waitForFunction(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');return [...t.querySelectorAll('td,th')].every(c=>c.style.borderTopStyle==='dashed'&&c.style.borderTopWidth==='2px');});
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    await bar.locator('[data-control="tableShadow"]').click();
+    await page.waitForFunction(async()=>/box-shadow/.test(new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table').getAttribute('style')));
+    void tableNow;await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    // A click on a cell of the selected table types in it; Tab goes to the next cell.
+    await frame().locator('table td').first().click();await page.waitForTimeout(200);
+    await page.keyboard.type('A');await page.keyboard.press('Tab');await page.keyboard.type('B');await page.keyboard.press('Escape');
+    await page.waitForFunction(async()=>{const h=(await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html;return />A<\/td>/.test(h)&&/>B<\/td>/.test(h);});
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    // The table menu: a row below the selected cell's row.
+    await frame().locator('table td').nth(1).click();await page.waitForTimeout(200);await page.keyboard.press('Escape');await page.waitForTimeout(300);
+    await bar.locator('[data-control="tableAction"]').click();await page.locator('.pick-menu [role=option]').filter({hasText:/Inserir linha abaixo|Insert row below/}).click();
+    await page.waitForFunction(async()=>new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table').rows.length===4);
+    assert.match(await html(),/>A<\/td><td[^>]*>B<\/td><\/tr><tr><td[^>]*><\/td><td[^>]*><\/td><\/tr>/,'the new row comes below, the texts stay');
+    // Two cells (⇧+click) merge into one spanning both columns, with both texts.
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    await frame().locator('table td').first().click();await page.waitForTimeout(200);await page.keyboard.press('Escape');await page.waitForTimeout(200);
+    await frame().locator('table td').nth(1).click({modifiers:['Shift']});await page.waitForTimeout(300);
+    await bar.locator('[data-control="tableAction"]').click();await page.locator('.pick-menu [role=option]').filter({hasText:/Mesclar|Merge/}).click();
+    await page.waitForFunction(async()=>/colspan="2"[^>]*>A<br>B</.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));
+    // Delete on a selected cell clears its text (the cell stays).
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);
+    await frame().locator('table td').first().click();await page.waitForTimeout(200);await page.keyboard.press('Escape');await page.waitForTimeout(200);await page.keyboard.press('Delete');
+    await page.waitForFunction(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');return t&&!/A|B/.test(t.textContent)&&t.rows[1].cells.length===1;});
+    await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator(F).waitFor();await page.waitForTimeout(500);
+  }
+  // Table rows and columns: the bars select a column, several cells take italic (empty ones too), borders drag to resize
+  // columns (the table keeps its width) and rows, the menu shares column widths equally, dragging across cells selects them.
+  {const previous=await page.evaluate(()=>EdukorsDocuments.active().id),html=async()=>(await content(page)).deck.slides[0].html;
+    await page.evaluate(async()=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].html='<section class="slide"></section>';const next=EdukorsDocuments.add({name:'Table sizes'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);});
+    const F='#document-placeholder iframe:not(.preview-stale)',frame=()=>page.frameLocator(F),bar=page.locator('#context-toolbar'),ready=async()=>{await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(300);};
+    const parsed=async()=>page.evaluate(h=>{const t=new DOMParser().parseFromString(h,'text/html').querySelector('table');return{cols:[...t.querySelectorAll('col')].map(c=>parseFloat(c.style.width)),rows:[...t.rows].map(r=>parseFloat(r.style.height)||0),cells:[...t.rows].map(r=>[...r.cells].map(c=>({text:c.textContent,italic:/font-style: italic/.test(c.getAttribute('style')||'')||!!c.querySelector('i')})))};},await html());
+    const tap=async sel=>{const b=await frame().locator(sel).boundingBox();await page.mouse.click(b.x+b.width/2,b.y+b.height/2);},visibleSel=()=>frame().locator('[data-esf-ui=sel]').evaluateAll(list=>list.filter(d=>getComputedStyle(d).display!=='none').length);
+    await ready();await page.locator('#insert-actions [data-command="insertTable"]').click();await page.locator('.table-picker button[data-rows="3"][data-cols="2"]').click();
+    await page.waitForFunction(async()=>/data-manual="table"/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));await ready();
+    assert.deepEqual((await parsed()).cols,[50,50],'new tables size their columns in a colgroup');
+    await frame().locator('table td').first().click();await page.keyboard.type('x');await page.keyboard.press('Escape');await ready();
+    // The bar above the second column selects its three cells; bold goes to all (the empty ones keep it for later typing).
+    await frame().locator('table td').first().click();await page.waitForTimeout(200);
+    await tap('[data-esf-ui=tpickc][data-i="1"]');await page.waitForTimeout(300);
+    assert.equal(await visibleSel(),3,'a whole column is selected');
+    await bar.locator('[data-control="italic"]').click();await page.waitForTimeout(700);
+    {const p=await parsed();assert.deepEqual(p.cells.map(r=>r[1].italic),[true,true,true],'italic on every cell of the column');assert.equal(p.cells[1][0].italic,false);}
+    // Column border: dragging moves width from one column to the other.
+    await ready();await frame().locator('table td').first().click();await page.waitForTimeout(200);await page.keyboard.press('Escape');await page.waitForTimeout(200);
+    {const b=await frame().locator('[data-esf-ui=tcol][data-i="1"]').boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();for(let i=1;i<=5;i++)await page.mouse.move(b.x+b.width/2+i*12,b.y+b.height/2);await page.mouse.up();}
+    await page.waitForFunction(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');const w=[...t.querySelectorAll('col')].map(c=>parseFloat(c.style.width));return w[0]>55&&Math.abs(w[0]+w[1]-100)<0.1;});
+    // Row border: the first row gets taller; every row then has its height and the table is as tall as they are.
+    {const before=(await parsed());const b=await frame().locator('[data-esf-ui=trow][data-i="0"]').boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();for(let i=1;i<=5;i++)await page.mouse.move(b.x+b.width/2,b.y+b.height/2+i*10);await page.mouse.up();
+      await page.waitForFunction(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');const h=[...t.rows].map(r=>parseFloat(r.style.height));return h.every(x=>x>0)&&h[0]>h[1]+20&&Math.abs(h.reduce((a,b)=>a+b,0)-parseFloat(t.style.height))<0.1;});}
+    // Distribute columns (the whole row selected by its bar): equal widths again.
+    await ready();await frame().locator('table td').first().click();await page.waitForTimeout(200);await tap('[data-esf-ui=tpickr][data-i="1"]');await page.waitForTimeout(300);
+    await bar.locator('[data-control="tableAction"]').click();await page.locator('.pick-menu [role=option]').filter({hasText:/Distribuir colunas|Distribute columns/}).click();
+    await page.waitForFunction(async()=>{const t=new DOMParser().parseFromString((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html,'text/html').querySelector('table');const w=[...t.querySelectorAll('col')].map(c=>parseFloat(c.style.width));return Math.abs(w[0]-50)<0.1&&Math.abs(w[1]-50)<0.1;});
+    // Select row from the menu, from one cell: both cells of its row.
+    await ready();await frame().locator('table td').nth(2).click();await page.waitForTimeout(200);
+    await bar.locator('[data-control="tableAction"]').click();await page.locator('.pick-menu [role=option]').filter({hasText:/Selecionar linha|Select row/}).click();await page.waitForTimeout(300);
+    assert.equal(await visibleSel(),2,'Select row selects the row of the cell');
+    // Dragging from a cell being edited to another selects the cells between them.
+    await page.keyboard.press('Escape');await ready();
+    {const a=await frame().locator('table td').first().boundingBox(),z=await frame().locator('table td').nth(3).boundingBox();
+      await frame().locator('table td').first().click();await page.waitForTimeout(200);
+      await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();for(let i=1;i<=6;i++)await page.mouse.move(a.x+a.width/2+(z.x-a.x)*i/6,a.y+a.height/2+(z.y-a.y)*i/6);await page.mouse.up();await page.waitForTimeout(300);
+      assert.equal(await visibleSel(),4,'dragging across cells selects the rectangle of cells');}
+    await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator(F).waitFor();await page.waitForTimeout(500);
   }
   // Side panels: the inner-edge handle resizes (drag, arrows, double click restores) and the width is remembered.
   {if(await page.locator('.toolbar [data-command="sidebar"]').getAttribute('aria-pressed')!=='true')await page.locator('.toolbar [data-command="sidebar"]').click();

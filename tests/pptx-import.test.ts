@@ -23,7 +23,7 @@ test('PPTX importer creates editable text with positions, rich styles and alignm
   const entries=unzipSync(fixture());
   entries['ppt/slides/slide1.xml']=strToU8(strFromU8(entries['ppt/slides/slide1.xml']).replace('</p:spTree>',shape+'</p:spTree>'));
   const result=await importPptx(zipSync(entries)),html=result.deck.slides[0].html;
-  assert.match(html,/data-manual="text" data-pptx-id="3"/);
+  assert.match(html,/data-manual="text" data-field="pptx-3" data-pptx-id="3"/);
   assert.match(html,/left:100px;top:100px;/);
   assert.match(html,/PowerPoint &amp; edits/);
   assert.match(html,/font-weight:700/);assert.match(html,/font-style:italic/);
@@ -68,4 +68,14 @@ test('PPTX backgrounds, master pictures, groups and preset shapes are imported; 
   assert.match(s.html,/data-pptx-id="7-text"[^>]*>.*11\/Dez/);
   assert.doesNotMatch(s.html,/overflow:hidden/);
   assert.doesNotMatch(deck.masters[0].css,/line-height:1\.5/);
+});
+
+test('PPTX runs with the same look become one span; the text box is one text object',async()=>{
+  const run=(t:string,extra='')=>`<a:r><a:rPr lang="pt-BR" sz="2000"${extra}/><a:t>${t}</a:t></a:r>`;
+  const box=`<p:sp><p:nvSpPr><p:cNvPr id="8" name="Runs"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="5486400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p>${run('O ')+run('crescimento')+run(' ')+run('orgânico')+run('fly to price',' i="1"')+run('.')}</a:p></p:txBody></p:sp>`;
+  const entries=unzipSync(fixture());
+  entries['ppt/slides/slide1.xml']=strToU8(strFromU8(entries['ppt/slides/slide1.xml']).replace('</p:spTree>',box+'</p:spTree>'));
+  const html=(await importPptx(zipSync(entries))).deck.slides[0].html;
+  assert.match(html,/data-manual="text" data-field="pptx-8"/);
+  assert.match(html,/>O crescimento orgânico<\/span><span[^>]*font-style:italic[^>]*>fly to price<\/span><span[^>]*>\.<\/span>/);
 });

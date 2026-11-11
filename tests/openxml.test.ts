@@ -38,3 +38,13 @@ test('PPTX package reading rejects entity declarations, missing targets and macr
   const macro={...entries,'[Content_Types].xml':strToU8(decoder.decode(entries['[Content_Types].xml']).replace('application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml','application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml'))};
   await assert.rejects(()=>readPresentationPackage(zipSync(macro)),/non-macro/);
 });
+
+test('Editable PPTX: turned objects keep their angle; lines are connectors with their ends',async()=>{
+  const {createEditablePptx}=await import('../src/shared/pptx-writer');
+  const bytes=createEditablePptx([{background:png,objects:{width:1600,height:900,items:[
+    {type:'shape',geometry:'rect',x:100,y:100,w:300,h:200,rot:45,fill:{hex:'4A6CF7',alpha:1}},
+    {type:'line',x:500,y:450,w:600,h:0,rot:30,head:'oval',tail:'triangle',line:{hex:'172033',alpha:1,width:4,dash:'dash'}}]}}],'Lines');
+  const slide=new TextDecoder().decode(unzipSync(bytes)['ppt/slides/slide1.xml']);
+  assert.match(slide,/<p:sp>.*<a:xfrm rot="2700000">/);
+  assert.match(slide,/<p:cxnSp>.*<a:xfrm rot="1800000"><a:off x="\d+" y="\d+"\/><a:ext cx="\d+" cy="0"\/>.*prst="line".*<a:prstDash val="dash"\/><a:headEnd type="oval"[^>]*\/><a:tailEnd type="triangle"[^>]*\/><\/a:ln>/);
+});

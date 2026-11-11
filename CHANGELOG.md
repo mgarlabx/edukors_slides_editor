@@ -1,5 +1,17 @@
 # Changelog
 
+## 26.11.11
+
+- **Tables:** Insert → Table. Click selects the table, a second click edits a cell; Tab/⇧Tab move between cells, ⇧+click or a drag selects a range. Add, remove, merge and split rows and columns, drag column and row borders, select and distribute rows and columns, cell fill, borders (or no borders) and table shadow. Formatting applies to every selected cell, or to the whole table.
+- **Rotation:** a handle above the selected object (or group) rotates it; ⇧ steps by 15°, it snaps at 90° (⌥ turns snapping off). Editable PPTX keeps the rotation.
+- **Lines:** Insert → Line, with width, solid/dashed/dotted style, color and arrowheads at each end. Exported to PPTX as native lines.
+- **Groups** align and distribute as one unit.
+- **Pasted images** get a box with the image's proportions.
+- **PowerPoint import:** fonts the presentation uses that only this computer has (Office's own fonts included) are stored in the document; each text box becomes one editable text with its whole sentences.
+- **Exported HTML:** laser pointer (S); the presenter panel (Z) shows each slide's notes and a stopwatch or time remaining; each tool shows its key.
+- **Format bar:** font size and line width sliders cover the usual range; typed values still go further.
+- **Assistant:** it can look at the slides it changed (`view_slide`), capture web pages as images (`capture_page`), read its skills' own files, and select objects under transparent animated layers.
+
 ## 26.11.9
 
 - **Rulers** above and to the left of the slide, in slide units (1600 × 900). Pressing a ruler shows a guide line across the slide while the mouse is held.

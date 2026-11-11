@@ -7,11 +7,12 @@ import React,{useState,useEffect,useRef,useMemo,useReducer} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createPortal} from 'react-dom';
 import {masterPrefix,layoutPrefix,masterItems,itemName,masterDeck,masterSlide,findSlide,putSlide} from '../shared/masters';
-import {Deck,Slide,Template,Language,Asset,newDeck,newSlide,newMaster,defaultNames,duplicateSlides,uid,layoutOf,activeMaster,masterOf,blankHtml,usedAssets} from '../shared/model';
+import {Deck,Slide,Template,Language,Asset,newDeck,newSlide,newMaster,defaultNames,duplicateSlides,uid,layoutOf,activeMaster,masterOf,blankHtml,usedAssets,validateDeck} from '../shared/model';
 import {copySlides,pasteSlides,copyMasterItem,pasteMasterItems,importResources,independentObjects,joinBehavior,pastedFonts,plainFontNames} from '../shared/clipboard';
 import {relayout} from '../shared/layout';
 import {applyEdits,editIndex,EditOp,SelectionDetails,ObjectStyle} from '../shared/edit';
-import {insertManual,editableAt,safeUrl,setLinkUrl,setLinkCaption,setLinkQr,linkHasQr,ManualKind,shapeTypes,shapeLook,setShape,setLinkStyle,linkLook,LinkStyle,setImageShadow,wrapShadow,setGroup} from '../shared/manual';
+import {insertManual,editableAt,safeUrl,setLinkUrl,setLinkCaption,setLinkQr,linkHasQr,ManualKind,shapeTypes,shapeLook,setShape,lineLook,setLine,setLinkStyle,linkLook,LinkStyle,setImageShadow,wrapShadow,setGroup} from '../shared/manual';
+import {tableAction,setCellFill,cellFillOf,tableSelection,tableActions,TableAction,setCellBorder,cellBorderOf,setTableShadow,tableShadowOf} from '../shared/table';
 import {PollConfig,pollWords} from '../shared/poll';
 import {encodeEslx,decodeEslx} from '../shared/eslx';
 import {setAssetUrl} from '../shared/render';
@@ -80,7 +81,7 @@ common.EdukorsAppDocument={
 
   // .esf (earlier versions of the app) and .pptx become presentations without a file; the originals are never written.
   async importFile({format,bytes,name}:{format:string;bytes:Uint8Array;name?:string}):Promise<Content>{
-    if(format==='pptx')return{deck:(await importPptx(bytes,name)).deck,imported:true};
+    if(format==='pptx')return{deck:await withLocalFonts((await importPptx(bytes,name)).deck),imported:true};
     if(format!=='esf')throw Error('Unsupported presentation format.');
     const entries=await common.EdukorsPackage.unzip(bytes,{maxEntries:20000,maxTotalBytes:2*2**30});
     const files=new Map<string,Uint8Array>(entries.map((entry:any)=>[entry.name,entry.bytes]));
@@ -98,6 +99,18 @@ common.EdukorsAppDocument={
   selectAll:()=>command('selectAll')
 };
 let command:(name:string)=>void=()=>{};
+// Fonts the imported slides name and only this computer has (Aptos inside Office, for example) go into the presentation,
+// so the editor, the exports and other computers show the original letters. Without the desktop bridge nothing changes.
+async function withLocalFonts(deck:Deck):Promise<Deck>{
+  if(!desktop())return deck;
+  const text=[...deck.masters.flatMap(m=>[m.css,m.html]),...deck.layouts.flatMap(l=>[l.css||'',l.html]),...deck.slides.flatMap(s=>[s.css,s.html])].join('\n');
+  try{
+    const found=await api.invoke('localFonts',text,deck.assets.map(a=>a.id)) as {assets:Asset[];rules:string};
+    if(!found?.rules)return deck;
+    const next={...deck,assets:[...deck.assets,...found.assets],masters:deck.masters.map(m=>({...m,css:found.rules+m.css}))};
+    validateDeck(next);return next;
+  }catch{return deck;}
+}
 document.addEventListener('edukors:document-saved',((event:CustomEvent)=>{
   const {doc,committed}=event.detail;if(!store.has(doc.id))return;
   const tab=store.get(doc.id)!;
@@ -124,11 +137,11 @@ async function imageForModel(asset:Asset){
   }finally{URL.revokeObjectURL(url);}
 }
 common.EdukorsAiAssistant.configure({
-  instructions:'You are the assistant of Edukors Slides Editor, a presentation editor whose slides are small HTML/CSS/JS documents (16:9, 1920×1080 design size) that inherit a base (master) and a layout. Work only on the presentation of this conversation, only through its tools: read_document returns the slides, bases and layouts with the revision; apply_changes changes them (pass that revision as expectedRevision; send only what changes; never delete slides; never add interactive questions). Images you need come in with import_image and are referenced as asset:ID (read_image shows you an image already in the presentation); no other external resource (https URLs, CDN fonts or scripts) works in the exported file. Each request carries the selected slides, the index of all slides and what the person is looking at; follow documentInstructions when present. Respond briefly, in the language of the request.',
+  instructions:'You are the assistant of Edukors Slides Editor, a presentation editor whose slides are small HTML/CSS/JS documents (16:9, 1920×1080 design size) that inherit a base (master) and a layout. Work only on the presentation of this conversation, only through its tools: read_document returns the slides, bases and layouts with the revision; apply_changes changes them (pass that revision as expectedRevision; send only what changes; never delete slides; never add interactive questions). Images you need come in with import_image and are referenced as asset:ID (read_image shows you an image already in the presentation); when the desktop app offers view_slide, look at the slides you changed before saying they are done, instead of guessing from the code; no other external resource (https URLs, CDN fonts or scripts) works in the exported file. Each request carries the selected slides, the index of all slides and what the person is looking at; follow documentInstructions when present. Respond briefly, in the language of the request.',
   documentId:(doc:CommonDoc)=>`slides-${doc.id}`,
   // No documentPath: the agent works in Common's private folder for this document, never in the folder of the file.
   context:(doc:CommonDoc)=>assistantContext(store,doc.id),
-  tools:createSlidesTools(store,{showImage:imageForModel,...desktop()?{downloadImage:(url:string)=>api.invoke('downloadImage',url)}:{}})
+  tools:createSlidesTools(store,{showImage:imageForModel,...desktop()?{downloadImage:(url:string)=>api.invoke('downloadImage',url),capturePage:(args:object)=>api.invoke('capturePage',args),showSlide:(deck:Deck,id:string)=>api.invoke('slideImage',deck,id)}:{}})
 });
 
 // In the desktop app the slide frames load images and fonts from the frame scheme (registered once per presentation
@@ -150,8 +163,9 @@ if(desktop())setAssetUrl((deck,asset)=>{void registerAssets(deck,[asset]).catch(
 // ---------- Shell slots ----------
 // Places in Common's shell where the editor renders (React portals); created once.
 function slot(tag:string,className:string,place:(el:HTMLElement)=>void){const el=document.createElement(tag);el.className=className;place(el);return el;}
-const fileExtra=slot('span','slides-contents document-action',el=>shellButton('reveal')!.before(el));
-const viewGroup=slot('div','toolbar-group document-action slides-view-actions',el=>{const sep=document.createElement('span');sep.className='separator document-action';sep.setAttribute('aria-hidden','true');document.getElementById('file-actions')!.after(sep,el);});
+// Created hidden: Common shows its .document-action elements only with a document open, but only on its next render.
+const fileExtra=slot('span','slides-contents document-action',el=>{el.hidden=true;shellButton('reveal')!.before(el);});
+const viewGroup=slot('div','toolbar-group document-action slides-view-actions',el=>{const sep=document.createElement('span');sep.className='separator document-action';sep.hidden=el.hidden=true;sep.setAttribute('aria-hidden','true');document.getElementById('file-actions')!.after(sep,el);});
 const insertExtra=slot('span','slides-contents',el=>document.getElementById('insert-actions')!.append(el));
 const statusSlot=slot('span','slides-status',el=>document.getElementById('document-status')!.after(el));
 const sidebarSlot=slot('div','slides-sidebar',el=>document.querySelector('#sidebar-panel .panel-inner')!.append(el));
@@ -190,7 +204,7 @@ function RuledCanvas({width,children}:{width:string;children:React.ReactNode}){
 }
 // Edit and Insert buttons of the toolbar keep the keyboard in the canvas frame, so a text being edited keeps its selection.
 for(const button of document.querySelectorAll<HTMLElement>('#edit-actions .tool,#insert-actions .tool'))button.addEventListener('mousedown',e=>e.preventDefault());
-for(const key of ['undo','redo','cut','copy','paste','duplicate','delete','insertText','insertShape','insertImage'])shellButton(key)?.addEventListener('click',e=>command(key==='insertShape'?'insertShapeMenu:'+JSON.stringify((e.currentTarget as HTMLElement).getBoundingClientRect()):key));
+for(const key of ['undo','redo','cut','copy','paste','duplicate','delete','insertText','insertTable','insertShape','insertLine','insertImage'])shellButton(key)?.addEventListener('click',e=>command(key==='insertShape'||key==='insertTable'?key+'Menu:'+JSON.stringify((e.currentTarget as HTMLElement).getBoundingClientRect()):key));
 // The gallery replaces Common's direct New.
 for(const button of [shellButton('new'),document.getElementById('document-new-tab')])button?.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();command('new');},true);
 // The earlier interface's language seeds the shared one, once.
@@ -257,7 +271,7 @@ function Editor(){
     addEventListener('dragenter',on);addEventListener('dragleave',off);addEventListener('drop',off,true);return()=>{removeEventListener('dragenter',on);removeEventListener('dragleave',off);removeEventListener('drop',off,true);};},[]);
   useEffect(()=>{setLayoutPick(null);setRenaming(null);setManualSelection(null);setImageSel(false);setCropOn(false);canvasSel.current={slide:'',indices:[],editing:false};},[active]);
   // Undo and Redo of the toolbar follow the active presentation.
-  useEffect(()=>{for(const [key,on] of [['undo',!!tab?.past.length],['redo',!!tab?.future.length],['cut',!!tab],['copy',!!tab],['paste',!!tab],['duplicate',!!tab],['delete',!!tab],['insertText',!!tab],['insertShape',!!tab],['insertImage',!!tab]] as const){const b=shellButton(key);if(!b)continue;if(on)b.removeAttribute('aria-disabled');else b.setAttribute('aria-disabled','true');}});
+  useEffect(()=>{for(const [key,on] of [['undo',!!tab?.past.length],['redo',!!tab?.future.length],['cut',!!tab],['copy',!!tab],['paste',!!tab],['duplicate',!!tab],['delete',!!tab],['insertText',!!tab],['insertTable',!!tab],['insertShape',!!tab],['insertLine',!!tab],['insertImage',!!tab]] as const){const b=shellButton(key);if(!b)continue;if(on)b.removeAttribute('aria-disabled');else b.setAttribute('aria-disabled','true');}});
   // Typing in the presentation's instructions is one undo step until something else changes the deck.
   const setDeckPrompt=(text:string)=>{if(active===null||!deck)return;const merge=promptStep.current===active+':'+tab!.version;mutate(d=>{if(text)d.systemPrompt=text;else delete d.systemPrompt;},undefined,merge);promptStep.current=active+':'+store.get(active)!.version;};
   const promptStep=useRef('');
@@ -298,7 +312,7 @@ function Editor(){
     if(cut){const ids=new Set(payload.slides.map(s=>s.id));mutate(d=>{if(d.slides.every(s=>ids.has(s.id)))return;d.slides=d.slides.filter(s=>!ids.has(s.id));return[d.slides[0].id];});}}
   // Objects selected on the canvas (text boxes, images…) are copied as their HTML with the assets they use.
   function selectedObjects(){
-    const sel=canvasSel.current;if(!deck||!editSlide||sel.slide!==editSlide.id||sel.editing||!sel.indices.length)return null;
+    const sel=canvasSel.current;if(!deck||!editSlide||sel.slide!==editSlide.id||sel.editing||!sel.indices.length||tableSelection(editSlide,sel.indices)==='cells')return null;
     const doc=new DOMParser().parseFromString(editSlide.html,'text/html'),all=[...doc.body.querySelectorAll('*')],els=sel.indices.map(i=>all[i]).filter(Boolean),top=els.filter(el=>!els.some(o=>o!==el&&o.contains(el)));
     return top.length?{all,top}:null;
   }
@@ -394,9 +408,11 @@ function Editor(){
       }
     });
   }
-  function addManual(kind:ManualKind,payload='',asset?:Asset){
+  function addManual(kind:ManualKind,payload='',asset?:Asset,size?:{width:number;height:number}){
+    // An image goes in at its own proportions: its size is read first.
+    if(kind==='image'&&asset&&!size){void imageSize(asset).then(s=>addManual(kind,payload,asset,s||{width:0,height:0}));return;}
     const target=editSlide;if(!deck||!target)return;
-    const result=insertManual(target,kind,payload);
+    const result=insertManual(target,kind,payload,size);
     canvasSel.current={slide:target.id,indices:[result.index],editing:kind==='text'};
     setManualSelection({slide:target.id,index:result.index});
     mutate(d=>{if(asset&&!d.assets.some(a=>a.id===asset.id))d.assets.push(asset);putSlide(d,result.slide);});
@@ -467,11 +483,16 @@ function Editor(){
   }
   const present=()=>{if(deck&&slide)void run(()=>api.invoke('present',deck,Math.max(0,deck.slides.indexOf(slide)),lang,active));};
   const canvasEditing=()=>canvasSel.current.editing&&canvasSel.current.slide===editSlide?.id;
-  const deleteSelection=()=>{if(canvasEditing())return;if(selModeRef.current==='slides'){if(masterItem)deleteMasterItem();else deleteSlides();return;}const sel=canvasSel.current;if(sel.slide===editSlide?.id&&sel.indices.length)canvasEdit?.onOps(sel.indices.map(index=>({type:'delete',index})),[],false);};
+  const deleteSelection=()=>{if(canvasEditing())return;if(selModeRef.current==='slides'){if(masterItem)deleteMasterItem();else deleteSlides();return;}const sel=canvasSel.current;if(sel.slide!==editSlide?.id||!sel.indices.length)return;
+    // Table cells are not deleted on their own: their text is cleared.
+    if(tableSelection(editSlide,sel.indices)==='cells'){canvasEdit?.onOps(sel.indices.map(index=>({type:'text',index,html:''})),sel.indices,false);return;}
+    canvasEdit?.onOps(sel.indices.map(index=>({type:'delete',index})),[],false);};
+  function tableMenu(x:number,y:number,restoreFocus?:Element|null){common.EdukorsTables.pick({x,y,t:commonT,restoreFocus,onPick:(rows:number,cols:number)=>addManual('table',`${rows}x${cols}`)});}
   function shapeMenu(box:DOMRect){common.EdukorsShapes.pick({x:box.left,y:box.bottom+4,t:commonT,onPick:(type:string)=>addManual('shape',type),restoreFocus:shellButton('insertShape')});}
   command=(name:string)=>{
     if(name==='new'){setSearch('');setGallery(true);return;}
     if(name.startsWith('insertShapeMenu:')){if(tab)shapeMenu(JSON.parse(name.slice(16)));return;}
+    if(name.startsWith('insertTableMenu:')){const box=JSON.parse(name.slice(16));if(tab)tableMenu(box.left,box.bottom+4,shellButton('insertTable'));return;}
     if(!tab||!deck||!slide||active===null)return;
     const typing=!!(document.activeElement as Element|null)?.closest('input,textarea,select,[contenteditable]');
     // Text selected on the page (the assistant's messages, help…) is copied as text, not as slides or objects.
@@ -488,7 +509,7 @@ function Editor(){
     }
     if(name==='delete'){deleteSelection();return;}
     if(name==='duplicate'){if(canvasEditing())return;if(masterItem){if(selModeRef.current==='slides')duplicateMasterItem();else duplicateObjects();return;}if(selModeRef.current==='canvas'&&duplicateObjects())return;duplicate();return;}
-    if(name==='insertText'){addManual('text');return;}if(name==='insertImage'){void run(insertImage);return;}if(name==='insertLink'){void run(insertLink);return;}
+    if(name==='insertText'){addManual('text');return;}if(name==='insertLine'){addManual('line');return;}if(name==='insertImage'){void run(insertImage);return;}if(name==='insertLink'){void run(insertLink);return;}
     if(name==='insertPoll'){if(!masterItem)setPollTarget({doc:active,slide:slide.id,poll:slide.poll});return;}
   };
   // Shortcuts of the old menu bar, now handled here (Common's macOS menu has only the app menu, Edit and Window).
@@ -536,7 +557,7 @@ function Editor(){
     onPress:()=>{toCanvas();relayPress();},
     // Right click: Common's object menu (as in its canvas): clipboard, duplicate, delete, stacking order; with several
     // objects, align and distribute; a text can be edited; on an empty spot, paste and the insert commands.
-    onContext:(x,y,text,count)=>{toCanvas();relayPress();const r=editorFrame.current?.getBoundingClientRect();if(!r)return;
+    onContext:(x,y,text,count,units=count)=>{toCanvas();relayPress();const r=editorFrame.current?.getBoundingClientRect();if(!r)return;
       const mac=common.EdukorsPlatform?.mac,key=(k:string,shift=false)=>mac?`${shift?'⇧':''}⌘${k}`:`Ctrl+${shift?'Shift+':''}${k}`;
       const run=(name:string,keys?:string,disabled=false)=>({label:commonT(name),shortcut:keys,disabled,action:()=>command(name)});
       const frame=(name:string,c:object,disabled=false)=>({label:commonT(name),disabled,action:()=>frameCommand(c)});
@@ -544,17 +565,25 @@ function Editor(){
       const items=count?[run('cut',key('X')),run('copy',key('C')),run('paste',key('V')),run('duplicate',key('D')),run('delete',mac?'⌫':'Del'),sep,
           frame('bringToFront',{type:'order',value:'front'}),frame('sendToBack',{type:'order',value:'back'}),
           ...groupingRef.current.group||groupingRef.current.ungroup?[sep,{label:commonT('fmtGroup'),shortcut:key('G'),disabled:!groupingRef.current.group,action:()=>frameCommand({type:'group'})},{label:commonT('fmtUngroup'),shortcut:key('G',true),disabled:!groupingRef.current.ungroup,action:()=>frameCommand({type:'ungroup'})}]:[],
-          ...count>1?[sep,...(['top','middle','bottom'] as const).map(v=>frame('align'+v[0].toUpperCase()+v.slice(1),{type:'arrange',value:v})),sep,
+          ...units>1?[sep,...(['top','middle','bottom'] as const).map(v=>frame('align'+v[0].toUpperCase()+v.slice(1),{type:'arrange',value:v})),sep,
             ...(['left','center','right'] as const).map(v=>frame('align'+v[0].toUpperCase()+v.slice(1),{type:'arrange',value:v})),sep,
-            frame('distributeH',{type:'arrange',value:'distributeH'},count<3),frame('distributeV',{type:'arrange',value:'distributeV'},count<3)]:[],
+            frame('distributeH',{type:'arrange',value:'distributeH'},units<3),frame('distributeV',{type:'arrange',value:'distributeV'},units<3)]:[],
           ...count===1&&text?[sep,{label:commonT('editText'),shortcut:mac?'↩':'Enter',action:()=>frameCommand({type:'edit'})}]:[]]
-        :[run('paste',key('V')),sep,run('insertText'),{label:commonT('insertShape'),action:()=>common.EdukorsShapes.pick({x:px,y:py,t:commonT,onPick:(type:string)=>addManual('shape',type)})},run('insertImage')];
+        :[run('paste',key('V')),sep,run('insertText'),{label:commonT('insertTable'),action:()=>tableMenu(px,py,editorFrame.current)},{label:commonT('insertShape'),action:()=>common.EdukorsShapes.pick({x:px,y:py,t:commonT,onPick:(type:string)=>addManual('shape',type)})},run('insertLine'),run('insertImage')];
       common.EdukorsContextMenu.open({x:px,y:py,label:commonT('objectActions'),items,restoreFocus:editorFrame.current});},
     onFiles:files=>{toCanvas();void run(()=>dropFiles(files));},
     onRange:(start,end)=>{canvasRange.current=end>start?{start,end}:null;},
     onState:(indices,editing,details,g)=>{setGrouping(x=>g&&(x.group!==g.group||x.ungroup!==g.ungroup)?g:x);if(indices.length)setSelMode('canvas');if(canvasSel.current.slide!==target.id||canvasSel.current.indices[0]!==indices[0])canvasRange.current=null;canvasSel.current={slide:target.id,indices,editing};setManualSelection(indices.length===1||indices.length>1&&details?{slide:target.id,index:indices[0],details}:null);setImageSel(!!details?.crop);},
     onGroup:(type,indices)=>{const id=target.id;mutate(d=>{const s=findSlide(d,id);if(!s)return;const next=setGroup(s,indices,type==='group'?uid('group'):null);if(next.html===s.html)return;
       putSlide(d,next);canvasSel.current={slide:id,indices,editing:false};});},
+    // Table actions and cell fill from the format bar, after the frame committed any text being typed.
+    onTable:(action,indices,value)=>{const id=target.id;mutate(d=>{const s=findSlide(d,id);if(!s)return;
+      if(action==='cellFill'){if(!value)return;const next=setCellFill(s,indices,value);if(next.html===s.html)return;putSlide(d,next);canvasSel.current={slide:id,indices,editing:false};return;}
+      if(action==='border'||action==='shadow'){let next=s;if(action==='shadow')next=setTableShadow(s,indices,value==='1');else{try{const c=JSON.parse(value||'{}');if(c&&typeof c==='object')next=setCellBorder(s,indices,c);}catch{}}
+        if(next.html===s.html)return;putSlide(d,next);canvasSel.current={slide:id,indices,editing:false};return;}
+      if(!(tableActions as readonly string[]).includes(action))return;const r=tableAction(s,indices,action as TableAction);if(!r)return;
+      putSlide(d,r.slide);canvasSel.current={slide:id,indices:r.select,editing:false};});
+      if(!canvasSel.current.indices.length)setManualSelection(null);},
     // All operations of one gesture (a text commit followed by a drag) become a single undo step.
     onOps:(ops,indices,editing,range)=>{canvasSel.current={slide:target.id,indices,editing};if(range!==undefined)canvasRange.current=range&&range.end>range.start?range:null;setManualSelection(previous=>indices.length===1?{slide:target.id,index:indices[0],details:previous?.slide===target.id&&previous.index===indices[0]?previous.details:undefined}:indices.length>1&&previous?.details&&previous.slide===target.id&&previous.index===indices[0]?previous:null);
       mutate(d=>{const current=findSlide(d,target.id);if(!current)return;const edited=applyEdits(current,ops);if(edited.html===current.html&&edited.staticHtml===current.staticHtml&&edited.title===current.title)return;putSlide(d,edited);});}
@@ -573,7 +602,7 @@ function Editor(){
     const kind=details?.kind||(imageSel?'image':'box'),st=details?.style||{},px=(v?:string)=>parseFloat(v||'')||0;
     const hex=(v?:string,fallback='#172033')=>controlColor(v||'',fallback);
     const transparent=(v?:string)=>!v||/(?:transparent|rgba\([^)]*,\s*0\))$/.test(v);
-    const look=kind==='shape'&&manualEl?shapeLook(manualEl):null;
+    const look=kind==='shape'&&manualEl?shapeLook(manualEl):null,line=kind==='line'&&manualEl?lineLook(manualEl):null;
     const opacity=Math.round((parseFloat(st.opacity||'1')||1)*100);
     const state:any={
       bold:parseInt(st.fontWeight||'400')>=600,italic:st.fontStyle==='italic',underline:/underline/.test(st.textDecorationLine||''),strike:/line-through/.test(st.textDecorationLine||''),
@@ -586,7 +615,12 @@ function Editor(){
     // Compact groups (Common's dropdowns), so the bar fits in one row.
     // Group and ungroup are buttons of their own (below), not entries of the arrange menu.
     state.list=details?.list;if(kind==='link')delete state.valign;
-    const groups=arrangeOnly?['arrangeMenu']:kind==='text'?['textCompact','alignMenu','paragraphMenu','shape','arrangeMenu']:kind==='link'?['textCompact','alignMenu','link','arrangeMenu']:kind==='image'?['image','arrangeMenu']:['shape','arrangeMenu'];
+    if(line)Object.assign(state,{lineWidth:line.width,lineStyle:line.style,lineColor:hex(line.color),lineStart:line.start,lineEnd:line.end});
+    // A table, or cells of one: the table menu and the cells' fill; cells also take the text groups.
+    const cells=!arrangeOnly&&canvasSel.current.slide===editSlide.id?tableSelection(editSlide,canvasSel.current.indices):null;
+    if(cells){const ix=canvasSel.current.indices,fill=cellFillOf(editSlide,ix),b=cellBorderOf(editSlide,ix);state.cellFill=transparent(fill)?'transparent':hex(fill,'#ffffff');
+      Object.assign(state,{borderWidth:b?b.width:2,borderStyle:b?b.style:'solid',borderColor:hex(b?.color,'#9aa5b8'),tableShadow:tableShadowOf(editSlide,ix)});}
+    const groups=cells==='cells'?['textCompact','alignMenu','paragraphMenu','table']:cells==='table'||kind==='table'?['textCompact','alignMenu','paragraphMenu','table','arrangeMenu']:arrangeOnly?['arrangeMenu']:kind==='text'?['textCompact','alignMenu','paragraphMenu','shape','arrangeMenu']:kind==='link'?['textCompact','alignMenu','link','arrangeMenu']:kind==='image'?['image','arrangeMenu']:kind==='line'?['line','arrangeMenu']:['shape','arrangeMenu'];
     const border=(property:string,value:any)=>{
       const none=!state.lineWidth||st.borderStyle==='none';
       if(property==='lineWidth')changeObjectStyle({'border-width':value+'px','border-style':value?state.lineStyle:'none'});
@@ -595,6 +629,10 @@ function Editor(){
     };
     const onChange=(property:string,value:any)=>{
       if(property==='group'||property==='ungroup'){frameCommand({type:property});return;}
+      if(property==='tableAction'){frameCommand({type:'table',action:value});return;}
+      if(property==='cellFill'){frameCommand({type:'table',action:'cellFill',value});return;}
+      if(property==='borderWidth'||property==='borderStyle'||property==='borderColor'){frameCommand({type:'table',action:'border',value:JSON.stringify({[property.slice(6).toLowerCase()]:property==='borderWidth'?Number(value):value})});return;}
+      if(property==='tableShadow'){frameCommand({type:'table',action:'shadow',value:value?'1':''});return;}
       if(property==='bringToFront'||property==='sendToBack'){frameCommand({type:'order',value:property==='bringToFront'?'front':'back'});return;}
       if(property==='align'){if(value==='justify')formatText('justifyFull');else frameCommand({type:'align',axis:'x',value:({left:'start',center:'center',right:'end'} as Record<string,string>)[value]});return;}
       if(property==='list'){formatText('list',value);return;}
@@ -609,6 +647,10 @@ function Editor(){
         script:()=>formatText(value==='sub'||value==='none'&&st.verticalAlign==='sub'?'subscript':'superscript',undefined,{script:value}),fontSize:()=>formatText('fontSize',value+'px'),fontFamily:()=>formatText('fontFamily',value),color:()=>formatText('color',value)};
       if(text[property]){text[property]();return;}
       if(property==='opacity'||property==='imageOpacity'){changeObjectStyle({opacity:String(Math.max(0,Math.min(100,Number(value)||0))/100)});return;}
+      if(kind==='line'){
+        const change:Record<string,object>={lineWidth:{width:Number(value)},lineStyle:{style:value},lineColor:{color:value},lineStart:{start:value},lineEnd:{end:value}};
+        if(change[property])changeManual((s,i)=>setLine(s,i,change[property]));return;
+      }
       if(kind==='shape'){
         if(property==='lineWidth')changeManual((s,i)=>setShape(s,i,{width:Number(value)}));
         if(property==='lineColor')changeManual((s,i)=>setShape(s,i,{stroke:value,...state.lineWidth?{}:{width:2}}));
@@ -625,7 +667,7 @@ function Editor(){
       if(property==='fill')changeObjectStyle({'background-color':value});
       if(property==='shadow')changeObjectStyle({'box-shadow':value?'0 12px 30px #17203355':'none'});
     };
-    common.EdukorsFormat.render(bar,{groups,state,t:commonT,onChange,options:{compact:true,fontFamilies:[...new Set([state.fontFamily,...(details?.fonts||[]),...common.EdukorsFormat.defaults.fontFamilies])]}});
+    common.EdukorsFormat.render(bar,{groups,state,t:commonT,onChange,options:{compact:true,tableActions:slidesTableActions,fontFamilies:[...new Set([state.fontFamily,...(details?.fonts||[]),...common.EdukorsFormat.defaults.fontFamilies])]}});
     // Shapes also change their type, with Common's shape picker.
     if(kind==='shape'&&look&&!arrangeOnly){
       const group=document.createElement('div');group.className='format-group';group.dataset.group='shapeType';group.setAttribute('role','group');
@@ -703,5 +745,9 @@ function Editor(){
     {pollTarget&&pollTarget.doc===active&&<Modal title={pollWords[lang].title} onClose={()=>setPollTarget(null)}><PollEditor key={pollTarget.slide} initial={pollTarget.poll} lang={lang} server={pollServer} onCancel={()=>setPollTarget(null)} onSave={poll=>{mutate(d=>{const target=d.slides.find(s=>s.id===pollTarget.slide);if(target){if(poll){target.poll=poll;target.title=poll.prompt.slice(0,200);}else delete target.poll;}});setManualSelection(null);canvasRange.current=null;setImageSel(false);setCropOn(false);setPollTarget(null);}}/></Modal>}
   </>;
 }
+// The table menu: Common's actions plus selecting rows and columns and sharing their sizes equally (done in the canvas frame).
+const slidesTableActions=[['selectRow','fmtSelectRow'],['selectColumn','fmtSelectColumn'],null,['addRowBefore','fmtRowAbove'],['addRowAfter','fmtRowBelow'],['addColumnBefore','fmtColumnLeft'],['addColumnAfter','fmtColumnRight'],null,
+  ['deleteRow','fmtDeleteRow'],['deleteColumn','fmtDeleteColumn'],null,['distributeRows','fmtDistributeRows'],['distributeColumns','fmtDistributeColumns'],null,['mergeCells','fmtMergeCells'],['splitCell','fmtSplitCell'],null,['toggleHeaderRow','fmtHeaderRow'],null,['deleteTable','fmtDeleteTable']];
+const imageSize=(asset:Asset)=>new Promise<{width:number;height:number}|null>(resolve=>{const img=new Image();img.onload=()=>resolve(img.naturalWidth&&img.naturalHeight?{width:img.naturalWidth,height:img.naturalHeight}:null);img.onerror=()=>resolve(null);img.src=`data:${asset.mime};base64,${asset.data}`;});
 const root=document.createElement('div');root.id='slides-root';document.body.append(root);
 createRoot(root).render(<Editor/>);

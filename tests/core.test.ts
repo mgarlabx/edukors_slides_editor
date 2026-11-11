@@ -14,7 +14,7 @@ import {playerDocument} from '../src/shared/player';
 import {minifyJs} from '../src/main/minify';
 import {applySlideChanges,agentContext,removedSlides,sentKeys} from '../src/shared/assistant';
 import esfSchema from '../src/shared/esf.schema.json';
-import {embedFonts} from '../src/main/fonts';
+import {embedFonts,localFonts} from '../src/main/fonts';
 const root=path.resolve('test-results/core');
 await fs.mkdir(root,{recursive:true});
 const fixture=async()=>fs.mkdtemp(path.join(root,'case-'));
@@ -219,6 +219,10 @@ test('fonts installed only on this computer are embedded in the export; system a
   assert.match(r.deck.masters[0].css,/@font-face\{font-family:"Fonte Teste";src:url\("asset:asset-[0-9a-f]{64}"\)/);
   const html=playerDocument(r.deck);assert.ok(!/@font-face[^}]*url\("asset:/.test(html),'asset URLs resolved to embedded data');assert.ok(html.includes(r.deck.assets.at(-1)!.data.slice(0,40)));
   assert.equal(d.masters[0].css.includes('@font-face'),false,'the saved deck is not changed');
+  // PowerPoint imports: quotes as entities inside style attributes, and Office's style-named families ("X Bold").
+  const pptx=await localFonts('<span style="font-family:&#39;Fonte Teste&#39;">a</span><span style="font-family:&#39;Fonte Teste Bold&#39;">b</span>',new Set([r.deck.assets.at(-1)!.id]));
+  assert.deepEqual(pptx.embedded,['Fonte Teste','Fonte Teste Bold']);assert.equal(pptx.assets.length,0,'known files are not sent again');
+  assert.match(pptx.rules,/font-family:"Fonte Teste Bold";src:url\("asset:asset-[0-9a-f]{64}"\);font-weight:700/);
 });
 
 test('alignment uses nearest edges/centers, preserves axis locks and supports bypass',async()=>{

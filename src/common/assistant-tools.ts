@@ -2,7 +2,7 @@
 // presentation of the conversation, whichever tab is visible; each accepted change is one undo step.
 import {agentContext,applySlideChanges,removedSlides} from '../shared/assistant';
 import {applySchema} from '../shared/assistant-schema';
-import {Asset,Deck} from '../shared/model';
+import {Asset,Deck,usedAssets} from '../shared/model';
 import {itemName} from '../shared/masters';
 import {Store} from './store';
 
@@ -32,7 +32,7 @@ export type ModelImage={mimeType:string;data:string;width?:number;height?:number
 // Formats the model reads as they are, and the largest image sent unchanged (base64 characters); larger images and
 // other formats (SVG, AVIF…) go through `showImage` (the page draws them, scaled down) or are refused.
 const modelFormats=['image/png','image/jpeg','image/gif','image/webp'],modelBytes=4_500_000;
-export function createSlidesTools<D extends {id:number}>(store:Store,options:{downloadImage?:(url:string)=>Promise<Asset>;showImage?:(asset:Asset)=>Promise<ModelImage>}={}){
+export function createSlidesTools<D extends {id:number}>(store:Store,options:{capturePage?:(args:object)=>Promise<{asset:Asset;width:number;height:number;title:string;url:string;preview:ModelImage}>;downloadImage?:(url:string)=>Promise<Asset>;showImage?:(asset:Asset)=>Promise<ModelImage>;showSlide?:(deck:Deck,slideId:string)=>Promise<ModelImage>}={}){
   const tab=(doc:D)=>{const value=store.get(doc.id);if(!value)throw Error('The presentation is no longer open.');return value;};
   const tools:any[]=[
     {
@@ -64,6 +64,17 @@ export function createSlidesTools<D extends {id:number}>(store:Store,options:{do
       }
     }
   ];
+  if(options.showSlide)tools.push({
+    name:'view_slide',description:'Shows you a slide as it looks when presented (its base, layout, content, images and fonts, after animations finish), so you can check what you made: use it after apply_changes whenever the look matters (drawings, SVG, layout, overflow).',
+    label:()=>'Viewed slide',changes:false,
+    inputSchema:{type:'object',properties:{slide:{type:'string',maxLength:300,description:'The slide id'}},required:['slide'],additionalProperties:false},
+    run:async(doc:D,args:any)=>{
+      const deck=tab(doc).deck,id=String(args?.slide||''),slide=deck.slides.find(s=>s.id===id);
+      if(!slide)throw Error(`There is no slide ${id} in the presentation.`);
+      const part:Deck={...deck,slides:[slide]},image=await options.showSlide!({...part,assets:usedAssets(part)},id);
+      return{slide:id,title:slide.title,...image.width?{shownWidth:image.width,shownHeight:image.height}:{},images:[{mimeType:image.mimeType,data:image.data}]};
+    }
+  });
   if(options.downloadImage)tools.push({
     name:'import_image',description:'Downloads an image (https, PNG/JPEG/WebP/GIF/SVG/AVIF, at most 50 MB) into the presentation and returns its reference (asset:ID) for slide HTML or CSS. Does not place it on a slide.',
     label:()=>'Imported image',changes:true,
@@ -72,6 +83,16 @@ export function createSlidesTools<D extends {id:number}>(store:Store,options:{do
       const asset=await options.downloadImage!(String(args?.url||''));
       store.mutate(doc.id,deck=>{if(!deck.assets.some(a=>a.id===asset.id))deck.assets.push(asset);});
       return{reference:'asset:'+asset.id,name:asset.name,mime:asset.mime,revision:tab(doc).version};
+    }
+  });
+  if(options.capturePage)tools.push({
+    name:'capture_page',description:'Captures a web page as a PNG (by default the whole page, top to bottom) in a browser of the app, and adds it to the presentation as an image (asset:ID); you also see it. Use it for screenshots of websites: your own commands have no network and cannot run a browser. language asks the site for that language (Accept-Language, e.g. pt-BR); when the site needs a click instead (a language menu), pass script: JavaScript run in the page before the capture (it may click elements and await). The image is often tall: to show it whole on a slide, put it in a box with overflow-y:auto (the presenter scrolls it).',
+    label:()=>'Captured page',changes:true,
+    inputSchema:{type:'object',properties:{url:{type:'string',maxLength:4000},fullPage:{type:'boolean',description:'Whole page height (default true); false: only the first screen'},width:{type:'number',minimum:320,maximum:2400,description:'Viewport width in px (default 1280)'},language:{type:'string',maxLength:35,description:'Preferred language, e.g. pt-BR'},script:{type:'string',maxLength:20000,description:'JavaScript run in the page before capturing (async allowed)'},wait:{type:'number',minimum:0,maximum:15000,description:'Milliseconds to wait after loading and after the script (default 1500)'}},required:['url'],additionalProperties:false},
+    run:async(doc:D,args:any)=>{
+      const r=await options.capturePage!({url:String(args?.url||''),fullPage:args?.fullPage,width:args?.width,language:args?.language,script:args?.script,wait:args?.wait});
+      store.mutate(doc.id,deck=>{if(!deck.assets.some(a=>a.id===r.asset.id))deck.assets.push(r.asset);});
+      return{reference:'asset:'+r.asset.id,width:r.width,height:r.height,title:r.title,url:r.url,revision:tab(doc).version,images:[{mimeType:r.preview.mimeType,data:r.preview.data}]};
     }
   });
   return tools;

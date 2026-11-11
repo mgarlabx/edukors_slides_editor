@@ -8,9 +8,9 @@ import {createPollController,normalizePollServer,pollEndpoint,pollWords} from '.
 import {qrRuntimeSource} from './qr';
 
 export const playerWords={
-  pt:{credit:'Gerado pelo Edukors Slides Editor',creditAt:'em',motionNotice:'Este computador está configurado para reduzir movimentos. Deseja ativar as animações desta apresentação?',motionEnable:'Ativar animações',motionKeep:'Manter configuração atual',goto:'Ir para o slide',slides:'Slides',slide:'Slide',of:'de',step:'Etapa',penLabel:'Caneta',pen:'Caneta (P)',hlLabel:'Destaque',hl:'Destaque (H) · o traço some sozinho',textLabel:'Texto',text:'Texto (T) · clique no slide e digite; Enter fixa',eraseLabel:'Apagar tudo',erase:'Apagar tudo (E)',lensLabel:'Lente',lens:'Lente (L) · roda do mouse ajusta o zoom',boardLabel:'Lousa',board:'Lousa (W) · infinita: escreva, desenhe, apague, mova e role; fica salva neste navegador',presenterLabel:'Abrir painel do apresentador',presenter:'Abrir o painel em outra janela',fsLabel:'Alternar tela cheia',fs:'Tela cheia (F)',noteLabel:'Texto sobre o slide',wbNoteLabel:'Texto na lousa',homeLabel:'Voltar ao início',home:'Voltar ao início (Home) · role com o trackpad, a roda do mouse ou as setas, ou arraste com Espaço pressionado',moveLabel:'Mover',move:'Mover (M) · arraste o que foi escrito ou desenhado; arraste o vazio para rolar a lousa',wbPen:'Caneta (P)',wbText:'Texto (T) · clique para escrever, ou num texto para editá-lo',eraserLabel:'Borracha',eraser:'Borracha (E) · passe sobre o traço ou texto',shapesLabel:'Formas',shapes:'Formas (S) · escolha a forma, arraste para desenhar e escreva dentro',rect:'Retângulo',round:'Retângulo arredondado',ellipseLabel:'Círculo',ellipse:'Círculo / elipse (Shift: círculo perfeito)',diamond:'Losango',triangle:'Triângulo',arrowsLabel:'Setas',arrows:'Setas (A) · escolha a direção, arraste para desenhar e escreva dentro',arrowLeft:'Seta para a esquerda',arrowRight:'Seta para a direita',arrowUp:'Seta para cima',arrowDown:'Seta para baixo',colors:'Cores',color:'Cor',undoLabel:'Desfazer',undo:'Desfazer (⌘Z / Ctrl+Z)',wipe:'Apagar tudo',wipeTitle:'Apagar tudo o que está na lousa',confirmWipe:'Apagar tudo o que está na lousa? Isso não pode ser desfeito.',fsFallback:'Use o comando de tela cheia do navegador para apresentar.',popup:'O navegador bloqueou a janela do painel; ele foi aberto nesta janela. Permita pop-ups para usá-lo em outra janela.',panel:'Painel',previous:'← Anterior',next:'Próximo →',now:'AGORA',jump:'Ir para este slide',closed:'A janela da apresentação foi fechada.',close:'Fechar',error:'Erro no slide',restore:'A sessão anterior não pôde ser restaurada. O conteúdo foi aberto com uma nova sessão.'},
-  en:{credit:'Made with Edukors Slides Editor',creditAt:'on',motionNotice:'This computer is set to reduce motion. Enable animations for this presentation?',motionEnable:'Enable animations',motionKeep:'Keep current setting',goto:'Go to slide',slides:'Slides',slide:'Slide',of:'of',step:'Step',penLabel:'Pen',pen:'Pen (P)',hlLabel:'Highlight',hl:'Highlight (H) · the stroke fades on its own',textLabel:'Text',text:'Text (T) · click the slide and type; Enter places it',eraseLabel:'Clear all',erase:'Clear all (E)',lensLabel:'Magnifier',lens:'Magnifier (L) · mouse wheel adjusts the zoom',boardLabel:'Whiteboard',board:'Whiteboard (W) · infinite: write, draw, erase, move and scroll; saved in this browser',presenterLabel:'Open presenter panel',presenter:'Open the panel in another window',fsLabel:'Toggle fullscreen',fs:'Fullscreen (F)',noteLabel:'Text on the slide',wbNoteLabel:'Text on the whiteboard',homeLabel:'Back to start',home:'Back to start (Home) · scroll with the trackpad, mouse wheel or arrow keys, or drag while holding Space',moveLabel:'Move',move:'Move (M) · drag what was written or drawn; drag empty space to scroll the whiteboard',wbPen:'Pen (P)',wbText:'Text (T) · click to write, or click a text to edit it',eraserLabel:'Eraser',eraser:'Eraser (E) · pass over a stroke or text',shapesLabel:'Shapes',shapes:'Shapes (S) · pick a shape, drag to draw and type inside',rect:'Rectangle',round:'Rounded rectangle',ellipseLabel:'Circle',ellipse:'Circle / ellipse (Shift: perfect circle)',diamond:'Diamond',triangle:'Triangle',arrowsLabel:'Arrows',arrows:'Arrows (A) · pick a direction, drag to draw and type inside',arrowLeft:'Left arrow',arrowRight:'Right arrow',arrowUp:'Up arrow',arrowDown:'Down arrow',colors:'Colors',color:'Color',undoLabel:'Undo',undo:'Undo (⌘Z / Ctrl+Z)',wipe:'Clear all',wipeTitle:'Clear everything on the whiteboard',confirmWipe:'Clear everything on the whiteboard? This cannot be undone.',fsFallback:'Use the browser’s fullscreen command to present.',popup:'The browser blocked the panel window, so it opened in this window. Allow pop-ups to use it in another window.',panel:'Panel',previous:'← Previous',next:'Next →',now:'NOW',jump:'Go to this slide',closed:'The presentation window was closed.',close:'Close',error:'Slide error',restore:'The previous session could not be restored. The content was opened with a new session.'},
-  es:{credit:'Generado con Edukors Slides Editor',creditAt:'el',motionNotice:'Este equipo está configurado para reducir el movimiento. ¿Activar las animaciones de esta presentación?',motionEnable:'Activar animaciones',motionKeep:'Mantener configuración actual',goto:'Ir a la diapositiva',slides:'Diapositivas',slide:'Diapositiva',of:'de',step:'Paso',penLabel:'Lápiz',pen:'Lápiz (P)',hlLabel:'Resaltador',hl:'Resaltador (H) · el trazo desaparece solo',textLabel:'Texto',text:'Texto (T) · haz clic en la diapositiva y escribe; Enter lo fija',eraseLabel:'Borrar todo',erase:'Borrar todo (E)',lensLabel:'Lupa',lens:'Lupa (L) · la rueda del ratón ajusta el zoom',boardLabel:'Pizarra',board:'Pizarra (W) · infinita: escribe, dibuja, borra, mueve y desplázate; se guarda en este navegador',presenterLabel:'Abrir panel del presentador',presenter:'Abrir el panel en otra ventana',fsLabel:'Alternar pantalla completa',fs:'Pantalla completa (F)',noteLabel:'Texto sobre la diapositiva',wbNoteLabel:'Texto en la pizarra',homeLabel:'Volver al inicio',home:'Volver al inicio (Inicio) · desplázate con el trackpad, la rueda del ratón o las flechas, o arrastra con Espacio pulsado',moveLabel:'Mover',move:'Mover (M) · arrastra lo que se escribió o dibujó; arrastra el vacío para desplazar la pizarra',wbPen:'Lápiz (P)',wbText:'Texto (T) · haz clic para escribir, o en un texto para editarlo',eraserLabel:'Borrador',eraser:'Borrador (E) · pasa sobre el trazo o el texto',shapesLabel:'Formas',shapes:'Formas (S) · elige la forma, arrastra para dibujar y escribe dentro',rect:'Rectángulo',round:'Rectángulo redondeado',ellipseLabel:'Círculo',ellipse:'Círculo / elipse (Shift: círculo perfecto)',diamond:'Rombo',triangle:'Triángulo',arrowsLabel:'Flechas',arrows:'Flechas (A) · elige la dirección, arrastra para dibujar y escribe dentro',arrowLeft:'Flecha a la izquierda',arrowRight:'Flecha a la derecha',arrowUp:'Flecha hacia arriba',arrowDown:'Flecha hacia abajo',colors:'Colores',color:'Color',undoLabel:'Deshacer',undo:'Deshacer (⌘Z / Ctrl+Z)',wipe:'Borrar todo',wipeTitle:'Borrar todo lo que hay en la pizarra',confirmWipe:'¿Borrar todo lo que hay en la pizarra? No se puede deshacer.',fsFallback:'Usa el comando de pantalla completa del navegador para presentar.',popup:'El navegador bloqueó la ventana del panel, así que se abrió en esta ventana. Permite ventanas emergentes para usarlo en otra ventana.',panel:'Panel',previous:'← Anterior',next:'Siguiente →',now:'AHORA',jump:'Ir a esta diapositiva',closed:'Se cerró la ventana de la presentación.',close:'Cerrar',error:'Error en la diapositiva',restore:'No se pudo restaurar la sesión anterior. El contenido se abrió con una sesión nueva.'},
+  pt:{laserLabel:'Ponteiro laser',laser:'Ponteiro laser (S)',stopwatch:'Cronômetro',countdown:'Tempo restante',timerStart:'Iniciar',timerPause:'Pausar',timerReset:'Zerar',timerMinutes:'Minutos',timerMode:'Tipo de contagem',notes:'Notas',credit:'Gerado pelo Edukors Slides Editor',creditAt:'em',motionNotice:'Este computador está configurado para reduzir movimentos. Deseja ativar as animações desta apresentação?',motionEnable:'Ativar animações',motionKeep:'Manter configuração atual',goto:'Ir para o slide',slides:'Slides',slide:'Slide',of:'de',step:'Etapa',penLabel:'Caneta',pen:'Caneta (P)',hlLabel:'Destaque',hl:'Destaque (H) · o traço some sozinho',textLabel:'Texto',text:'Texto (T) · clique no slide e digite; Enter fixa',eraseLabel:'Apagar tudo',erase:'Apagar tudo (E)',lensLabel:'Lente',lens:'Lente (L) · roda do mouse ajusta o zoom',boardLabel:'Lousa',board:'Lousa (W) · infinita: escreva, desenhe, apague, mova e role; fica salva neste navegador',presenterLabel:'Abrir painel do apresentador',presenter:'Painel do apresentador (Z) · abre em outra janela',fsLabel:'Alternar tela cheia',fs:'Tela cheia (F)',noteLabel:'Texto sobre o slide',wbNoteLabel:'Texto na lousa',homeLabel:'Voltar ao início',home:'Voltar ao início (Home) · role com o trackpad, a roda do mouse ou as setas, ou arraste com Espaço pressionado',moveLabel:'Mover',move:'Mover (M) · arraste o que foi escrito ou desenhado; arraste o vazio para rolar a lousa',wbPen:'Caneta (P)',wbText:'Texto (T) · clique para escrever, ou num texto para editá-lo',eraserLabel:'Borracha',eraser:'Borracha (E) · passe sobre o traço ou texto',shapesLabel:'Formas',shapes:'Formas (S) · escolha a forma, arraste para desenhar e escreva dentro',rect:'Retângulo',round:'Retângulo arredondado',ellipseLabel:'Círculo',ellipse:'Círculo / elipse (Shift: círculo perfeito)',diamond:'Losango',triangle:'Triângulo',arrowsLabel:'Setas',arrows:'Setas (A) · escolha a direção, arraste para desenhar e escreva dentro',arrowLeft:'Seta para a esquerda',arrowRight:'Seta para a direita',arrowUp:'Seta para cima',arrowDown:'Seta para baixo',colors:'Cores',color:'Cor',undoLabel:'Desfazer',undo:'Desfazer (⌘Z / Ctrl+Z)',wipe:'Apagar tudo',wipeTitle:'Apagar tudo o que está na lousa',confirmWipe:'Apagar tudo o que está na lousa? Isso não pode ser desfeito.',fsFallback:'Use o comando de tela cheia do navegador para apresentar.',popup:'O navegador bloqueou a janela do painel; ele foi aberto nesta janela. Permita pop-ups para usá-lo em outra janela.',panel:'Painel',previous:'← Anterior',next:'Próximo →',now:'AGORA',jump:'Ir para este slide',closed:'A janela da apresentação foi fechada.',close:'Fechar',error:'Erro no slide',restore:'A sessão anterior não pôde ser restaurada. O conteúdo foi aberto com uma nova sessão.'},
+  en:{laserLabel:'Laser pointer',laser:'Laser pointer (S)',stopwatch:'Stopwatch',countdown:'Time remaining',timerStart:'Start',timerPause:'Pause',timerReset:'Reset',timerMinutes:'Minutes',timerMode:'Timer type',notes:'Notes',credit:'Made with Edukors Slides Editor',creditAt:'on',motionNotice:'This computer is set to reduce motion. Enable animations for this presentation?',motionEnable:'Enable animations',motionKeep:'Keep current setting',goto:'Go to slide',slides:'Slides',slide:'Slide',of:'of',step:'Step',penLabel:'Pen',pen:'Pen (P)',hlLabel:'Highlight',hl:'Highlight (H) · the stroke fades on its own',textLabel:'Text',text:'Text (T) · click the slide and type; Enter places it',eraseLabel:'Clear all',erase:'Clear all (E)',lensLabel:'Magnifier',lens:'Magnifier (L) · mouse wheel adjusts the zoom',boardLabel:'Whiteboard',board:'Whiteboard (W) · infinite: write, draw, erase, move and scroll; saved in this browser',presenterLabel:'Open presenter panel',presenter:'Presenter panel (Z) · opens in another window',fsLabel:'Toggle fullscreen',fs:'Fullscreen (F)',noteLabel:'Text on the slide',wbNoteLabel:'Text on the whiteboard',homeLabel:'Back to start',home:'Back to start (Home) · scroll with the trackpad, mouse wheel or arrow keys, or drag while holding Space',moveLabel:'Move',move:'Move (M) · drag what was written or drawn; drag empty space to scroll the whiteboard',wbPen:'Pen (P)',wbText:'Text (T) · click to write, or click a text to edit it',eraserLabel:'Eraser',eraser:'Eraser (E) · pass over a stroke or text',shapesLabel:'Shapes',shapes:'Shapes (S) · pick a shape, drag to draw and type inside',rect:'Rectangle',round:'Rounded rectangle',ellipseLabel:'Circle',ellipse:'Circle / ellipse (Shift: perfect circle)',diamond:'Diamond',triangle:'Triangle',arrowsLabel:'Arrows',arrows:'Arrows (A) · pick a direction, drag to draw and type inside',arrowLeft:'Left arrow',arrowRight:'Right arrow',arrowUp:'Up arrow',arrowDown:'Down arrow',colors:'Colors',color:'Color',undoLabel:'Undo',undo:'Undo (⌘Z / Ctrl+Z)',wipe:'Clear all',wipeTitle:'Clear everything on the whiteboard',confirmWipe:'Clear everything on the whiteboard? This cannot be undone.',fsFallback:'Use the browser’s fullscreen command to present.',popup:'The browser blocked the panel window, so it opened in this window. Allow pop-ups to use it in another window.',panel:'Panel',previous:'← Previous',next:'Next →',now:'NOW',jump:'Go to this slide',closed:'The presentation window was closed.',close:'Close',error:'Slide error',restore:'The previous session could not be restored. The content was opened with a new session.'},
+  es:{laserLabel:'Puntero láser',laser:'Puntero láser (S)',stopwatch:'Cronómetro',countdown:'Tiempo restante',timerStart:'Iniciar',timerPause:'Pausar',timerReset:'Reiniciar',timerMinutes:'Minutos',timerMode:'Tipo de contador',notes:'Notas',credit:'Generado con Edukors Slides Editor',creditAt:'el',motionNotice:'Este equipo está configurado para reducir el movimiento. ¿Activar las animaciones de esta presentación?',motionEnable:'Activar animaciones',motionKeep:'Mantener configuración actual',goto:'Ir a la diapositiva',slides:'Diapositivas',slide:'Diapositiva',of:'de',step:'Paso',penLabel:'Lápiz',pen:'Lápiz (P)',hlLabel:'Resaltador',hl:'Resaltador (H) · el trazo desaparece solo',textLabel:'Texto',text:'Texto (T) · haz clic en la diapositiva y escribe; Enter lo fija',eraseLabel:'Borrar todo',erase:'Borrar todo (E)',lensLabel:'Lupa',lens:'Lupa (L) · la rueda del ratón ajusta el zoom',boardLabel:'Pizarra',board:'Pizarra (W) · infinita: escribe, dibuja, borra, mueve y desplázate; se guarda en este navegador',presenterLabel:'Abrir panel del presentador',presenter:'Panel del presentador (Z) · se abre en otra ventana',fsLabel:'Alternar pantalla completa',fs:'Pantalla completa (F)',noteLabel:'Texto sobre la diapositiva',wbNoteLabel:'Texto en la pizarra',homeLabel:'Volver al inicio',home:'Volver al inicio (Inicio) · desplázate con el trackpad, la rueda del ratón o las flechas, o arrastra con Espacio pulsado',moveLabel:'Mover',move:'Mover (M) · arrastra lo que se escribió o dibujó; arrastra el vacío para desplazar la pizarra',wbPen:'Lápiz (P)',wbText:'Texto (T) · haz clic para escribir, o en un texto para editarlo',eraserLabel:'Borrador',eraser:'Borrador (E) · pasa sobre el trazo o el texto',shapesLabel:'Formas',shapes:'Formas (S) · elige la forma, arrastra para dibujar y escribe dentro',rect:'Rectángulo',round:'Rectángulo redondeado',ellipseLabel:'Círculo',ellipse:'Círculo / elipse (Shift: círculo perfecto)',diamond:'Rombo',triangle:'Triángulo',arrowsLabel:'Flechas',arrows:'Flechas (A) · elige la dirección, arrastra para dibujar y escribe dentro',arrowLeft:'Flecha a la izquierda',arrowRight:'Flecha a la derecha',arrowUp:'Flecha hacia arriba',arrowDown:'Flecha hacia abajo',colors:'Colores',color:'Color',undoLabel:'Deshacer',undo:'Deshacer (⌘Z / Ctrl+Z)',wipe:'Borrar todo',wipeTitle:'Borrar todo lo que hay en la pizarra',confirmWipe:'¿Borrar todo lo que hay en la pizarra? No se puede deshacer.',fsFallback:'Usa el comando de pantalla completa del navegador para presentar.',popup:'El navegador bloqueó la ventana del panel, así que se abrió en esta ventana. Permite ventanas emergentes para usarlo en otra ventana.',panel:'Panel',previous:'← Anterior',next:'Siguiente →',now:'AHORA',jump:'Ir a esta diapositiva',closed:'Se cerró la ventana de la presentación.',close:'Cerrar',error:'Error en la diapositiva',restore:'No se pudo restaurar la sesión anterior. El contenido se abrió con una sesión nueva.'},
 };
 export type PlayerWords=typeof playerWords.pt;
 // Initial step placeholder in each slide document, replaced when the slide is loaded.
@@ -185,6 +185,8 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
     else if(key==='h'||key==='H')setTool('hl');
     else if(key==='t'||key==='T')setTool('text');
     else if(key==='l'||key==='L')setTool('lens');
+    else if(key==='s'||key==='S')setTool('laser');
+    else if(key==='z'||key==='Z')openPanel();
     else if(key==='w'||key==='W')toggleBoard();
     else if(key==='e'||key==='E')clearInk();
     else return false;
@@ -215,7 +217,7 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
       polls.csv(cur,data.pollWords).then(file=>{if(!file)return;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([file.text],{type:'text/csv;charset=utf-8'}));a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000);},(e:any)=>{if(e?.message!=='cancelled')notice(data.pollWords.csvFailed);});return;}
     if(m.type==='poll'&&m.token===token&&f===frames[front]&&m.id===data.slides[cur].id&&ready&&m.action==='copy'){copyText(polls.link(cur)).then(ok=>post(f,token,'poll-copied',{ok}));return;}
     if(m.type==='poll'&&m.token===token&&f===frames[front]&&m.id===data.slides[cur].id&&ready&&typeof m.action==='string'&&(m.action!=='again'||confirm(data.pollWords.confirmAgain)))void polls.action(cur,m.action);
-    if(m.type==='navigate'){if(dockJustClosed||(tools&&(wbOpen||(tool&&tool!=='lens'))))return;m.direction>0?next():prev();}
+    if(m.type==='navigate'){if(dockJustClosed||(tools&&(wbOpen||(tool&&tool!=='lens'&&tool!=='laser'))))return;m.direction>0?next():prev();}
     if(m.type==='key')handleKey(m.key,!!m.meta,!!m.alt);
     if(m.type==='error')notice(W.error+': '+m.message);
     if(m.type==='link'&&/^https?:|^mailto:/i.test(m.href))window.open(m.href,'_blank','noopener,noreferrer');
@@ -223,14 +225,17 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
 
   // ---- Presenter tools (exported HTML only) ----
   let tool:string|null=null,wbOpen=false;
-  const panels:{update:()=>void;closed:()=>void}[]=[];
-  let clearInk=()=>{},refreshLens=()=>{},setTool=(_t:string)=>{},toggleBoard=()=>{},boardKey=(_k:string,_m:boolean,_a:boolean)=>false,persist=()=>{};
+  const panels:{update:()=>void;closed:()=>void;tick?:()=>void}[]=[];
+  const clock={mode:'up' as 'up'|'down',running:false,base:0,started:0,minutes:20};
+  const clockElapsed=()=>clock.base+(clock.running?Date.now()-clock.started:0),tickAll=()=>panels.forEach(p=>p.tick?.());
+  setInterval(()=>{if(clock.running)tickAll();},250);
+  let openPanel=()=>{},clearInk=()=>{},refreshLens=()=>{},setTool=(_t:string)=>{},toggleBoard=()=>{},boardKey=(_k:string,_m:boolean,_a:boolean)=>false,persist=()=>{};
   let note:any=null,wbNote:any=null,wbState:any={items:[],x:0,y:0};
   if(tools){
     persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({format:'esf-session',version:2,deckId:data.id,slideId:data.slides[cur].id,step,whiteboard:wbState}));}catch{}};
     const stagePoint=(e:any)=>{const r=stage.getBoundingClientRect();return[(e.clientX-r.left)/r.width*1600,(e.clientY-r.top)/r.height*900];};
     const ink=$('ink'),lens=$('lens'),lensView=lens.querySelector('.view'),lensFrame=$('lens-frame'),lensInk=document.createElement('canvas');
-    const toolBtns:any={pen:$('pen-btn'),hl:$('hl-btn'),text:$('text-btn'),lens:$('lens-btn')};
+    const toolBtns:any={pen:$('pen-btn'),hl:$('hl-btn'),text:$('text-btn'),lens:$('lens-btn'),laser:$('laser-btn')};
     const LENS_R=180;let zoom=2.5,lensAt:any=null,last:any=null,lensToken='';
     ink.width=lensInk.width=3200;ink.height=lensInk.height=1800;lensView.append(lensInk);
     const pen=ink.getContext('2d');pen.scale(2,2);
@@ -242,6 +247,7 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
       document.documentElement.dataset.tool=tool||'';
       Object.entries(toolBtns).forEach(([k,b]:any)=>{b.classList.toggle('on',k===tool);b.setAttribute('aria-pressed',String(k===tool));});
       if(tool==='lens'){refreshLens();placeLens();}else lens.classList.remove('on');
+      if(tool==='laser')placeLaser();else laser.classList.remove('on');
     };
     Object.entries(toolBtns).forEach(([k,b]:any)=>b.addEventListener('click',(e:any)=>{e.currentTarget.blur();setTool(k);}));
     $('erase-btn').addEventListener('click',(e:any)=>{e.currentTarget.blur();clearInk();});
@@ -259,7 +265,7 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
     });
     ink.addEventListener('pointerup',()=>last=null);ink.addEventListener('pointercancel',()=>last=null);
     // With the pen or text tool, clicking draws instead of changing slides; the lens still navigates.
-    ink.addEventListener('click',(e:any)=>{if(tool!=='lens')e.stopPropagation();if(tool==='text')openNote(stagePoint(e));});
+    ink.addEventListener('click',(e:any)=>{if(tool!=='lens'&&tool!=='laser')e.stopPropagation();if(tool==='text')openNote(stagePoint(e));});
 
     note=$('note');const NOTE_FONT='700 36px '+FONT;let noteAt:any=null;
     function openNote([x,y]:number[]){commitNote();noteAt=[x,y];note.value='';note.style.left=x-8+'px';note.style.top=y-26+'px';sizeNote();note.classList.add('on');note.focus();}
@@ -306,8 +312,11 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
       lens.style.left=x-LENS_R+'px';lens.style.top=y-LENS_R+'px';
       lensView.style.transform=`translate(${LENS_R-x*zoom}px, ${LENS_R-y*zoom}px) scale(${zoom})`;lens.classList.add('on');
     }
-    addEventListener('pointermove',e=>{lensAt=stagePoint(e);placeLens();});
-    document.documentElement.addEventListener('pointerleave',()=>lens.classList.remove('on'));
+    // Laser pointer: a red dot that follows the pointer over the slide (the cursor hides); clicks still change slides.
+    const laser=$('laser');
+    function placeLaser(){if(tool!=='laser'||!lensAt)return;laser.style.left=lensAt[0]+'px';laser.style.top=lensAt[1]+'px';laser.classList.add('on');}
+    addEventListener('pointermove',e=>{lensAt=stagePoint(e);placeLens();placeLaser();});
+    document.documentElement.addEventListener('pointerleave',()=>{lens.classList.remove('on');laser.classList.remove('on');});
     addEventListener('wheel',e=>{if(tool!=='lens')return;e.preventDefault();zoom=Math.max(1.5,Math.min(6,zoom*(e.deltaY<0?1.1:1/1.1)));placeLens();},{passive:false});
 
     // Whiteboard (W): one infinite board; every stroke, text and shape is an object that can be erased or dragged later.
@@ -601,7 +610,7 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
     let popup:Window|null=null,popupPanel:any=null,inlinePanel:any=null;
     function buildPanel(d:Document,root:HTMLElement,onClose?:()=>void){
       const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'} as any)[c]);
-      root.innerHTML=`<div class="p-toolbar"><button data-p="prev">${esc(W.previous)}</button><button data-p="next" class="primary">${esc(W.next)}</button><button data-p="board">${esc(W.boardLabel)}</button>${onClose?`<button data-p="close">${esc(W.close)}</button>`:''}</div><div class="p-status" role="status"></div><div class="overview-list">${data.slides.map((s:any,i:number)=>`<article class="overview-card"><div class="overview-label"><span>${i+1}. ${esc(s.title)}</span><span class="now">${esc(W.now)}</span></div><div class="mini-frame"><button class="jump" aria-label="${esc(W.goto)} ${i+1}: ${esc(s.title)}">${esc(W.jump)}</button></div></article>`).join('')}</div>`;
+      root.innerHTML=`<div class="p-toolbar"><button data-p="prev">${esc(W.previous)}</button><button data-p="next" class="primary">${esc(W.next)}</button><button data-p="board">${esc(W.boardLabel)}</button>${onClose?`<button data-p="close">${esc(W.close)}</button>`:''}</div><div class="p-status" role="status"></div><div class="p-timer" role="group" aria-label="${esc(W.timerMode)}"><span class="t-time" role="timer" aria-live="off">00:00</span><button data-t="run" class="primary icon" aria-label="${esc(W.timerStart)}" title="${esc(W.timerStart)}">▶</button><button data-t="reset" class="icon" aria-label="${esc(W.timerReset)}" title="${esc(W.timerReset)}">↺</button><select data-t="mode" aria-label="${esc(W.timerMode)}"><option value="up">${esc(W.stopwatch)}</option><option value="down">${esc(W.countdown)}</option></select><label class="t-min"><input data-t="minutes" type="number" min="1" max="600" step="1" aria-label="${esc(W.timerMinutes)}" title="${esc(W.timerMinutes)}"> min</label></div><div class="overview-list">${data.slides.map((s:any,i:number)=>`<article class="overview-card"><div class="overview-label"><span>${i+1}. ${esc(s.title)}</span><span class="now">${esc(W.now)}</span></div><div class="mini-frame"><button class="jump" aria-label="${esc(W.goto)} ${i+1}: ${esc(s.title)}">${esc(W.jump)}</button></div>${s.notes?`<p class="overview-notes" aria-label="${esc(W.notes)}">${esc(s.notes)}</p>`:''}</article>`).join('')}</div>`;
       const cards=[...root.querySelectorAll('.overview-card')] as HTMLElement[];
       cards.forEach((card,i)=>{
         const f=d.createElement('iframe');f.setAttribute('sandbox','allow-scripts');f.tabIndex=-1;f.setAttribute('aria-hidden','true');f.srcdoc=doc(i,'static');
@@ -610,6 +619,20 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
       });
       const act:any={prev:()=>{if(wbOpen)toggleBoard();prev();},next:()=>{if(wbOpen)toggleBoard();next();},board:()=>toggleBoard(),close:()=>onClose?.()};
       root.querySelectorAll('[data-p]').forEach((b:any)=>b.addEventListener('click',(e:any)=>{e.stopPropagation();act[b.dataset.p]();}));
+      // Timer: a stopwatch, or the time left from a number of minutes (shown in red past zero). One clock for every panel.
+      const tq=(k:string)=>root.querySelector(`[data-t="${k}"]`) as any,time=root.querySelector('.t-time') as HTMLElement,timerBox=root.querySelector('.p-timer') as HTMLElement;
+      const tick=()=>{
+        const ms=clockElapsed(),left=clock.minutes*60000-ms,over=clock.mode==='down'&&left<0;
+        const sec=over?Math.floor(-left/1000):clock.mode==='down'?Math.ceil(left/1000):Math.floor(ms/1000),h=Math.floor(sec/3600),mm=Math.floor(sec%3600/60),ss=sec%60,two=(n:number)=>String(n).padStart(2,'0');
+        time.textContent=(over?'−':'')+(h?h+':'+two(mm):two(mm))+':'+two(ss);timerBox.classList.toggle('over',over);timerBox.classList.toggle('running',clock.running);
+        const run=tq('run'),label=clock.running?W.timerPause:W.timerStart;run.textContent=clock.running?'❚❚':'▶';run.setAttribute('aria-label',label);run.title=label;tq('mode').value=clock.mode;
+        const min=tq('minutes');if(d.activeElement!==min)min.value=String(clock.minutes);(root.querySelector('.t-min') as HTMLElement).hidden=clock.mode!=='down';
+      };
+      tq('run').addEventListener('click',(e:any)=>{e.stopPropagation();if(clock.running){clock.base=clockElapsed();clock.running=false;}else{clock.started=Date.now();clock.running=true;}tickAll();});
+      tq('reset').addEventListener('click',(e:any)=>{e.stopPropagation();clock.base=0;clock.started=Date.now();tickAll();});
+      tq('mode').addEventListener('change',(e:any)=>{clock.mode=e.target.value==='down'?'down':'up';tickAll();});
+      tq('minutes').addEventListener('change',(e:any)=>{const v=Math.round(Number(e.target.value));if(v>=1&&v<=600)clock.minutes=v;tickAll();});
+      timerBox.addEventListener('keydown',(e:any)=>e.stopPropagation());
       const fitCards=()=>cards.forEach(c=>{const m=c.querySelector('.mini-frame') as HTMLElement,f=m.querySelector('iframe') as HTMLElement;f.style.transform=`scale(${m.clientWidth/1600})`;});
       d.defaultView?.addEventListener('resize',fitCards);fitCards();
       root.addEventListener('keydown',(e:any)=>{
@@ -629,9 +652,9 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
         sc.scrollTo({top:top(b)+sc.scrollTop-anchor,behavior:'smooth'});scrolledAt=performance.now();
       };
       return{
-        root,fit:fitCards,
+        root,fit:fitCards,tick,
         update(){
-          const s=data.slides[cur];
+          tick();const s=data.slides[cur];
           (root.querySelector('.p-status') as HTMLElement).textContent=`${W.slide} ${cur+1} ${W.of} ${N} · ${s.title} · ${W.step} ${step} ${W.of} ${total}`;
           cards.forEach((c,i)=>{c.classList.toggle('here',i===cur);c.classList.toggle('past',i<cur);c.querySelector('.jump')!.setAttribute('aria-current',i===cur?'true':'false');});
           if(shownAt!==cur)follow(shownAt,cur);shownAt=cur;
@@ -660,7 +683,7 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
         popup.addEventListener('beforeunload',()=>{forget(popupPanel);popupPanel=null;});
       }catch{popup.close();popup=null;notice(W.popup);openInline();}
     }
-    $('presenter-btn').addEventListener('click',(e:any)=>{e.currentTarget.blur();openPresenter();});
+    $('presenter-btn').addEventListener('click',(e:any)=>{e.currentTarget.blur();openPresenter();});openPanel=openPresenter;
     addEventListener('beforeunload',()=>popupPanel?.closed());
   }
 
@@ -690,6 +713,7 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
 
 const icon=(paths:string,width='2.2',extra='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"${extra}>${paths}</svg>`;
 const I={
+  laser:icon('<circle cx="12" cy="12" r="3.2" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>'),
   home:icon('<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>'),
   move:icon('<path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>'),
   pen:icon('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
@@ -733,13 +757,14 @@ body{font-family:${FONT};color:var(--ink);-webkit-font-smoothing:antialiased}
 #topdock{position:absolute;left:0;right:0;top:0;height:0;z-index:5;pointer-events:none}
 #top-bar{position:absolute;left:0;right:0;top:0;height:76px;display:flex;align-items:center;justify-content:center;gap:14px;background:rgba(15,18,34,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transform:translateY(-100%);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
 :root:not(.touch) #topdock:hover #top-bar,#topdock:focus-within #top-bar,#topdock.open #top-bar{transform:none}
-#top-bar button{width:50px;height:50px;border-radius:14px;border:0;cursor:pointer;display:grid;place-items:center;color:#fff;background:rgba(255,255,255,.12);transition:background .2s,color .2s}
+#top-bar button{min-width:50px;height:50px;padding:0 12px;border-radius:14px;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;color:#fff;background:rgba(255,255,255,.12);transition:background .2s,color .2s}
 #top-bar button:hover{background:var(--ai)}#top-bar button.on{background:var(--quiz);color:var(--ink)}#top-bar button:focus-visible{outline:3px solid var(--quiz);outline-offset:3px}
-#top-bar svg{width:24px;height:24px}#top-bar .sep{width:2px;height:30px;background:rgba(255,255,255,.25);margin:0 6px}
+#top-bar svg{width:24px;height:24px;flex:none}#top-bar .key{font:700 15px/1 ${FONT};opacity:.8}#top-bar .sep{width:2px;height:30px;background:rgba(255,255,255,.25);margin:0 6px}
 #fs-btn .exit,:fullscreen #fs-btn .enter{display:none}:fullscreen #fs-btn .exit{display:block}
 #ink{position:absolute;inset:0;width:1600px;height:900px;z-index:4;pointer-events:none}
 [data-tool="pen"] #ink{pointer-events:auto;touch-action:none;cursor:${penCursor('FF3B5C')}}
-[data-tool="text"] #ink{pointer-events:auto;cursor:text}[data-tool="lens"] #ink{pointer-events:auto;cursor:none}
+[data-tool="text"] #ink{pointer-events:auto;cursor:text}[data-tool="lens"] #ink,[data-tool="laser"] #ink{pointer-events:auto;cursor:none}
+#laser{position:absolute;z-index:6;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;pointer-events:none;display:none;background:radial-gradient(circle,#fff 0 14%,#ff1f3d 26%,#ff1f3dcc 42%,#ff1f3d55 60%,#ff1f3d00 72%)}#laser.on{display:block}
 #note{position:absolute;z-index:5;display:none;height:48px;min-width:40px;padding:0 6px;margin:0;font:700 36px/48px ${FONT};color:#FF3B5C;caret-color:#FF3B5C;background:rgba(255,255,255,.6);border:2px dashed #FF3B5C;border-radius:8px;outline:none}#note.on{display:block}
 #wb{position:absolute;inset:0;z-index:5;display:none;background-color:#FBFBF7;background-image:radial-gradient(circle,#D3D8E2 1.5px,transparent 1.6px);background-size:32px 32px}
 [data-wb] #wb{display:block}[data-wb] #dock{display:none}
@@ -782,12 +807,16 @@ body{font-family:${FONT};color:var(--ink);-webkit-font-smoothing:antialiased}
 @media(prefers-reduced-motion:reduce){:root:not([data-esf-motion="full"]),:root:not([data-esf-motion="full"]) *,:root:not([data-esf-motion="full"]) *::before,:root:not([data-esf-motion="full"]) *::after{animation:none!important;transition:none!important}}`;
 // Presenter panel, used in the pop-up and in the same-window fallback.
 const panelCss=`*{box-sizing:border-box;margin:0;padding:0}.esf-panel-page{background:#101425;margin:0;color:#eef0f8;font-family:${FONT}}
-.esf-panel{color-scheme:dark;color:#eef0f8;font-family:${FONT};padding:132px 24px 24px;outline:none}
+.esf-panel{color-scheme:dark;color:#eef0f8;font-family:${FONT};padding:186px 24px 24px;outline:none}
 .esf-panel button{font:inherit;cursor:pointer;border:1px solid #3c425d;background:#22283e;color:inherit;border-radius:10px;padding:10px 15px;font-size:13px;font-weight:650}
 .esf-panel button:hover{background:#343b58}.esf-panel button:focus-visible{outline:3px solid #c7b5ff;outline-offset:3px}.esf-panel button:disabled{opacity:.4;cursor:default}
 .esf-panel .primary{background:#b7a1ff;color:#17102e;border-color:#b7a1ff}.esf-panel .primary:hover{background:#d0c0ff}
 .p-toolbar{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:20;display:flex;gap:8px;padding:8px;border-radius:16px;background:#14182be6;box-shadow:0 5px 20px #0008;white-space:nowrap}
 .p-status{position:fixed;top:78px;left:50%;transform:translateX(-50%);z-index:20;max-width:calc(100vw - 28px);padding:9px 16px;border-radius:999px;background:#14182be6;box-shadow:0 4px 18px #0006;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-timer{position:fixed;top:122px;left:50%;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:14px;background:#14182be6;box-shadow:0 4px 18px #0006;white-space:nowrap;max-width:calc(100vw - 16px)}
+.p-timer .t-time{font:700 22px/1 ${FONT};font-variant-numeric:tabular-nums;min-width:68px;text-align:center;color:#eef0f8}.p-timer.running .t-time{color:#9be7b0}.p-timer.over .t-time{color:#ff7a8a}
+.esf-panel .p-timer button{padding:6px 0;width:34px;font-size:14px;line-height:1}.p-timer select{max-width:132px}.p-timer select,.p-timer input{font:inherit;font-size:12px;color:inherit;background:#22283e;border:1px solid #3c425d;border-radius:8px;padding:6px 6px}.p-timer input{width:52px}.t-min{font-size:12px;color:#abb3cf}
+.overview-notes{margin:10px 2px 0;font-size:14px;line-height:1.45;color:#d6dbef;white-space:pre-wrap;overflow-wrap:anywhere}.past .overview-notes{opacity:.6}
 .overview-list{max-width:900px;margin:auto;display:grid;gap:26px}.overview-card{position:relative}
 .overview-label{font:600 14px ${FONT};color:#abb3cf;margin:0 0 9px;display:flex;justify-content:space-between}.overview-card.here .overview-label{color:#ffc14d}
 .now{visibility:hidden}.here .now{visibility:visible}
@@ -795,7 +824,7 @@ const panelCss=`*{box-sizing:border-box;margin:0;padding:0}.esf-panel-page{backg
 .mini-frame iframe{position:absolute;top:0;left:0;width:1600px;height:900px;border:0;transform-origin:0 0;pointer-events:none}
 .esf-panel .jump{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:0;background:#ffc14d;color:#191326;padding:9px 16px;border-radius:30px;font:700 13px ${FONT};opacity:0;transition:opacity .12s}
 .esf-panel .jump:hover{background:#ffd47f}.mini-frame:hover .jump,.esf-panel .jump:focus-visible{opacity:1}.esf-panel .jump:focus-visible{outline:4px solid #c7b5ff;outline-offset:3px}
-@media(max-width:600px){.esf-panel{padding:120px 14px 14px}.p-toolbar{gap:6px;padding:6px}.p-toolbar button{padding:8px 10px;font-size:12px}.p-status{font-size:11px}.overview-list{gap:18px}}`;
+@media(max-width:600px){.esf-panel{padding:172px 14px 14px}.p-timer{top:112px}.p-toolbar{gap:6px;padding:6px}.p-toolbar button{padding:8px 10px;font-size:12px}.p-status{font-size:11px}.overview-list{gap:18px}}`;
 
 // tools=false is the in-app "Present" window: navigation only, no annotation tools or panel.
 // Exported HTML always uses English; lang only controls the in-app Present window.
@@ -804,13 +833,14 @@ export function playerDocument(deck:Deck,options:{tools?:boolean;start?:number;t
   // The in-app window speaks the interface language when the player has its words (pt, en, es); otherwise English.
   const tools=options.tools!==false,lang=(!tools&&['pt','en','es'].includes(options.lang as string)?options.lang:'en') as 'pt'|'en'|'es';
   const W=playerWords[lang];
-  const slides=deck.slides.map(s=>({id:s.id,title:s.title,steps:s.poll?0:(s.html.match(/\sdata-step\b/g)||[]).length,poll:s.poll,html:slideDocument(deck,s,false,'__ESF_TOKEN__',STEP_SENTINEL,false,undefined,lang,options.minify),static:slideDocument(deck,s,true,'',0,false,undefined,lang,options.minify)}));
+  const slides=deck.slides.map(s=>({id:s.id,title:s.title,...tools&&s.notes?.trim()?{notes:s.notes}:{},steps:s.poll?0:(s.html.match(/\sdata-step\b/g)||[]).length,poll:s.poll,html:slideDocument(deck,s,false,'__ESF_TOKEN__',STEP_SENTINEL,false,undefined,lang,options.minify),static:slideDocument(deck,s,true,'',0,false,undefined,lang,options.minify)}));
   const used=slides.map(s=>s.html+s.static).join('\n');
   const assets=Object.fromEntries(deck.assets.filter(a=>used.includes('asset:'+a.id)).map(a=>[a.id,`data:${a.mime};base64,${a.data}`]));
   const server=normalizePollServer(options.pollServer),endpoint=server?pollEndpoint(server):'',hasPoll=deck.slides.some(s=>s.poll);
   const data={id:deck.id,title:deck.title,lang,words:W,pollWords:pollWords[lang],pollEndpoint:endpoint,tools,start:options.start||0,sentinel:STEP_SENTINEL,font:FONT,panelCss,slides,assets};
   const e=escapeHtml,made=new Date().toLocaleString({pt:'pt-BR',en:'en-US',es:'es-ES'}[lang],{dateStyle:'short',timeStyle:'short'}),credit=`${W.credit} ${W.creditAt} ${made}`;
-  const btn=(id:string,label:string,title:string,svg:string,pressed=true)=>`<button id="${id}" aria-label="${e(label)}"${pressed?' aria-pressed="false"':''} title="${e(title)}">${svg}</button>`;
+  // key: the tool's shortcut, shown beside its icon in the top bar (also announced through aria-keyshortcuts).
+  const btn=(id:string,label:string,title:string,svg:string,pressed=true,key='')=>`<button id="${id}" aria-label="${e(label)}"${pressed?' aria-pressed="false"':''}${key?` aria-keyshortcuts="${key}"`:''} title="${e(title)}">${svg}${key?`<span class="key" aria-hidden="true">${key}</span>`:''}</button>`;
   const wbBtn=(tool:string,label:string,title:string,svg:string,extra='')=>`<button data-wbtool="${tool}" aria-label="${e(label)}" title="${e(title)}"${extra}>${svg}</button>`;
   const kind=(k:string,label:string,title:string,svg:string)=>`<button data-kind="${k}" title="${e(title)}" aria-label="${e(label)}">${svg}</button>`;
   const chrome=tools?`<canvas id="ink"></canvas><canvas id="glow"></canvas><input id="note" type="text" autocomplete="off" spellcheck="false" aria-label="${e(W.noteLabel)}">
@@ -822,8 +852,8 @@ ${wbBtn('move',W.moveLabel,W.move,I.move)}${wbBtn('pen',W.penLabel,W.wbPen,I.pen
 <span class="sep"></span><div id="wb-colors" style="display:flex;gap:8px" role="group" aria-label="${e(W.colors)}"></div><span class="sep"></span>
 <button id="wb-undo" aria-label="${e(W.undoLabel)}" title="${e(W.undo)}">${I.undo}</button><button id="wb-wipe" title="${e(W.wipeTitle)}">${e(W.wipe)}</button></div></div>
 <div id="topdock"><div class="corner l"></div><div class="corner r"></div><div id="top-bar">
-${btn('presenter-btn',W.presenterLabel,W.presenter,I.presenter,false)}${btn('pen-btn',W.penLabel,W.pen,I.pen)}${btn('hl-btn',W.hlLabel,W.hl,I.hl)}${btn('text-btn',W.textLabel,W.text,I.textBold)}${btn('erase-btn',W.eraseLabel,W.erase,I.erase,false)}${btn('lens-btn',W.lensLabel,W.lens,I.lens)}${btn('wb-btn',W.boardLabel,W.board,I.board)}<span class="sep"></span>${btn('fs-btn',W.fsLabel,W.fs,fsIcons,false)}
-</div></div><div id="lens" aria-hidden="true"><div class="view"><iframe id="lens-frame" sandbox="allow-scripts" tabindex="-1" title=""></iframe></div></div>`:'';
+${btn('presenter-btn',W.presenterLabel,W.presenter,I.presenter,false,'Z')}${btn('pen-btn',W.penLabel,W.pen,I.pen,true,'P')}${btn('hl-btn',W.hlLabel,W.hl,I.hl,true,'H')}${btn('text-btn',W.textLabel,W.text,I.textBold,true,'T')}${btn('erase-btn',W.eraseLabel,W.erase,I.erase,false,'E')}${btn('laser-btn',W.laserLabel,W.laser,I.laser,true,'S')}${btn('lens-btn',W.lensLabel,W.lens,I.lens,true,'L')}${btn('wb-btn',W.boardLabel,W.board,I.board,true,'W')}<span class="sep"></span>${btn('fs-btn',W.fsLabel,W.fs,fsIcons,false,'F')}
+</div></div><div id="laser" aria-hidden="true"></div><div id="lens" aria-hidden="true"><div class="view"><iframe id="lens-frame" sandbox="allow-scripts" tabindex="-1" title=""></iframe></div></div>`:'';
   return `<!doctype html>
 <!-- ${e(credit)} — https://edukors.org -->
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="generator" content="Edukors Slides Editor"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; frame-src about: blob:; font-src data:; connect-src ${hasPoll&&endpoint?endpoint:"'none'"}; base-uri 'none';"><title>${e(options.title??deck.title)}</title><style>${playerCss}</style></head><body>

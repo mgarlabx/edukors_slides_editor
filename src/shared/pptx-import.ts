@@ -210,14 +210,19 @@ function textHtml(node:Element,part:Part,ctx:Context,textColor?:string){
       const spacing=number(pick(props,el=>attr(el,'spc')));if(spacing)styles.push(`letter-spacing:${decimal(spacing/100*fontScale)}px`);
       return styles.join(';');
     };
-    const pieces=runs.map(run=>{
-      if(run.localName==='br')return '<br>';
-      const props=runProps(run);
-      let content=escapeHtml(children(run,'t').map(t=>t.textContent||'').join(''));
-      const baseline=number(attr(direct(run,'rPr'),'baseline'));
+    // PowerPoint splits text into runs at every edit or spell check; neighbours with the same look become one span.
+    const merged:{style:string;text:string;baseline:number;href:string}[]=[];
+    for(const run of runs){
+      if(run.localName==='br'){merged.push({style:'',text:'',baseline:0,href:'<br>'});continue;}
+      const style=styleOf(runProps(run)),text=children(run,'t').map(t=>t.textContent||'').join(''),baseline=number(attr(direct(run,'rPr'),'baseline'));
+      const link=direct(direct(run,'rPr'),'hlinkClick'),href=link?safeLink(part.rels.find(r=>r.id===relId(link))):'',last=merged.at(-1);
+      if(last&&last.href!=='<br>'&&last.style===style&&last.baseline===baseline&&last.href===href)last.text+=text;else merged.push({style,text,baseline,href});
+    }
+    const pieces=merged.map(({style,text,baseline,href})=>{
+      if(href==='<br>')return '<br>';
+      let content=escapeHtml(text);
       if(baseline)content=`<${baseline<0?'sub':'sup'}>${content}</${baseline<0?'sub':'sup'}>`;
-      content=`<span style="${escapeHtml(styleOf(props))}">${content}</span>`;
-      const link=direct(direct(run,'rPr'),'hlinkClick'),href=link?safeLink(part.rels.find(r=>r.id===relId(link))):'';
+      content=`<span style="${escapeHtml(style)}">${content}</span>`;
       return href?`<a href="${escapeHtml(href)}">${content}</a>`:content;
     }).join('');
     const empty=`<span style="${escapeHtml(styleOf([...(direct(paragraph,'endParaRPr')?[direct(paragraph,'endParaRPr')!]:[]),...defaults]))}"><br></span>`;
@@ -317,17 +322,18 @@ function shapes(tree:Element,part:Part,ctx:Context,space:Space,content:boolean,g
     const geometry=visible?pptxGeometry(preset,props,bounds.width,bounds.height,inherited):undefined;
     if(visible&&!geometry)ctx.issues.push({slideId:ctx.slideId,objectId:id,code:'shape-approximated',detail:`${name}: shape "${preset}" is shown as a rectangle.`});
     if(text&&(plain||!visible)){
-      // Text boxes (and simple filled boxes with text) are one editable object; nothing clips their text.
+      // Text boxes (and simple filled boxes with text) are one editable object, like the editor's own (data-field inside
+      // data-manual: a whole text, not a layout placeholder); nothing clips their text.
       const {padding,anchor,nowrap}=bodyProps(node,part,ctx),radius=/ellipse|Connector/.test(preset)?'border-radius:50%;':/roundRect|AlternateProcess/.test(preset)?`border-radius:${decimal(Math.min(bounds.width,bounds.height)*number(attr(first(props,'gd'),'fmla').replace('val ',''),16667)/100000)}px;`:'';
       const look=visible?`background:${fill.css};${line?`border:${decimal(line.width)}px ${line.dash?'dashed':'solid'} ${line.color};`:''}${radius}`:'';
-      out.push(`<div data-manual="text" ${tag} style="${escapeHtml(boxStyle(bounds,anchor==='start'?'min-height':'height')+look+`padding:${padding};align-content:${anchor};${nowrap?'white-space:nowrap;':''}overflow-wrap:break-word;`)}">${textHtml(node,part,ctx,fontColor)}</div>`);
+      out.push(`<div data-manual="text" data-field="pptx-${id}" ${tag} style="${escapeHtml(boxStyle(bounds,anchor==='start'?'min-height':'height')+look+`padding:${padding};align-content:${anchor};${nowrap?'white-space:nowrap;':''}overflow-wrap:break-word;`)}">${textHtml(node,part,ctx,fontColor)}</div>`);
       continue;
     }
     if(visible){
       const svg=shapeSvg(geometry||pptxGeometry('rect',props,bounds.width,bounds.height)!,fill,line,bounds,node.localName==='cxnSp'||preset==='line');
       out.push(`<div data-manual="shape" data-shape="${geometry?.native||'pptx'}" ${tag} style="${escapeHtml(boxStyle(bounds))}">${svg}</div>`);
     }
-    if(text){const {padding,anchor,nowrap}=bodyProps(node,part,ctx);out.push(`<div data-manual="text" data-pptx-id="${id}-text" style="${escapeHtml(boxStyle(bounds)+`padding:${padding};align-content:${anchor};${nowrap?'white-space:nowrap;':''}overflow-wrap:break-word;`)}">${textHtml(node,part,ctx,fontColor)}</div>`);}
+    if(text){const {padding,anchor,nowrap}=bodyProps(node,part,ctx);out.push(`<div data-manual="text" data-field="pptx-${id}-text" data-pptx-id="${id}-text" style="${escapeHtml(boxStyle(bounds)+`padding:${padding};align-content:${anchor};${nowrap?'white-space:nowrap;':''}overflow-wrap:break-word;`)}">${textHtml(node,part,ctx,fontColor)}</div>`);}
   }
   return out;
 }

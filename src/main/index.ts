@@ -17,13 +17,14 @@ import {frameShell,frameShellCsp} from '../shared/render';
 import {playerDocument} from '../shared/player';
 import {normalizePollServer,pollEndpoint} from '../shared/poll';
 import {minifyJs} from './minify';
-import {captureSlides,createPdf,createEditablePptxFile} from './exports';
-import {embedFonts} from './fonts';
+import {captureSlide,captureSlides,createPdf,createEditablePptxFile} from './exports';
+import {embedFonts,localFonts} from './fonts';
 
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'..'),page='dist/index.html';
 const pageUrl=pathToFileURL(path.join(root,page)).href;
 app.setName('Edukors Slides Editor');
-protocol.registerSchemesAsPrivileged([{scheme:'esf-frame',privileges:{standard:true,secure:true}}]);
+// corsEnabled: fonts are always fetched in CORS mode (images are not); without it @font-face of the frames failed.
+protocol.registerSchemesAsPrivileged([{scheme:'esf-frame',privileges:{standard:true,secure:true,corsEnabled:true}}]);
 // ESF_DATA_DIR isolates a run (tests, a local test build). Packaged, the data folder of the earlier "Edukors Slides"
 // keeps its templates and preferences; unpackaged runs use .local-data.
 const localData=process.env.ESF_DATA_DIR||(!app.isPackaged?path.join(root,'.local-data'):undefined);
@@ -69,6 +70,52 @@ handle('downloadImage',async(_e,url:unknown)=>{
   if(Number(r.headers.get('content-length')||0)>50_000_000)throw Error('Resource exceeds 50 MB.');
   const bytes=Buffer.from(await r.arrayBuffer());if(bytes.length>50_000_000)throw Error('Resource exceeds 50 MB.');
   return asset(bytes,path.basename(u.pathname)||'image',mime);
+});
+
+// The assistant's page capture: its own commands run in a sandbox without network, so a web page is captured here, in a
+// hidden window of its own (in-memory session, no preload, no pop-ups, downloads or permissions). Optional: a preferred
+// language (Accept-Language), a script run in the page first (to open a menu, pick a language…), the whole page height.
+let pageShots=Promise.resolve();
+handle('capturePage',async(_e,raw:any)=>{
+  let u:URL;try{u=new URL(String(raw?.url||''));}catch{throw Error('Invalid address.');}
+  if(!/^https?:$/.test(u.protocol))throw Error('Only http and https addresses are accepted.');
+  const width=Math.round(Math.min(2400,Math.max(320,Number(raw?.width)||1280))),full=raw?.fullPage!==false,wait=Math.min(15000,Math.max(0,Number(raw?.wait)||1500));
+  const language=typeof raw?.language==='string'&&/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(raw.language)?raw.language:'';
+  const script=typeof raw?.script==='string'?raw.script.slice(0,20000):'';
+  const run=pageShots.then(async()=>{
+    const ses=session.fromPartition('esf-capture');
+    ses.setPermissionRequestHandler((_w,_p,cb)=>cb(false));ses.removeAllListeners('will-download');ses.on('will-download',(_ev,item)=>item.cancel());
+    ses.webRequest.onBeforeSendHeaders((d,cb)=>{if(language)d.requestHeaders['Accept-Language']=`${language},${language.split('-')[0]};q=0.9,en;q=0.5`;cb({requestHeaders:d.requestHeaders});});
+    const win=new BrowserWindow({show:false,width,height:900,useContentSize:true,enableLargerThanScreen:true,paintWhenInitiallyHidden:true,webPreferences:{partition:'esf-capture',sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
+    const pause=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+    const settle=async()=>{for(let i=0;i<40&&win.webContents.isLoading();i++)await pause(250);};
+    try{
+      win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+      await Promise.race([win.loadURL(u.href),pause(30000).then(()=>{throw Error('The page took too long to load.');})]);
+      await pause(wait);
+      if(script){
+        try{await Promise.race([win.webContents.executeJavaScript(`(async()=>{${script}\n})()`,true),pause(15000)]);}catch(e:any){throw Error('The script failed in the page: '+String(e?.message||e).slice(0,300));}
+        await pause(800);await settle();await pause(wait);
+      }
+      const js=(code:string)=>win.webContents.executeJavaScript(code,true);
+      let height=900;
+      if(full){
+        // Scrolled through once, so images that load on scroll are there; then the window is as tall as the page.
+        height=Math.min(15000,Math.max(300,Number(await js('Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0)'))||900));
+        await js(`(async()=>{for(let y=0;y<${height};y+=700){scrollTo(0,y);await new Promise(r=>setTimeout(r,120));}scrollTo(0,0);})()`);
+        height=Math.min(15000,Math.max(300,Number(await js('Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0)'))||900));
+        win.setContentSize(width,height);await pause(900);
+      }
+      let image=await win.webContents.capturePage();
+      if(image.isEmpty())throw Error('The page could not be captured.');
+      const png=image.toPNG(),size=image.getSize(),title=await js('document.title').catch(()=>'');
+      // What the model sees: at most 1568 px wide and 7000 px tall.
+      const k=Math.min(1,1568/size.width,7000/size.height);if(k<1)image=image.resize({width:Math.round(size.width*k),height:Math.round(size.height*k),quality:'best'});
+      const shown=image.getSize(),name=(u.hostname+(u.pathname.length>1?u.pathname.replace(/\/+/g,'-'):'')).replace(/[^\w.-]+/g,'-').slice(0,80)+'.png';
+      return{asset:asset(png,name,'image/png'),width:size.width,height:size.height,title:String(title).slice(0,300),url:win.webContents.getURL(),preview:{mimeType:'image/png',data:image.toPNG().toString('base64'),width:shown.width,height:shown.height}};
+    }finally{win.destroy();}
+  });
+  pageShots=run.then(()=>{},()=>{});return run;
 });
 
 // Clipboard: slides and canvas objects travel as JSON text, so they also move between windows and presentations.
@@ -153,8 +200,23 @@ handle('export',async(event,deck:Deck,format:string,where:{folder?:string;name?:
     return{path:file,fonts};
   }finally{exportBusy=false;}
 });
+// The assistant's view_slide: the slide as exported (static state, base and layout), at most 1568 px wide for the model.
+let slideShots=Promise.resolve();
+handle('slideImage',async(_e,deck:Deck,id:unknown)=>{
+  validateDeck(deck);
+  const run=slideShots.then(async()=>{
+    let image=nativeImage.createFromBuffer(await captureSlide(deck,String(id),tempDir));
+    if(image.getSize().width>1568)image=image.resize({width:1568,quality:'best'});
+    const{width,height}=image.getSize();return{mimeType:'image/png',data:image.toPNG().toString('base64'),width,height};
+  });
+  slideShots=run.then(()=>{},()=>{});return run;
+});
 handle('openOutput',async(_e,file:string)=>{if(!outputs.has(file))throw Error('Unknown export.');const error=await shell.openPath(file);if(error)throw Error(error);});
 handle('revealOutput',async(_e,file:string)=>{if(!outputs.has(file))throw Error('Unknown export.');shell.showItemInFolder(file);});
+
+// Imported PowerPoint files name fonts (Aptos, the Office default, among them) that may exist only on this computer,
+// some only inside Office itself: the page receives their faces to keep in the presentation (CSS text in, files out).
+handle('localFonts',async(_e,css:string,known:string[])=>{if(typeof css!=='string'||css.length>50_000_000)throw Error('Invalid text.');return localFonts(css,new Set(Array.isArray(known)?known.filter(x=>typeof x==='string'):[]));});
 
 // Drafts of unsaved presentations are Common's; Slides only packs them here, so typing and dragging never wait for the
 // compression of large images in the page.
@@ -221,7 +283,7 @@ app.whenReady().then(async()=>{
   await fs.mkdir(tempDir,{recursive:true});
   protocol.handle('esf-frame',async request=>{
     const m=/^\/asset\/([\w-]{1,120})\/([\w-]{1,200})$/.exec(new URL(request.url).pathname);
-    if(m){const asset=await servedAsset(m[1]+'/'+m[2]);return asset?new Response(new Uint8Array(asset.bytes),{headers:{'content-type':asset.mime,'cache-control':'max-age=31536000, immutable'}}):new Response('',{status:404});}
+    if(m){const asset=await servedAsset(m[1]+'/'+m[2]);return asset?new Response(new Uint8Array(asset.bytes),{headers:{'content-type':asset.mime,'cache-control':'max-age=31536000, immutable','access-control-allow-origin':'*'}}):new Response('',{status:404});}
     return new Response(frameShell,{headers:{'content-type':'text/html; charset=utf-8','content-security-policy':frameShellCsp,'cache-control':'no-store'}});
   });
   session.defaultSession.registerPreloadScript({type:'frame',id:'edukors-slides',filePath:path.join(here,'preload.cjs')});

@@ -24,7 +24,7 @@ export function createEditablePptx(slides:EditableSlide[],title:string){
     const rels=[`<Relationship Id="rId1" Type="${OREL}/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>`,`<Relationship Id="rId2" Type="${OREL}/image" Target="../media/slide${n}-background.png"/>`];
     f[`ppt/media/slide${n}-background.png`]=slide.background;media.add('png');
     let id=2;const rel=(type:string,target:string,external=false)=>{const r=`rId${rels.length+1}`;rels.push(`<Relationship Id="${r}" Type="${OREL}/${type}" Target="${e(target)}"${external?' TargetMode="External"':''}/>`);return r;};
-    const xfrm=(it:{x:number;y:number;w:number;h:number})=>`<a:xfrm><a:off x="${emu(it.x)}" y="${emu(it.y)}"/><a:ext cx="${Math.max(1,emu(it.w))}" cy="${Math.max(1,emu(it.h))}"/></a:xfrm>`;
+    const xfrm=(it:{x:number;y:number;w:number;h:number;rot?:number})=>`<a:xfrm${it.rot?` rot="${int(it.rot*60000)}"`:''}><a:off x="${emu(it.x)}" y="${emu(it.y)}"/><a:ext cx="${Math.max(1,emu(it.w))}" cy="${Math.max(1,emu(it.h))}"/></a:xfrm>`;
     const geometry=(prst:string,it:PptxItem&PptxLook)=>prst==='roundRect'||(prst==='rect'&&it.radius)?`<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${int(Math.min(50000,(it.radius||0)/Math.max(1,Math.min(it.w,it.h))*100000))}"/></a:avLst></a:prstGeom>`:`<a:prstGeom prst="${prst}"><a:avLst/></a:prstGeom>`;
     const lookXml=(l:PptxLook)=>(l.fill?`<a:solidFill>${clr({...l.fill,alpha:l.fill.alpha*(l.opacity??1)})}</a:solidFill>`:'<a:noFill/>')
       +(l.line?`<a:ln w="${int(l.line.width*k)}"><a:solidFill>${clr(l.line)}</a:solidFill>${l.line.dash?`<a:prstDash val="${l.line.dash}"/>`:''}</a:ln>`:'<a:ln><a:noFill/></a:ln>')
@@ -46,6 +46,11 @@ export function createEditablePptx(slides:EditableSlide[],title:string){
         // A cropped image shows only its visible part, so the frame shrinks to it.
         const shown={x:it.x+it.w*l/100,y:it.y+it.h*t/100,w:it.w*(1-(l+r)/100),h:it.h*(1-(t+b)/100)};
         return`<p:pic><p:nvPicPr>${cNv}<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rel('image',`../media/${file}`)}"/>${crop}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${xfrm(shown)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${it.line?`<a:ln w="${int(it.line.width*k)}"><a:solidFill>${clr(it.line)}</a:solidFill></a:ln>`:''}${it.shadow?'<a:effectLst><a:outerShdw blurRad="190500" dist="76200" dir="5400000" algn="t" rotWithShape="0"><a:srgbClr val="172033"><a:alpha val="35000"/></a:srgbClr></a:outerShdw></a:effectLst>':''}</p:spPr></p:pic>`;
+      }
+      // A line: a connector shape with its ends (head = start, tail = end); the box has no height.
+      if(it.type==='line'){
+        const l=it.line;if(!l)return'';const ln=(end:string,side:string)=>end==='none'?'':`<a:${side} type="${end}" w="med" len="med"/>`;
+        return`<p:cxnSp><p:nvCxnSpPr>${cNv}<p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm${it.rot?` rot="${int(it.rot*60000)}"`:''}><a:off x="${emu(it.x)}" y="${emu(it.y)}"/><a:ext cx="${Math.max(1,emu(it.w))}" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="${int(l.width*k)}"><a:solidFill>${clr({...l,alpha:l.alpha*(it.opacity??1)})}</a:solidFill>${l.dash?`<a:prstDash val="${l.dash}"/>`:''}${ln(it.head,'headEnd')}${ln(it.tail,'tailEnd')}</a:ln></p:spPr></p:cxnSp>`;
       }
       if(it.type==='text'){
         const [l,t,r,b]=it.insets.map(v=>int(v*k));
