@@ -114,13 +114,13 @@ O **+** do campo anexa arquivos (textos, PDFs, imagens), escolhe uma skill ou um
 
 **Modelo, esforço e consumo.** Ao lado de Enviar ficam o modo, o modelo e o **esforço** (mais esforço, respostas mais cuidadosas e mais lentas, com mais consumo). Abaixo, o uso da janela de 5 horas da assinatura.
 
-**Conversas.** O histórico, no alto do painel, reabre conversas anteriores (com busca); a nova conversa começa outra. As conversas ficam guardadas na apresentação.
+**Conversas.** O histórico, no alto do painel, reabre conversas anteriores (com busca); a nova conversa começa outra. Em cada conversa do histórico, a estrela a favorita (as favoritas aparecem primeiro e nunca saem do limite de 40) e o lápis a renomeia (Enter guarda, Esc cancela). As conversas ficam guardadas na apresentação.
 
 **Parar.** Enquanto o assistente trabalha, **Parar** interrompe o pedido; as mudanças que ele já aplicou ficam e se desfazem com ⌘Z.
 
 ## 8. Perguntas interativas
 
-**Inserir → Pergunta interativa** transforma o slide numa pergunta ao vivo: **múltipla escolha**, **nuvem de palavras** ou **resposta aberta**. No HTML exportado, você desbloqueia a pergunta com a sua chave de apresentador, a plateia lê o QR code e responde pelo celular, e os resultados aparecem como barras, nuvem ou lista, com download em CSV.
+**Inserir → Pergunta interativa** transforma o slide numa pergunta ao vivo: **múltipla escolha**, **nuvem de palavras** ou **resposta aberta**. No HTML exportado, você desbloqueia a pergunta com a sua chave de apresentador, a plateia lê o QR code e responde pelo celular, e os resultados aparecem como barras, nuvem ou lista, com download em CSV. Ao reabrir o mesmo HTML no mesmo navegador, a última rodada de cada pergunta volta encerrada, com os resultados e o CSV (o servidor guarda as respostas por 30 dias); **Nova rodada** começa outra.
 
 As respostas passam por um servidor de perguntas que **você ou a sua instituição hospedam** (PHP e MySQL, com guia de instalação no [repositório](https://github.com/mgarlabx/edukors_slides_editor)). Informe o endereço em **Configurações → Perguntas interativas** e use **Testar conexão**. Sem servidor, a apresentação com perguntas não pode ser exportada em HTML: o diálogo de exportação mostra um aviso com o atalho para as configurações (PDF e PPTX continuam disponíveis).
 

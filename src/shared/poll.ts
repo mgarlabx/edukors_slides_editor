@@ -61,7 +61,7 @@ ${pollOptionColors.map((color,i)=>`.esf-poll .poll-option:nth-child(${i+1}){--po
 .esf-poll .poll-csv{width:40px;height:40px;padding:8px;margin-right:-8px;border-color:transparent;background:transparent;color:var(--muted,#657085)}.esf-poll .poll-csv:hover{color:var(--ink,#202535);border-color:#aab2c2}.esf-poll .poll-csv .poll-icon{width:22px;height:22px}.esf-poll .poll-csv[data-tip]::after{left:0;translate:0 4px}.esf-poll .poll-csv[data-tip]:is(:hover,:focus-visible)::after{translate:0 0}
 .esf-poll .poll-icon-button{display:grid;place-items:center;padding:12px;width:54px;height:54px;flex:none}.poll-icon{display:block;width:28px;height:28px}.esf-poll .poll-lock{border-radius:50%;color:var(--ink,#202535)}.esf-poll .poll-code .poll-lock{position:absolute;left:50%;top:50%;translate:-50% -50%;width:132px;height:132px;border:none;background:var(--paper,#fff);box-shadow:0 10px 30px #20253540}.poll-code .poll-lock .poll-icon{width:64px;height:64px}.esf-poll .poll-lock[aria-pressed=true]{color:var(--accent,#5265e8);border-color:var(--accent,#5265e8);background:var(--paper,#fff)}.poll-lock[aria-pressed=false] .poll-lock-open,.poll-lock[aria-pressed=true] .poll-lock-closed,[data-poll=list][aria-pressed=false] .poll-mode-cloud,[data-poll=list][aria-pressed=true] .poll-mode-list{display:none}.esf-poll .poll-lock:disabled{opacity:.7;cursor:default}
 .esf-poll [data-tip]{position:relative}.esf-poll [data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 10px);left:50%;translate:-50% 4px;z-index:10;white-space:nowrap;padding:8px 14px;border-radius:8px;background:#202535;color:#fff;font-size:19px;font-weight:600;line-height:1.2;box-shadow:0 6px 18px #20253533;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .12s,translate .12s,visibility .12s}.esf-poll [data-tip]:is(:hover,:focus-visible)::after{opacity:1;visibility:visible;translate:-50% 0;transition-delay:.3s}.esf-poll .poll-code .poll-lock::after{bottom:auto;top:calc(100% + 12px)}
-.poll-cloud{display:flex;align-items:center;justify-content:center;align-content:center;flex-wrap:wrap;gap:16px 25px;min-height:300px}.poll-word{color:var(--accent,#5265e8);line-height:1.2;overflow-wrap:anywhere;max-width:100%}.poll-comments{display:flex;flex-direction:column;gap:15px}.poll-comment{font-size:27px;line-height:1.35;padding:18px 22px;border-radius:12px;background:#8491a414;white-space:pre-wrap;overflow-wrap:anywhere}.poll-frequency{font-size:25px;padding:8px 0;border-bottom:1px solid #8491a433}.poll-empty{font-size:28px;padding:50px 10px}.poll-static .poll-footer,.poll-static .poll-error{display:none}.poll-static{pointer-events:none}
+.esf-poll[data-type=tag][data-view=results] .poll-results{display:flex;flex-direction:column;gap:8px;height:100%}.poll-cloud{position:relative;flex:1;min-height:300px;overflow:hidden}.poll-cloud-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}.poll-cloud-svg text{font-family:inherit}@media (prefers-reduced-motion:no-preference){.poll-cloud-svg text{animation:poll-pop .6s ease-out both}}@keyframes poll-pop{from{opacity:0}}.poll-comments{display:flex;flex-direction:column;gap:15px}.poll-comment{font-size:27px;line-height:1.35;padding:18px 22px;border-radius:12px;background:#8491a414;white-space:pre-wrap;overflow-wrap:anywhere}.poll-frequency{font-size:25px;padding:8px 0;border-bottom:1px solid #8491a433}.poll-empty{font-size:28px;padding:50px 10px}.poll-static .poll-footer,.poll-static .poll-error{display:none}.poll-static{pointer-events:none}
 `;
 
 export function pollMarkup(p:PollConfig,w:PollWords,staticMode:boolean){
@@ -116,9 +116,38 @@ export function pollViewRuntime(config:any,w:PollWords){
         if(share>=25)fill.append(label);else label.classList.add('poll-bar-out');bar.replaceChildren(fill,...share>=25?[]:[label]);bar.setAttribute('aria-label',`${'ABCDE'[i]}: ${count} (${Math.round(share)}%)`);});
     }else if(config.poll.type==='tag'){
       result.append(node('div','poll-limit',w.limit));
-      const cloud=node('div',frequencies?'':'poll-cloud'),max=Math.max(1,...s.rows.map((r:any)=>r.responses));
-      for(const r of s.rows){const word=node('span',frequencies?'poll-frequency':'poll-word',frequencies?`${r.response} — ${r.responses}`:r.response);if(frequencies)word.style.display='block';else{word.style.fontSize=(22+58*Math.sqrt(r.responses/max))+'px';word.title=r.response+' — '+r.responses;word.setAttribute('aria-label',word.title);}cloud.append(word);}result.append(cloud);if(!s.rows.length)result.append(node('div','poll-empty',w.empty));
+      if(frequencies){const list=node('div','');for(const r of s.rows)list.append(node('div','poll-frequency',`${r.response} — ${r.responses}`));result.append(list);}
+      else if(s.rows.length){const cloud=node('div','poll-cloud');result.append(cloud);layoutCloud(cloud,s.rows);}
+      if(!s.rows.length)result.append(node('div','poll-empty',w.empty));
     }else{result.append(node('div','poll-limit',s.rows.length+' '+w.comments));const comments=node('div','poll-comments');for(const r of s.rows)comments.append(node('div','poll-comment',r.response));result.append(comments);if(!s.rows.length)result.append(node('div','poll-empty',w.empty));}
+  }
+  // Word cloud: the most frequent term in the middle, the others along a spiral, packed by their glyph boxes
+  // (measured on a canvas), some turned upright, each in a color of the palette. Positions depend only on the
+  // words, so refreshing keeps the same picture.
+  function layoutCloud(cloud:HTMLElement,rows:{response:string;responses:number}[]){
+    const palette=['#3d5a1e','#6b8e23','#8a6d1f','#5a3e1b','#2e6b4f','#a07d2a','#7a9a2e','#4b2e14','#567d32','#b08a3e'];
+    const hash=(t:string)=>{let h=2166136261;for(let i=0;i<t.length;i++)h=Math.imul(h^t.charCodeAt(i),16777619);return h>>>0;};
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),family=getComputedStyle(cloud).fontFamily,pen=document.createElement('canvas').getContext('2d')!;
+    const max=Math.max(...rows.map(r=>r.responses)),W=cloud.clientWidth||1400,H=cloud.clientHeight||560,aspect=W/H,placed:number[][]=[],gap=5;
+    const hits=(x:number,y:number,w:number,h:number)=>placed.some(([a,b,c,d])=>x<a+c+gap&&a<x+w+gap&&y<b+d+gap&&b<y+h+gap);
+    rows.forEach((r,i)=>{
+      const share=r.responses/max,size=Math.round(26+134*Math.pow(share,.8)),weight=share>.35?800:700,seed=hash(r.response);
+      pen.font=`${weight} ${size}px ${family}`;const m=pen.measureText(r.response),L=m.actualBoundingBoxLeft,R=m.actualBoundingBoxRight,A=m.actualBoundingBoxAscent,D=m.actualBoundingBoxDescent;
+      const up=i>0&&r.response.length<=14&&seed%10<3,w=up?A+D:L+R,h=up?L+R:A+D,turn=(seed%628)/100;let x=-w/2,y=-h/2;
+      // Archimedean spiral stretched to the shape of the area; each word starts at its own angle.
+      for(let t=0;t<20000&&placed.length&&hits(x,y,w,h);t++){const a=turn+t*.05,d=1.1*t*.05;x=d*Math.cos(a)*Math.sqrt(aspect)-w/2;y=d*Math.sin(a)/Math.sqrt(aspect)-h/2;}
+      placed.push([x,y,w,h]);
+      // The text origin (start of the baseline) inside the box: upright words read from bottom to top.
+      const ox=up?x+A:x+L,oy=up?y+R:y+A,text=document.createElementNS(ns,'text'),title=document.createElementNS(ns,'title');
+      text.setAttribute('x','0');text.setAttribute('y','0');text.setAttribute('transform',`translate(${ox.toFixed(1)} ${oy.toFixed(1)})${up?' rotate(-90)':''}`);
+      Object.assign(text.style,{fontSize:size+'px',fontWeight:String(weight),fill:palette[i%palette.length],animationDelay:Math.min(i*35,1200)+'ms'});
+      text.textContent=r.response;title.textContent=r.response+' — '+r.responses;text.prepend(title);svg.append(text);
+    });
+    const left=Math.min(...placed.map(p=>p[0])),top=Math.min(...placed.map(p=>p[1])),right=Math.max(...placed.map(p=>p[0]+p[2])),bottom=Math.max(...placed.map(p=>p[1]+p[3]));
+    // Few words would grow huge: the drawing never gets more than 1.3 times its natural size.
+    const k=Math.min(W/(right-left),H/(bottom-top),1.3),vw=W/k,vh=H/k,cx=(left+right)/2,cy=(top+bottom)/2;
+    svg.setAttribute('viewBox',`${(cx-vw/2).toFixed(1)} ${(cy-vh/2).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`);svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+    svg.setAttribute('role','img');svg.setAttribute('aria-label',rows.map(r=>r.response+' — '+r.responses).join(', '));svg.classList.add('poll-cloud-svg');cloud.append(svg);
   }
   let copiedTimer:any=0;
   addEventListener('message',e=>{const m=e.data;if(e.source!==parent||m?.app!=='esf-player'||m.token!==config.token)return;
@@ -128,14 +157,20 @@ export function pollViewRuntime(config:any,w:PollWords){
 
 export interface PollSession {token:string;expiresAt:number}
 // Kept by the player (localStorage); the controller never sees storage or the DOM. The key itself is never stored.
-export interface PollSessionStore {load():PollSession|null;save(v:PollSession):void;clear():void;askKey(reason:'new'|'invalid'|'expired'):Promise<string|null>}
+// room/keepRoom remember the last round of each question in this browser (code and link only, never answers), so a
+// reopened presentation can still show its results and CSV.
+export interface PollSessionStore {load():PollSession|null;save(v:PollSession):void;clear():void;askKey(reason:'new'|'invalid'|'expired'):Promise<string|null>;room?(i:number):{room:string;url:string}|null;keepRoom?(i:number,v:{room:string;url:string}|null):void}
 
 // Self contained: passed to playerRuntime as a function, never evaluated in slide frames.
 export function createPollController(configs:(PollConfig|undefined)[],emit:(i:number,s:any)=>void,qr:(url:string)=>string,fetcher:typeof fetch|undefined,settings:{endpoint:string;interval?:number;timeout?:number},session:PollSessionStore){
   const endpoint=settings.endpoint,origin=endpoint?new URL(endpoint).origin:'',doFetch=fetcher||fetch;
   const states:any[]=configs.map(()=>null);let active=-1,hidden=false,disposed=false,signingIn:Promise<string|null>|null=null;
   const fresh=()=>({room:'',phase:'ready',count:0,rows:[],view:'question',prepared:false,mayBeOpen:false,busy:false,error:false,stale:false,updated:0,url:'',qr:'',attempt:0,timer:0,reading:false,failures:0,retry:'start'});
-  function state(i:number){return states[i]||(states[i]=fresh());}
+  function state(i:number){if(states[i])return states[i];const s=states[i]=fresh();
+    // A round from an earlier opening comes back closed; the first look at it confirms that with the server.
+    try{const v=session.room?.(i);if(v&&configs[i]){const room=roomData(v);Object.assign(s,{room:room.room,url:room.url,prepared:true,phase:'closed',retry:'results',restored:true});}}catch{session.keepRoom?.(i,null);}
+    return s;}
+  function forget(i:number){session.keepRoom?.(i,null);stop(state(i));states[i]=fresh();}
   function publish(i:number){const s=state(i);emit(i,{noServer:!endpoint,phase:s.phase,count:s.count,rows:s.rows,view:s.view,prepared:s.prepared,mayBeOpen:s.mayBeOpen,busy:s.busy,error:s.error,stale:s.stale,updated:s.updated,url:s.url,qr:s.qr});}
   function stop(s:any){clearTimeout(s.timer);s.timer=0;}
   const failure=(message:string,status=0)=>Object.assign(Error(message),{status});
@@ -175,37 +210,40 @@ export function createPollController(configs:(PollConfig|undefined)[],emit:(i:nu
   function roomData(v:any){if(!v||typeof v.room!=='string'||!/^[A-Z0-9]{6}$/.test(v.room)||typeof v.url!=='string')throw Error('Invalid room');const u=new URL(v.url);if(u.origin!==origin||!/^https?:$/.test(u.protocol))throw Error('Invalid link');return{room:v.room,url:u.href};}
   function schedule(i:number){const s=state(i);stop(s);if(disposed||hidden||active!==i||!s.mayBeOpen||s.busy||s.phase==='unknown')return;s.timer=setTimeout(()=>void read(i),Math.min(30000,(settings.interval??2000)*2**Math.min(4,s.failures)));}
   async function read(i:number){const s=state(i);if(s.reading||s.busy||!s.prepared)return;const attempt=s.attempt;s.reading=true;
-    try{const v=countData(await request(s,'count',{},false));if(states[i]!==s||attempt!==s.attempt||s.busy)return;s.count=v.count;s.updated=Date.now();s.stale=false;s.failures=0;s.mayBeOpen=v.open;s.phase=v.open?'open':'closed';s.error=false;}
-    catch{if(states[i]===s&&attempt===s.attempt&&!s.busy){s.stale=true;s.failures++;}}
+    try{const v=countData(await request(s,'count',{},false));if(states[i]!==s||attempt!==s.attempt||s.busy)return;s.count=v.count;s.updated=Date.now();s.stale=false;s.failures=0;s.mayBeOpen=v.open;s.phase=v.open?'open':'closed';s.error=false;if(v.open&&!s.qr&&s.url)s.qr=qr(s.url);}
+    catch(e:any){if(states[i]===s&&e?.status===404&&s.restored){forget(i);publish(i);}else if(states[i]===s&&attempt===s.attempt&&!s.busy){s.stale=true;s.failures++;}}
     finally{s.reading=false;if(states[i]===s){publish(i);schedule(i);}}
   }
   async function action(i:number,op:string){if(disposed||!configs[i])return;let s=state(i);if(s.busy)return;
     if(!endpoint){s.error=true;publish(i);return;}
     if(op==='retry')op=s.retry;
     // The confirmation already says a new code is coming, so the new round opens right away.
-    if(op==='again'){if(s.mayBeOpen||!s.prepared)return;stop(s);states[i]=fresh();publish(i);return action(i,'start');}
+    if(op==='again'){if(s.mayBeOpen||!s.prepared)return;forget(i);publish(i);return action(i,'start');}
     if(!['start','stop','results','refresh'].includes(op))return;
     if(op==='start'&&s.prepared||op!=='start'&&!s.prepared)return;
     if((op==='results'||op==='refresh')&&s.mayBeOpen)return;
     stop(s);s.attempt++;s.busy=true;s.error=false;s.retry=op;s.phase=op==='start'?'preparing':op==='stop'?'closing':'loading';publish(i);
     try{
       if(op==='start'){
-        const p=configs[i]!,room=roomData(await request(s,'prepare',{type:p.type,meta:p.type==='quiz'?p.options!.length:0}));s.room=room.room;s.prepared=true;s.mayBeOpen=true;
+        const p=configs[i]!,room=roomData(await request(s,'prepare',{type:p.type,meta:p.type==='quiz'?p.options!.length:0}));s.room=room.room;s.prepared=true;s.mayBeOpen=true;session.keepRoom?.(i,room);
         // Once open is attempted, a timeout must be treated as potentially open, never as safe to replace.
         s.retry='stop';await request(s,'open');const v=countData(await request(s,'count'));s.count=v.count;s.mayBeOpen=v.open;if(!v.open)throw Error('Not open');
         s.url=room.url;s.qr=qr(s.url);s.phase='open';s.updated=Date.now();
       }else if(op==='stop'){
         s.mayBeOpen=true;await request(s,'close');const v=countData(await request(s,'count'));s.count=v.count;s.mayBeOpen=v.open;if(v.open)throw Error('Still open');s.phase='closed';s.updated=Date.now();
       }else{
-        const v=countData(await request(s,'count'));s.count=v.count;s.mayBeOpen=v.open;if(v.open)throw Error('Still open');s.rows=rowsData(await request(s,'results'),configs[i]!);s.view='results';s.phase='results';s.updated=Date.now();
+        const v=countData(await request(s,'count'));s.count=v.count;s.mayBeOpen=v.open;if(v.open){if(s.url&&!s.qr)s.qr=qr(s.url);throw Error('Still open');}s.rows=rowsData(await request(s,'results'),configs[i]!);s.view='results';s.phase='results';s.updated=Date.now();
       }
       s.stale=false;s.failures=0;
     }catch(e:any){
       // Closing the key dialog before anything exists is not a failure: the activity is simply still ready.
       if(e?.message==='cancelled'&&!s.prepared){s.phase='ready';s.retry='start';}
+      // The server no longer has a remembered room (kept 30 days) or it belongs to another key: start over.
+      else if(e?.status===404&&s.restored){forget(i);}
+      else if(e?.message==='cancelled'&&s.restored){s.phase='closed';}
       else{s.error=true;s.stale=true;s.phase=s.mayBeOpen?'unknown':s.prepared?'closed':'ready';}
     }
-    finally{s.busy=false;publish(i);schedule(i);if(op==='start'&&active!==i&&s.mayBeOpen)void action(i,'stop');}
+    finally{s.busy=false;if(states[i]!==s){publish(i);return;}publish(i);schedule(i);if(op==='start'&&active!==i&&s.mayBeOpen)void action(i,'stop');}
   }
   // Every answer of the room as CSV (UTF-8 with BOM for spreadsheets). Cells that a spreadsheet would run as a
   // formula are prefixed with an apostrophe, since the answers come from the audience.
@@ -219,7 +257,7 @@ export function createPollController(configs:(PollConfig|undefined)[],emit:(i:nu
     const stamp=new Date().toISOString().slice(0,16).replace(/[-:]/g,'').replace('T','-');
     return{name:`responses-${s.room}-${stamp}.csv`,text:'\ufeff'+[head,...lines].map(l=>l.map(cell).join(',')).join('\r\n')+'\r\n'};
   }
-  return{action,publish,csv,link(i:number){const s=states[i];return configs[i]&&s?.mayBeOpen&&s.url?s.url:'';},activate(i:number){if(active>=0&&states[active])stop(state(active));active=i;if(configs[i]){publish(i);schedule(i);}},needsClose(i:number){return !!configs[i]&&!!states[i]&&(state(i).mayBeOpen||state(i).busy);},
+  return{action,publish,csv,link(i:number){const s=states[i];return configs[i]&&s?.mayBeOpen&&s.url?s.url:'';},activate(i:number){if(active>=0&&states[active])stop(state(active));active=i;if(configs[i]){const s=state(i);publish(i);schedule(i);if(s.restored&&!s.updated&&saved())void read(i);}},needsClose(i:number){return !!configs[i]&&!!states[i]&&(state(i).mayBeOpen||state(i).busy);},
     async leave(i:number){if(!configs[i]||!states[i])return true;const s=state(i);if(s.busy)return false;if(s.mayBeOpen)await action(i,'stop');return !s.mayBeOpen&&!s.busy;},
     visibility(value:boolean){hidden=value;if(active>=0&&configs[active]){stop(state(active));if(!hidden)void read(active);}},dispose(){disposed=true;for(const s of states)if(s)stop(s);}};
 }

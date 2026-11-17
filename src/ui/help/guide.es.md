@@ -114,13 +114,13 @@ El **+** del campo adjunta archivos (textos, PDF, imágenes), elige una skill o 
 
 **Modelo, esfuerzo y consumo.** Junto a Enviar están el modo, el modelo y el **esfuerzo** (más esfuerzo, respuestas más cuidadosas y lentas, con más consumo). Debajo, el uso de la ventana de 5 horas de la suscripción.
 
-**Conversaciones.** El historial, arriba del panel, reabre conversaciones anteriores (con búsqueda); una nueva conversación empieza otra. Las conversaciones quedan guardadas en la presentación.
+**Conversaciones.** El historial, arriba del panel, reabre conversaciones anteriores (con búsqueda); una nueva conversación empieza otra. En cada conversación del historial, la estrella la marca como favorita (las favoritas aparecen primero y siempre se conservan dentro del límite de 40) y el lápiz le cambia el nombre (Enter guarda, Esc cancela). Las conversaciones quedan guardadas en la presentación.
 
 **Detener.** Mientras el asistente trabaja, **Detener** interrumpe el pedido; los cambios que ya aplicó se quedan y se deshacen con ⌘Z.
 
 ## 8. Preguntas interactivas
 
-**Insertar → Pregunta interactiva** convierte la diapositiva en una pregunta en vivo: **opción múltiple**, **nube de palabras** o **respuesta abierta**. En el HTML exportado, usted desbloquea la pregunta con su clave de presentador, el público escanea el código QR y responde con el móvil, y los resultados aparecen como barras, nube o lista, con descarga en CSV.
+**Insertar → Pregunta interactiva** convierte la diapositiva en una pregunta en vivo: **opción múltiple**, **nube de palabras** o **respuesta abierta**. En el HTML exportado, usted desbloquea la pregunta con su clave de presentador, el público escanea el código QR y responde con el móvil, y los resultados aparecen como barras, nube o lista, con descarga en CSV. Al reabrir el mismo HTML en el mismo navegador, la última ronda de cada pregunta vuelve cerrada, con sus resultados y el CSV (el servidor guarda las respuestas durante 30 días); **Nueva ronda** inicia otra.
 
 Las respuestas pasan por un servidor de preguntas que **usted o su institución alojan** (PHP y MySQL, con guía de instalación en el [repositorio](https://github.com/mgarlabx/edukors_slides_editor)). Indique su dirección en **Configuración → Preguntas interactivas** y use **Probar conexión**. Sin servidor, la presentación con preguntas no se puede exportar a HTML: el diálogo de exportación muestra un aviso con el acceso a la configuración (PDF y PPTX siguen disponibles).
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.11.17
+
+- **Word cloud** (exported HTML): the answers form a packed cloud, the most frequent term in the middle, others around it in several colors, some upright; refreshing keeps the same picture.
+- **Results after reopening** (exported HTML): reopening the same file in the same browser brings back the last round of each question as closed, with its results and CSV download (the server keeps answers for 30 days). New round starts another.
+- **Assistant conversations:** mark conversations as favorites (listed first, always kept) and rename them, from the history.
+- **Updates inside the app:** on macOS, Windows and Linux AppImages a new version downloads in the background and the app offers to restart into it; the .deb gets a direct link to its installer.
+- **Slide captures** (PDF, editable PPTX backgrounds, the assistant's `view_slide` and `capture_page`) stay 1600 × 900 on screens smaller than that.
+
 ## 26.11.11
 
 - **Tables:** Insert → Table. Click selects the table, a second click edits a cell; Tab/⇧Tab move between cells, ⇧+click or a drag selects a range. Add, remove, merge and split rows and columns, drag column and row borders, select and distribute rows and columns, cell fill, borders (or no borders) and table shadow. Formatting applies to every selected cell, or to the whole table.

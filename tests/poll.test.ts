@@ -128,3 +128,28 @@ test('invalid counts/results are rejected and tag/post preserve service semantic
 test('overlapping commands cannot prepare twice or reset an open room',async()=>{
   const api=service();let release!:()=>void;api.delay(new Promise<void>(r=>release=r));const c=controller(api,store());c.activate(0);const first=c.action(0,'start');await c.action(0,'start');assert.equal(api.calls.length,1);assert.equal(await c.leave(0),false);release();await first;api.delay();await c.action(0,'start');assert.equal(api.calls.filter(x=>x.proc==='prepare').length,1);c.dispose();
 });
+test('reopening: the last round of each question comes back closed, with results and CSV',async()=>{
+  const api=service(),session=store([KEY,KEY]),kept=new Map<number,any>();
+  Object.assign(session.s,{room:(i:number)=>kept.get(i)||null,keepRoom:(i:number,v:any)=>v?kept.set(i,v):kept.delete(i)});
+  const c=controller(api,session);c.activate(0);await c.action(0,'start');await c.action(0,'stop');const first=kept.get(0);
+  assert.match(first.room,/^R\d{5}$/);assert.equal(first.url,`${server}/r/?room=${first.room}`);assert.deepEqual(Object.keys(first).sort(),['room','url'],'only the code and link');
+  api.rooms.get(first.room).rows=[{response:1,responses:4}];c.dispose();
+  // Reopened with a live session: confirmed closed in the background, results without a new key.
+  let s:any;const c2=controller(api,session,(_,v)=>s=v);c2.activate(0);
+  assert.equal(s.phase,'closed');assert.equal(s.prepared,true);assert.equal(s.mayBeOpen,false);
+  await new Promise(r=>setTimeout(r,20));assert.equal(api.calls.at(-1).proc,'count');assert.equal(api.calls.at(-1).room,first.room);
+  await c2.action(0,'results');assert.equal(s.view,'results');assert.deepEqual(s.rows,[{response:1,responses:4}]);assert.ok(await c2.csv(0,{csvTime:'t',csvOption:'o',csvText:'x'}));
+  // New round: the old room is forgotten and the new one remembered.
+  await c2.action(0,'again');assert.notEqual(kept.get(0).room,first.room);await c2.action(0,'stop');c2.dispose();
+  // A cancelled key dialog keeps a remembered round closed, without an error.
+  const no=store([null]);Object.assign(no.s,{room:session.s.room,keepRoom:session.s.keepRoom});let s3:any;const c3=controller(api,no,(_,v)=>s3=v);c3.activate(0);
+  await c3.action(0,'results');assert.equal(s3.phase,'closed');assert.equal(s3.error,false);assert.equal(s3.prepared,true);c3.dispose();
+  // A remembered room the server no longer has (rooms last 30 days) starts over.
+  api.rooms.delete(kept.get(0).room);const q=store([KEY]);Object.assign(q.s,{room:session.s.room,keepRoom:session.s.keepRoom});
+  const c4=controller(api,q,(_,v)=>s3=v);c4.activate(0);assert.equal(s3.phase,'closed');await c4.action(0,'results');
+  assert.equal(s3.phase,'ready');assert.equal(s3.prepared,false);assert.equal(kept.has(0),false);c4.dispose();
+  // A round left open (the page was closed while collecting) comes back live, with its QR code.
+  const c5=controller(api,session);c5.activate(0);await c5.action(0,'start');c5.dispose();let s6:any;
+  const c6=controller(api,session,(_,v)=>s6=v);c6.activate(0);await new Promise(r=>setTimeout(r,20));
+  assert.equal(s6.phase,'open');assert.equal(s6.mayBeOpen,true);assert.equal(s6.qr,'<svg/>');assert.equal(c6.needsClose(0),true);await c6.action(0,'stop');assert.equal(s6.phase,'closed');c6.dispose();
+});

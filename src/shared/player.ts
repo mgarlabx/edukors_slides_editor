@@ -60,11 +60,15 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
   let cur=0,step=0,total=0,token='',ready=false,queued=0,front=0;
   // Presenter sign-in for interactive questions: the server returns a 12-hour token, kept per server in this
   // browser. The key typed in the dialog is sent once and never stored.
-  const PW=data.pollWords,pollKey='esf-poll-session:v1:'+data.pollEndpoint,keyDialog=$('poll-key');
+  const PW=data.pollWords,pollKey='esf-poll-session:v1:'+data.pollEndpoint,roomKey=(i:number)=>'esf-poll-room:v1:'+data.pollEndpoint+':'+data.id+':'+data.slides[i].id,keyDialog=$('poll-key');
   const pollSession={
     load(){try{const v=JSON.parse(localStorage.getItem(pollKey)||'null');return v&&v.format==='esf-poll-session'&&v.version===1&&typeof v.token==='string'&&/^[0-9a-f]{64}$/.test(v.token)&&Number.isFinite(v.expiresAt)?{token:v.token,expiresAt:v.expiresAt}:null;}catch{return null;}},
     save(v:any){try{localStorage.setItem(pollKey,JSON.stringify({format:'esf-poll-session',version:1,token:v.token,expiresAt:v.expiresAt}));}catch{}},
     clear(){try{localStorage.removeItem(pollKey);}catch{}},
+    // Last round of each question, per server, presentation and slide. The question itself is part of the record, so
+    // a question edited and exported again does not show the answers of the old one.
+    room(i:number){try{const s=data.slides[i],v=JSON.parse(localStorage.getItem(roomKey(i))||'null');return v&&v.format==='esf-poll-room'&&v.version===1&&v.poll===JSON.stringify(s.poll)&&typeof v.room==='string'&&typeof v.url==='string'?{room:v.room,url:v.url}:null;}catch{return null;}},
+    keepRoom(i:number,v:any){try{if(v)localStorage.setItem(roomKey(i),JSON.stringify({format:'esf-poll-room',version:1,room:v.room,url:v.url,poll:JSON.stringify(data.slides[i].poll),at:Date.now()}));else localStorage.removeItem(roomKey(i));}catch{}},
     askKey(reason:string){return new Promise<string|null>(resolve=>{
       const input=$('poll-key-input'),error=$('poll-key-error');input.value='';showKey(false);error.textContent=reason==='invalid'?PW.keyInvalid:reason==='expired'?PW.keyExpired:'';error.hidden=!error.textContent;
       const done=(value:string|null)=>{keyDialog.removeEventListener('close',closed);keyDialog.onsubmit=null;$('poll-key-cancel').onclick=null;if(keyDialog.open)keyDialog.close();window.focus();resolve(value);};

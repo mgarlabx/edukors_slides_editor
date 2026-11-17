@@ -114,13 +114,13 @@ The **+** in the field attaches files (texts, PDFs, images), picks a skill or an
 
 **Model, effort and usage.** Next to Send are the mode, the model and the **effort** (more effort, more careful and slower answers, using more of your plan). Below, the use of the plan's 5-hour window.
 
-**Conversations.** The history at the top of the panel reopens earlier conversations (with search); a new conversation starts another. Conversations are kept in the presentation.
+**Conversations.** The history at the top of the panel reopens earlier conversations (with search); a new conversation starts another. On each conversation in the history, the star makes it a favorite (favorites are listed first and are always kept within the limit of 40) and the pencil renames it (Enter keeps, Esc cancels). Conversations are kept in the presentation.
 
 **Stop.** While the assistant works, **Stop** ends the request; changes it already applied stay and are undone with ⌘Z.
 
 ## 8. Interactive questions
 
-**Insert → Interactive question** turns the slide into a live question: **multiple choice**, **word cloud** or **open answer**. In the exported HTML, you unlock the question with your presenter key, the audience scans the QR code and answers on their phones, and the results appear as bars, a cloud or a list, with a CSV download.
+**Insert → Interactive question** turns the slide into a live question: **multiple choice**, **word cloud** or **open answer**. In the exported HTML, you unlock the question with your presenter key, the audience scans the QR code and answers on their phones, and the results appear as bars, a cloud or a list, with a CSV download. When you reopen the same HTML in the same browser, the last round of each question comes back closed, with its results and CSV (the server keeps answers for 30 days); **New round** starts another.
 
 The answers go through a questions server that **you or your institution host** (PHP and MySQL, with an installation guide in the [repository](https://github.com/mgarlabx/edukors_slides_editor)). Enter its address in **Settings → Interactive questions** and use **Test connection**. Without a server, a presentation with questions cannot be exported to HTML: the export dialog shows a warning with a shortcut to the settings (PDF and PPTX remain available).
 
