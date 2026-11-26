@@ -11,7 +11,8 @@ export function applySlideChanges(deck:Deck,out:any):Deck|undefined{
     for(const slide of (out.slideUpdates||[]) as Partial<Slide>[]){
       if(!slide||typeof slide.id!=='string'||seen.has(slide.id))throw Error('Invalid or duplicate slide update.');
       // An existing slide takes only the fields sent (its interactive question is never the agent's); a new one starts from empty fields.
-      seen.add(slide.id);const existing=byId.get(slide.id);byId.set(slide.id,(existing?{...existing,...slide,...existing.poll?{poll:existing.poll}:{}}:{title:'',css:'',script:'',staticHtml:'',notes:'',...slide}) as Slide);
+      seen.add(slide.id);const existing=byId.get(slide.id);const merged=(existing?{...existing,...slide,...existing.poll?{poll:existing.poll}:{}}:{title:'',css:'',script:'',staticHtml:'',notes:'',...slide}) as Slide;
+      if((merged as any).transition===null)delete merged.transition;byId.set(slide.id,merged);
     }
     const ids:string[]=out.slideOrder||[...byId.keys()];
     if(!ids.length||ids.length>300||new Set(ids).size!==ids.length||ids.some(id=>!byId.has(id))||[...seen].some(id=>!ids.includes(id)))throw Error('Invalid slide order.');

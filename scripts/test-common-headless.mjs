@@ -67,6 +67,13 @@ try{
     await frame.locator('[contenteditable]').evaluate(el=>{const text=(li)=>document.createTreeWalker(li,NodeFilter.SHOW_TEXT).nextNode(),[a,b]=el.querySelectorAll('li'),r=document.createRange();r.setStart(text(a),1);r.setEnd(text(b),2);getSelection().removeAllRanges();getSelection().addRange(r);});
     await page.waitForTimeout(200);await bar.locator('[data-control="color"]').click();await page.locator('.pick-menu [aria-label*="#FF0000"]').click();await page.waitForTimeout(700);
     {const h=await html();assert.equal(h.split('data-field="b"')[0].match(/<li\b/g).length,2,'a color across items keeps them');assert.match(h,/One.*color: rgb\(255, 0, 0\)|color: (red|#ff0000|rgb\(255, 0, 0\))[^>]*>ne/,'the characters are colored');}
+    // A color typed as a code goes to the presentation's custom colors: in the color menus and in the saved file.
+    await bar.locator('[data-control="color"]').click();await page.locator('.pick-hex input').fill('#123456');await page.keyboard.press('Enter');await page.waitForTimeout(700);
+    await bar.locator('[data-control="color"]').click();await page.waitForTimeout(200);
+    assert.equal(await page.locator('.pick-menu [data-custom][aria-label="#123456"]').count(),1,'the typed color is among the custom colors');
+    assert.equal(await page.locator('.pick-menu .pick-heading').count(),1,'the custom colors have a heading');
+    await bar.locator('[data-control="color"]').click();await page.waitForTimeout(200);
+    assert.deepEqual(await page.evaluate(async()=>(await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.customColors),['#123456'],'the custom colors are saved in the file');
     await frame.locator('[contenteditable]').evaluate(el=>{const r=document.createRange();r.selectNodeContents(el.querySelectorAll('li')[1]);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);});
     await page.keyboard.press('Enter');await page.keyboard.type('Four');await page.keyboard.press('Escape');
     await page.waitForFunction(async()=>(await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html.match(/<li>/g)?.length===4);
@@ -184,6 +191,51 @@ try{
     assert.equal(shown,'e,w','a line resizes only from its ends');
     await page.locator('#context-toolbar [data-control=lineEnd]').click();await page.locator('.pick-menu [role=option][title="Seta"],.pick-menu [role=option][title="Arrow"]').first().click();
     await page.waitForFunction(async()=>/data-line-end="arrow"[^>]*>.*data-line-cap="end"/.test((await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck.slides[0].html));
+    await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator(F).waitFor();await page.waitForTimeout(500);
+  }
+  // Motion (26/11/2026): three buttons after the interactive question and before Settings; each one's bar takes the place
+  // of the format bar. Transition on the selected slides; entrance and exit on the selected objects (sequence, trigger,
+  // canvas preview); one undo step each.
+  {const previous=await page.evaluate(()=>EdukorsDocuments.active().id);
+    const box=(id,l)=>`<div data-manual="shape" data-shape="rect" id="${id}" style="position:absolute;left:${l}px;top:300px;width:200px;height:200px"><svg width="100%" height="100%"><rect data-shape-part="" width="100%" height="100%" style="fill:#4a6cf7"></rect></svg></div>`;
+    await page.evaluate(async html=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);
+      c.deck.slides[0].html=html;const next=EdukorsDocuments.add({name:'Motion'});EdukorsAppDocument.adopt(next,c);EdukorsDocuments.activate(next.id);},'<section class="slide">'+box('m1',200)+box('m2',700)+'</section>');
+    const F='#document-placeholder iframe:not(.preview-stale)',frame=()=>page.frameLocator(F),bar=page.locator('#context-toolbar');
+    const deckNow=()=>page.evaluate(async()=>(await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes)).deck);
+    const until=async(test,label)=>{for(let i=0;i<50;i++){if(test(await deckNow()))return;await page.waitForTimeout(100);}assert.fail(label);};
+    const attrs=(d,id)=>{const tag=d.slides[0].html.match(new RegExp(`<div[^>]*\\bid="${id}"[^>]*>`))?.[0]||'';return Object.fromEntries([...tag.matchAll(/(data-anim[\w-]*)="([^"]*)"/g)].map(m=>[m[1],m[2]]));};
+    const pick=async id=>{await frame().locator('html[data-esf-ready=true]').waitFor();const r=await frame().locator('#'+id).boundingBox();await page.mouse.click(r.x+r.width/2,r.y+r.height/2);await page.waitForTimeout(300);};
+    await frame().locator('html[data-esf-ready=true]').waitFor();await page.waitForTimeout(500);
+    assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll('.toolbar [data-command]')].map(b=>b.dataset.command).filter(c=>/^(insertPoll|slidesMotion-|settings)/.test(c))),['insertPoll','slidesMotion-transition','slidesMotion-in','slidesMotion-out','settings'],'motion buttons sit between the question and Settings');
+    await page.locator('[data-command="slidesMotion-transition"]').click();
+    assert.equal(await page.locator('[data-command="slidesMotion-transition"]').getAttribute('aria-pressed'),'true');
+    assert.equal(await bar.locator('[data-group=motion] [data-control^="motion-"]').count(),7,'seven transitions');
+    await bar.locator('[data-control="motion-split"]').click();
+    await until(d=>d.slides[0].transition?.type==='split'&&d.slides[0].transition.duration===700,'the slide takes the split transition');
+    await bar.locator('[data-control="motionDuration"]').fill('1,5');await bar.locator('[data-control="motionDuration"]').press('Enter');
+    await until(d=>d.slides[0].transition?.duration===1500,'the duration is set in seconds');
+    await page.locator('[data-command="slidesMotion-in"]').click();
+    assert.equal(await bar.locator('[data-group=motion] [data-control^="motion-"]').count(),9,'nine entrances');
+    assert.equal(await bar.locator('[data-control="motion-fade"]').getAttribute('aria-disabled'),'true','nothing selected: dimmed');
+    assert.equal(await bar.locator('.format-hint').count(),1);
+    await pick('m1');await bar.locator('[data-control="motion-zoom"]:not([aria-disabled])').click();
+    await until(d=>attrs(d,'m1')['data-anim-in']==='zoom'&&attrs(d,'m1')['data-anim-in-order']==='1','zoom entrance on the first object');
+    // The canvas shows the effect once (preview), then the object stays visible.
+    {let seen=false;for(let i=0;i<30&&!seen;i++){seen=await frame().locator('#m1').evaluate(el=>el.getAnimations().length>0).catch(()=>false);if(!seen)await page.waitForTimeout(50);}assert.ok(seen,'the chosen entrance plays on the canvas');}
+    await pick('m2');await bar.locator('[data-control="motion-up"]:not([aria-disabled])').click();
+    await until(d=>attrs(d,'m2')['data-anim-in-order']==='2','the second animation goes after the first');
+    await pick('m2');await bar.locator('[data-control="motionTrigger"]').click();await page.locator('.pick-menu [role=option]').nth(2).click();
+    await until(d=>attrs(d,'m2')['data-anim-in-trigger']==='after','trigger: after the previous');
+    await pick('m2');assert.match(await bar.locator('.motion-order-value').textContent(),/^2\/2$/);await bar.locator('[data-control="motionEarlier"]').click();
+    await until(d=>attrs(d,'m2')['data-anim-in-order']==='1'&&attrs(d,'m1')['data-anim-in-order']==='2','earlier in the sequence');
+    await page.locator('[data-command="slidesMotion-out"]').click();assert.equal(await page.locator('[data-command="slidesMotion-in"]').getAttribute('aria-pressed'),'false');
+    await pick('m1');await bar.locator('[data-control="motion-spin"]:not([aria-disabled])').click();
+    await until(d=>attrs(d,'m1')['data-anim-out']==='spin'&&attrs(d,'m1')['data-anim-out-order']==='3','spin exit, third in the sequence');
+    await page.locator('#edit-actions [data-command="undo"]').click();
+    await until(d=>!attrs(d,'m1')['data-anim-out']&&attrs(d,'m1')['data-anim-in']==='zoom','undo removes the exit only');
+    // Pressing the active button again gives the format bar back.
+    await page.locator('[data-command="slidesMotion-out"]').click();await pick('m1');
+    assert.equal(await bar.locator('[data-group=motion]').count(),0);assert.equal(await bar.locator('[data-control="arrangeMenu"]').count(),1);
     await page.evaluate(id=>EdukorsDocuments.activate(id),previous);await page.locator(F).waitFor();await page.waitForTimeout(500);
   }
   // Groups: align and distribute move a group as one object; a whole group selected turns around its common center.
@@ -478,6 +530,6 @@ try{
   }
   assert.deepEqual(errors,[]);
   await context.close();
-  console.log('Headless Common passed: gallery, canvas editing and formatting, slide list, undo/redo, keys, notes, slide master, layouts, questions and export rule, conversations, settings, Portuguese, Chinese and Hindi.');
+  console.log('Headless Common passed: gallery, canvas editing and formatting, transitions and animations, slide list, undo/redo, keys, notes, slide master, layouts, questions and export rule, conversations, settings, Portuguese, Chinese and Hindi.');
   await verifyImportedSave(browser,servers);
 }finally{await browser.close();servers.close();}

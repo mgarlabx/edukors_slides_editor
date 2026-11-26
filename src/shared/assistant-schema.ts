@@ -1,5 +1,7 @@
 const string={type:'string'};
-const slideFields=Object.fromEntries(['title','layoutId','html','css','script','staticHtml','notes'].map(k=>[k,string]));
+const slideFields={...Object.fromEntries(['title','layoutId','html','css','script','staticHtml','notes'].map(k=>[k,string])),
+  // Slide transition (when moving forward to this slide); null removes it.
+  transition:{anyOf:[{type:'null'},{type:'object',additionalProperties:false,properties:{type:{type:'string',enum:['fade','zoom','split','up','down','left','right']},duration:{type:'integer',minimum:100,maximum:10000,description:'Milliseconds.'}},required:['type','duration']}]}};
 export const applySchema={type:'object',additionalProperties:false,properties:{
   message:{type:'string',description:'Optional short summary of the change for the user.'},
   systemPrompt:{type:'string',maxLength:20000},

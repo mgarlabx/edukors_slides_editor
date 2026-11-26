@@ -35,7 +35,7 @@ When a new version comes out, the editor itself says so and offers its download 
 
 | Part | What it does |
 | --- | --- |
-| **Top bar** | File (new, open, recent, save, export, show in folder), **Present** and the switch between **Slides** and **Slide Master**, undo and redo, editing (cut, copy, paste, duplicate, delete), **Insert** (text, table, shape, line, image, link, interactive question), Settings and Help. On the right, the slide list (⌥⌘0) and the **AI assistant** (⇧⌘A). |
+| **Top bar** | File (new, open, recent, save, export, show in folder), **Present** and the switch between **Slides** and **Slide Master**, undo and redo, editing (cut, copy, paste, duplicate, delete), **Insert** (text, table, shape, line, image, link, interactive question), **Motion** (slide transition, entrance animation, exit animation), Settings and Help. On the right, the slide list (⌥⌘0) and the **AI assistant** (⇧⌘A). |
 | **Tabs** (just below) | One open presentation per tab. The dot on a tab means unsaved changes; **+** creates another presentation. |
 | **Format bar** | Font, size, color, bold, italic, underline, alignment, bulleted or numbered lists, line spacing, line, fill, shadow and crop for the object selected on the slide. Alignment, paragraph (lists and spacing), strikethrough/subscript/superscript and arrange are menus, so the bar fits in one row. |
 | **Slide list** (left) | The thumbnails, with a bar to create, move, duplicate, copy, cut, paste and delete slides. |
@@ -73,6 +73,7 @@ The slide works as in PowerPoint or Google Slides:
 - **Shapes and links.** The chosen shape lands on the slide with an adjustable line and fill. A link uses the copied address; its caption replaces the address on the slide, and the **QR code** option puts the code beside it.
 - **Tables.** **Insert → Table** opens a grid: hover to pick rows × columns and click (or use the arrows and Enter). The first row is the header. The first click selects the whole table (move, resize, rotate); click a cell to type in it; Tab and ⇧Tab go to the next and previous cell; ⇧+click selects the cells between the first one and the clicked one; dragging from one cell to another also selects those between. With a cell selected, the small bars above the columns and left of the rows select the whole column or row (⇧ extends). With several cells or the whole table selected, the format bar formats every cell (empty ones too, for what is typed later). Drag the inner borders to set the columns' width (the table keeps its width) and the rows' height. The format bar's **Table** menu selects the row or column, shares the height of the selected rows and the width of the selected columns equally, inserts and deletes rows and columns, merges and splits cells, turns the header row on or off and deletes the table; next to it are the cells' fill, their borders (width, style — including **No borders** — and color; for the selected cells or, with the whole table selected, all of them) and the table's shadow. Delete clears the text of the selected cells.
 - **Lines.** **Insert → Line** puts a line on the slide. Move it, set its length with the handles at its ends and turn it with the dot. In the format bar: color, width, style (solid, dashed, dotted) and its start and end (flat, arrow, open arrow, dot).
+- **Colors.** The color menus (text, border, line, fill) show the palette and, below it, **Custom colors**: the colors outside the palette already used in this presentation. Each file keeps its own list; on opening, it is completed with the text, border, line and background colors of the slides. A new color typed as a code (#RRGGBB) or picked with the eyedropper joins the list.
 - **Order and alignment.** A right click on an object offers **Bring to front**, **Send to back** and, for texts, horizontal and vertical alignment. With several objects selected, the menu also aligns and distributes them; a group counts as one object (its members keep their places within it).
 - **Group.** Select two or more objects and press ⌘G (or the **Group** button on the format bar, or a right click): the group moves and resizes as one object. A click on a member selects the group; another click goes into it (to edit a text, for instance). ⇧⌘G or **Ungroup** splits it again.
 - **Copy between slides and presentations.** Copied objects (⌘C) paste (⌘V) on another slide, even in another presentation, with the same look and animations.
@@ -80,6 +81,16 @@ The slide works as in PowerPoint or Google Slides:
 Each gesture is one undo step (⌘Z). Only Esc cancels a gesture in progress.
 
 **Slides in the list.** Click a thumbnail to go to that slide; ⇧ and ⌘ select several. With the list in focus, ⌫ deletes the selected slides, ⌘D duplicates them and ⌘C/⌘V copy them (to another presentation too, which gives them its own look). ⌘↑ and ⌘↓ change the order; Home and End go to the first and the last. The last area clicked decides: after clicking the slide, ⌫ and ⌘D act on objects, not on slides.
+
+### Transitions and animations
+
+The three buttons after **Insert** show the motion options in place of the format bar; click the button again to go back to formatting.
+
+- **Slide transition** applies to the slides selected in the list and plays when the presentation **moves forward** to them: Fade in, Zoom (expand), Split (expand) and Slide up, down, left or right. Clicking the chosen effect removes it. The duration is in seconds.
+- **Entrance animation** and **Exit animation** apply to the objects selected on the slide: Appear/Disappear, Fade in/out, Spin in/out, Dissolve in/out, Zoom (expand/contract) and Slide in four directions. A chosen effect plays once on the canvas. In a group, the animation applies to the whole group: its objects enter or leave together, as one (spinning and zooming around the group's center), taking a single place in the sequence.
+- The effect's **duration**, in seconds; its **order** in the slide's sequence (‹ › move it earlier or later, "2/3" shows its place); and how it **starts**: *On click* (a presenter click), *With previous* (together) or *After previous* (when the previous one ends). Effects before the first "On click" play by themselves when the slide enters.
+
+The click reveals the assistant already made (`data-step`) keep working and come first in the sequence. Transitions and animations show in **Present** and in the exported HTML; thumbnails, PDF and PPTX show the finished slide.
 
 ## 6. Slide Master: bases and layouts
 

@@ -5,8 +5,10 @@ import 'edukors-common-ux/src/format/list-markers.js';
 // Common's list markers: bullets and numbers take the look of their item's text (rule in every slide document, sync in the canvas).
 const listMarkers=(globalThis as any).EdukorsListMarkers as {sync:(root:Element)=>void;css:string};
 import {pollCss,pollMarkup,pollViewRuntime,pollWords} from './poll';
+import {motionRuntime} from './motion';
 
-function slideRuntime(config:{token:string;staticMode:boolean;steps:number;id:string;edit:boolean}){
+// wait: the player's stage frame, whose automatic animations start when its transition has ended ('play').
+function slideRuntime(config:{token:string;staticMode:boolean;steps:number;id:string;edit:boolean;wait?:boolean},makeMotion:typeof motionRuntime){
   const w=window as any;
   // Restore the original CSS declarations, including in older decks with animation:none!important.
   // CSSOM keeps nested rules and comma-separated queries intact. Impossible/always-true width
@@ -19,11 +21,15 @@ function slideRuntime(config:{token:string;staticMode:boolean;steps:number;id:st
     for(const sheet of [...document.styleSheets])visit(sheet.cssRules);
   }
   const root=document.querySelector('.slide') as HTMLElement;
-  const items=document.querySelector('.esf-poll')?[]:[...document.querySelectorAll('[data-step]')];
+  // Entrance and exit animations and data-step reveals (motion.ts): one step per click.
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches&&document.documentElement.dataset.esfMotion!=='full';
+  const motion=document.querySelector('.esf-poll')?null:makeMotion(root,{reduced}),total=motion?motion.clicks:0;
   // steps<0 opens the slide with every step revealed (going back from the next slide).
-  let step=config.staticMode||config.steps<0?items.length:Math.min(items.length,config.steps);
+  let step=config.staticMode||config.steps<0?total:Math.min(total,config.steps);
+  // auto: the effects that play by themselves when the slide has entered have played (or need not wait for 'play').
+  let auto=!(config.wait&&step===0);
   const send=(type:string,extra:any={})=>parent.postMessage({app:'esf-slide',token:config.token,id:config.id,type,...extra},'*');
-  const show=()=>items.forEach((el,i)=>el.classList.toggle('pending',i>=step));
+  const show=()=>{if(motion&&!config.staticMode)motion.apply(auto?step+1:0);};
   // Frames can run this before they have a size; a zero measure is skipped and the observer refits later.
   function fit(){const scale=Math.min(innerWidth/1600,innerHeight/900);if(root&&scale>0)root.style.transform=`translate(-50%,-50%) scale(${scale})`;}
   function report(e:any){send('error',{message:String(e?.message||e).slice(0,1000)});w.__slideError=String(e?.message||e);}
@@ -33,7 +39,10 @@ function slideRuntime(config:{token:string;staticMode:boolean;steps:number;id:st
   addEventListener('message',e=>{
     const m=e.data;
     if(e.source!==parent||m?.app!=='esf-player'||m.token!==config.token)return;
-    if(m.type==='step'){step=Math.max(0,Math.min(items.length,m.step));show();run('step',step);send('state',{step,total:items.length});}
+    if(m.type==='step'){const next=Math.max(0,Math.min(total,m.step));
+      if(motion&&!config.staticMode&&auto&&next===step+1){step=next;motion.playStep(step);}else{if(next>0)auto=true;step=next;show();}
+      run('step',step);send('state',{step,total});}
+    if(m.type==='play'&&!auto){auto=true;if(motion&&!config.staticMode){if(step===0)motion.playStep(0);else show();}}
     if(m.type==='dispose'){run('leave');run('dispose');}
   });
   // The editor canvas (edit mode) handles pointer and keys itself (editRuntime); slides never navigate there.
@@ -50,14 +59,17 @@ function slideRuntime(config:{token:string;staticMode:boolean;steps:number;id:st
   let startX:number|null=null;
   addEventListener('touchstart',e=>{if(!(e.target as Element)?.closest('a,button,input,[data-interactive]'))startX=e.touches[0].clientX;},{passive:true});
   addEventListener('touchend',e=>{if(startX!==null){const delta=e.changedTouches[0].clientX-startX;if(Math.abs(delta)>70)send('navigate',{direction:delta<0?1:-1});startX=null;}},{passive:true});}
+  // Editor: the effect chosen in the motion bar plays once on its object (canvas preview).
+  if(config.edit)addEventListener('message',e=>{const m=e.data;if(e.source!==parent||m?.app!=='esf-editor-command'||m.type!=='motionPreview'||!motion)return;
+    const els=(Array.isArray(m.indices)?m.indices:[m.index]).map((i:unknown)=>document.querySelector<HTMLElement>(`[data-esf-edit="${Number(i)}"]`)).filter((el:HTMLElement|null):el is HTMLElement=>!!el);if(els.length)motion.preview(els,m.phase==='out'?'out':'in',String(m.effect),Math.min(10000,Math.max(1,Number(m.duration)||500)));});
   addEventListener('resize',fit);new ResizeObserver(fit).observe(document.documentElement);
   show();fit();
   Promise.all([document.fonts.ready,...[...document.images].filter(im=>im.hasAttribute('src')).map(im=>im.decode().catch(()=>report('Image could not be decoded.')))])
     .then(async()=>{
       await run('mount',root);
-      if(config.staticMode){await run('renderStatic',root);items.forEach(el=>el.classList.remove('pending'));}
+      if(config.staticMode){await run('renderStatic',root);document.querySelectorAll('[data-step]').forEach(el=>el.classList.remove('pending'));}
       else {await run('enter',root);run('step',step);}
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{w.__slideReady=true;document.documentElement.dataset.esfReady='true';dispatchEvent(new Event('esf-slide-ready'));send('ready',{total:items.length,step});}));
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{w.__slideReady=true;document.documentElement.dataset.esfReady='true';dispatchEvent(new Event('esf-slide-ready'));send('ready',{total,step});}));
     }).catch(report);
   addEventListener('pagehide',()=>{run('leave');run('dispose');});
 }
@@ -88,12 +100,12 @@ export function slideDocument(deck:Deck,slide:Slide,staticMode=false,token='',st
   const style=inlineAssets(master.css+'\n'+(deck.layouts.find(l=>l.id===slide.layoutId)?.css||'')+'\n'+slide.css,deck,inline).replace(/<\/style/gi,'<\\/style');
   const behavior=inlineAssets(slide.poll?'':min&&slide.script.trim()?min(slide.script):slide.script,deck,inline).replace(/<\/script/gi,'<\\/script');
   const config={token,staticMode,steps,id:slide.id,edit:!!edit,poll:slide.poll};
-  const runtime=(edit||!min?`(${slideRuntime.toString()})(${safeJson(config)});`+(slide.poll?`\n(${pollViewRuntime.toString()})(${safeJson(config)},${safeJson(pollWords[lang])});`:''):fill(min(`(${slideRuntime.toString()})(__ESF_CONFIG__);`+(slide.poll?`\n(${pollViewRuntime.toString()})(__ESF_CONFIG__,__ESF_WORDS__);`:'')),{__ESF_CONFIG__:safeJson(config),__ESF_WORDS__:safeJson(pollWords[lang])}))+(edit&&!slide.poll?`\n(${editRuntime.toString()})(${safeJson(edit)},(${alignMovement.toString()}),(${resizeImage.toString()}),(${boxStyle.toString()}),(${canvasGeometry.toString()})(),(${listMarkers.sync.toString()}));`:'');
+  const runtime=(edit||!min?`(${slideRuntime.toString()})(${safeJson(config)},${motionRuntime.toString()});`+(slide.poll?`\n(${pollViewRuntime.toString()})(${safeJson(config)},${safeJson(pollWords[lang])});`:''):fill(min(`(${slideRuntime.toString()})(__ESF_CONFIG__,${motionRuntime.toString()});`+(slide.poll?`\n(${pollViewRuntime.toString()})(__ESF_CONFIG__,__ESF_WORDS__);`:'')),{__ESF_CONFIG__:safeJson(config),__ESF_WORDS__:safeJson(pollWords[lang])}))+(edit&&!slide.poll?`\n(${editRuntime.toString()})(${safeJson(edit)},(${alignMovement.toString()}),(${resizeImage.toString()}),(${boxStyle.toString()}),(${canvasGeometry.toString()})(),(${listMarkers.sync.toString()}));`:'');
   const served=inline&&assetUrl?' esf-frame:':'';
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:${served}; font-src data:${served}; media-src data: blob:${served}; connect-src 'none'; base-uri 'none'; form-action 'none';"><style>${style}
 ${listMarkers.css}
 html,body{width:100%;height:100%;overflow:hidden}.slide{position:absolute;top:50%;left:50%;transform-origin:center;transform:translate(-50%,-50%)}
-.esf-master{position:absolute;inset:0;padding:inherit;z-index:-1;pointer-events:none}[data-manual=group]{display:contents}${edit?'':'.esf-master>*{pointer-events:auto}'}
+.esf-master{position:absolute;inset:0;padding:inherit;z-index:-1;pointer-events:none}[data-esf-hidden]{visibility:hidden!important}[data-manual=group]{display:contents}${edit?'':'.esf-master>*{pointer-events:auto}'}
 ${staticMode?'*{animation:none!important;transition:none!important}[data-step]{opacity:1!important;transform:none!important}':''}
 ${slide.poll?pollCss:''}
 </style></head><body>${html}<script>${behavior}\n</script><script>${runtime.replace(/<\/script/gi,'<\\/script')}</script></body></html>`;

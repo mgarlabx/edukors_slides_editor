@@ -14,6 +14,7 @@ import {applyEdits,editIndex,EditOp,SelectionDetails,ObjectStyle} from '../share
 import {insertManual,editableAt,safeUrl,setLinkUrl,setLinkCaption,setLinkQr,linkHasQr,ManualKind,shapeTypes,shapeLook,setShape,lineLook,setLine,setLinkStyle,linkLook,LinkStyle,setImageShadow,wrapShadow,setGroup} from '../shared/manual';
 import {tableAction,setCellFill,cellFillOf,tableSelection,tableActions,TableAction,setCellBorder,cellBorderOf,setTableShadow,tableShadowOf} from '../shared/table';
 import {PollConfig,pollWords} from '../shared/poll';
+import {transitionTypes,animTypes,setAnimation,animationsAt,appendAnimations,defaultTransitionDuration,defaultAnimDuration,clampDuration,AnimType,AnimTrigger,TransitionType} from '../shared/motion';
 import {encodeEslx,decodeEslx} from '../shared/eslx';
 import {setAssetUrl} from '../shared/render';
 import {importPptx} from '../shared/pptx-import';
@@ -63,7 +64,7 @@ interface Content {deck:Deck;history?:Uint8Array;conversations?:unknown[];import
 // The file's name is the presentation's title; resources no slide refers to are left out of the file.
 async function encode(doc:CommonDoc,name?:string){
   const tab=store.get(doc.id);if(!tab)throw Error('The presentation is not open.');
-  const deck={...tab.deck,title:name||tab.deck.title};
+  const deck={...tab.deck,title:name||tab.deck.title,customColors:fileColors(tab.deck)};
   return{bytes:await encodeEslx({...deck,assets:usedAssets(deck)},tab.history,conversationsOf(doc)),committed:{version:tab.version}};
 }
 common.EdukorsAppDocument={
@@ -71,7 +72,7 @@ common.EdukorsAppDocument={
   // Drafts are packed by the main process, so typing and dragging never wait for the compression of large images.
   async draftBytes(doc:CommonDoc){
     const tab=store.get(doc.id);if(!tab)throw Error('The presentation is not open.');
-    const deck={...tab.deck,assets:usedAssets(tab.deck)};
+    const deck={...tab.deck,assets:usedAssets(tab.deck),customColors:fileColors(tab.deck)};
     if(!desktop())return encodeEslx(deck,tab.history,conversationsOf(doc));
     // Each resource crosses to the main process once (the frames' registry); drafts then carry only their IDs.
     await registerAssets(deck,deck.assets);
@@ -91,19 +92,24 @@ common.EdukorsAppDocument={
     const native=files.get('.edukors/ai/common-conversations.json');
     return{deck:await loadLegacyDeck(manifest,read),history:files.get('.edukors/ai/conversations.json'),conversations:native?JSON.parse(decoder.decode(native)):[],imported:true};
   },
+  // Opening a file brings its custom colors up to date with the colors its slides use.
   adopt(doc:CommonDoc,content:Content){
-    store.add(doc.id,content.deck,{history:content.history,saved:!content.imported});
+    store.add(doc.id,{...content.deck,customColors:fileColors(content.deck)},{history:content.history,saved:!content.imported});
     common.EdukorsAiAssistant.restoreConversations(doc,content.conversations||[]);
     syncModified(doc.id);
   },
   selectAll:()=>command('selectAll')
 };
 let command:(name:string)=>void=()=>{};
+const deckText=(deck:Deck)=>[...deck.masters.flatMap(m=>[m.css,m.html]),...deck.layouts.flatMap(l=>[l.css||'',l.html]),...deck.slides.flatMap(s=>[s.css,s.html])].join('\n');
+// The presentation's custom colors: the saved list joined with the colors of text, borders, lines and backgrounds its
+// slides, layouts and masters use (Common's EdukorsFormat.colors).
+function fileColors(deck:Deck):string[]{const colors=common.EdukorsFormat?.colors;return colors?colors.merge(deck.customColors||[],colors.collect(deckText(deck))):deck.customColors||[];}
 // Fonts the imported slides name and only this computer has (Aptos inside Office, for example) go into the presentation,
 // so the editor, the exports and other computers show the original letters. Without the desktop bridge nothing changes.
 async function withLocalFonts(deck:Deck):Promise<Deck>{
   if(!desktop())return deck;
-  const text=[...deck.masters.flatMap(m=>[m.css,m.html]),...deck.layouts.flatMap(l=>[l.css||'',l.html]),...deck.slides.flatMap(s=>[s.css,s.html])].join('\n');
+  const text=deckText(deck);
   try{
     const found=await api.invoke('localFonts',text,deck.assets.map(a=>a.id)) as {assets:Asset[];rules:string};
     if(!found?.rules)return deck;
@@ -137,7 +143,7 @@ async function imageForModel(asset:Asset){
   }finally{URL.revokeObjectURL(url);}
 }
 common.EdukorsAiAssistant.configure({
-  instructions:'You are the assistant of Edukors Slides Editor, a presentation editor whose slides are small HTML/CSS/JS documents (16:9, 1920×1080 design size) that inherit a base (master) and a layout. Work only on the presentation of this conversation, only through its tools: read_document returns the slides, bases and layouts with the revision; apply_changes changes them (pass that revision as expectedRevision; send only what changes; never delete slides; never add interactive questions). Images you need come in with import_image and are referenced as asset:ID (read_image shows you an image already in the presentation); when the desktop app offers view_slide, look at the slides you changed before saying they are done, instead of guessing from the code; no other external resource (https URLs, CDN fonts or scripts) works in the exported file. Each request carries the selected slides, the index of all slides and what the person is looking at; follow documentInstructions when present. Respond briefly, in the language of the request.',
+  instructions:'You are the assistant of Edukors Slides Editor, a presentation editor whose slides are small HTML/CSS/JS documents (16:9, 1920×1080 design size) that inherit a base (master) and a layout. Work only on the presentation of this conversation, only through its tools: read_document returns the slides, bases and layouts with the revision; apply_changes changes them (pass that revision as expectedRevision; send only what changes; never delete slides; never add interactive questions). Images you need come in with import_image and are referenced as asset:ID (read_image shows you an image already in the presentation); when the desktop app offers view_slide, look at the slides you changed before saying they are done, instead of guessing from the code; no other external resource (https URLs, CDN fonts or scripts) works in the exported file. Motion: a slide\'s transition (when the presentation moves forward to it) is the slide field transition {type: fade|zoom|split|up|down|left|right, duration in ms} (null removes it); an object enters or leaves with the attributes data-anim-in / data-anim-out (appear|fade|spin|dissolve|zoom|up|down|left|right), data-anim-in-dur / data-anim-out-dur (ms), data-anim-in-trigger / data-anim-out-trigger (click|with|after) and data-anim-in-order / data-anim-out-order (its place in the slide\'s sequence, 1, 2…), the same ones the person sets in the toolbar; members of a group (same data-group-id) animate as one: give every member the same animation and order; data-step still reveals an element on click. Each request carries the selected slides, the index of all slides and what the person is looking at; follow documentInstructions when present. Respond briefly, in the language of the request.',
   documentId:(doc:CommonDoc)=>`slides-${doc.id}`,
   // No documentPath: the agent works in Common's private folder for this document, never in the folder of the file.
   context:(doc:CommonDoc)=>assistantContext(store,doc.id),
@@ -167,6 +173,10 @@ function slot(tag:string,className:string,place:(el:HTMLElement)=>void){const el
 const fileExtra=slot('span','slides-contents document-action',el=>{el.hidden=true;shellButton('reveal')!.before(el);});
 const viewGroup=slot('div','toolbar-group document-action slides-view-actions',el=>{const sep=document.createElement('span');sep.className='separator document-action';sep.hidden=el.hidden=true;sep.setAttribute('aria-hidden','true');document.getElementById('file-actions')!.after(sep,el);});
 const insertExtra=slot('span','slides-contents',el=>document.getElementById('insert-actions')!.append(el));
+// Slide transition, entrance and exit animation: after Insert (interactive question), before Settings.
+const motionSlot=slot('div','toolbar-group document-action slides-motion-actions',el=>{const sep=document.createElement('span');sep.className='separator document-action';sep.hidden=el.hidden=true;sep.setAttribute('aria-hidden','true');el.setAttribute('role','group');document.getElementById('insert-actions')!.after(sep,el);});
+// Icons of the effects (Common's motion icons).
+const motionIcons:Record<string,string>={appear:'common-motionAppear',fade:'common-motionFade',spin:'common-motionSpin',dissolve:'common-motionDissolve',zoom:'common-motionZoomIn',split:'common-motionSplit',up:'common-motionUp',down:'common-motionDown',left:'common-motionLeft',right:'common-motionRight'};
 const statusSlot=slot('span','slides-status',el=>document.getElementById('document-status')!.after(el));
 const sidebarSlot=slot('div','slides-sidebar',el=>document.querySelector('#sidebar-panel .panel-inner')!.append(el));
 document.getElementById('sidebar-placeholder')?.setAttribute('hidden','');
@@ -245,6 +255,10 @@ function Editor(){
   const [pollTarget,setPollTarget]=useState<{doc:number;slide:string;poll?:PollConfig}|null>(null);
   const [layoutPick,setLayoutPick]=useState<'insert'|'change'|null>(null),[renaming,setRenaming]=useState<string|null>(null),[templateName,setTemplateName]=useState<string|null>(null),[zoom,setZoom]=useState(100);
   const [grouping,setGrouping]=useState({group:false,ungroup:false}),groupingRef=useRef(grouping);groupingRef.current=grouping;
+  // The motion bar (transition, entrance, exit) replaces the format bar while one of its buttons is pressed; selKey
+  // redraws it when the canvas selection changes.
+  const [motionMode,setMotionMode]=useState<null|'transition'|'in'|'out'>(null),[selKey,setSelKey]=useState('');
+  const pendingPreview=useRef<{msgs:object[];at:number;doc:number;slide:string}|null>(null),previewTarget=useRef({doc:-1,slide:''});
   const editorFrame=useRef<HTMLIFrameElement|null>(null),[manualSelection,setManualSelection]=useState<{slide:string;index:number;details?:SelectionDetails}|null>(null);
   const canvasRange=useRef<{start:number;end:number}|null>(null),[imageSel,setImageSel]=useState(false),[cropOn,setCropOn]=useState(false);
   // Selection mode: the last area clicked (slide list or canvas) owns Delete, copy/cut and ⌘D, whatever has the keyboard focus.
@@ -257,12 +271,19 @@ function Editor(){
   const masterItem=deck&&masterView?(masterItems(deck).includes(masterView)?masterView:'m:'+deck.masters[0].id):null;
   const masterTab=masterItem?.startsWith('m:')?'bases':'layouts',visibleMasterItems=deck?masterItems(deck).filter(item=>item.startsWith(masterTab==='bases'?'m:':'l:')):[];
   const editSlide=deck&&masterItem?masterSlide(deck,masterItem):slide,canvasDeck=deck&&masterItem?masterDeck(deck,masterItem):deck;
+  useEffect(()=>{if(masterItem)setMotionMode(null);},[!!masterItem]);
+  // A preview belongs to the slide it was asked on: it is dropped when the presentation or the slide changes.
+  previewTarget.current={doc:active??-1,slide:editSlide?.id||''};
+  useEffect(()=>{motionSlot.setAttribute('aria-label',commonT('fmtMotion'));},[lang]);
   const run=async(fn:()=>Promise<any>)=>{try{return await fn();}catch(e:any){setError(errorText(t,e));return null;}};
   const updateTab=(id:number,fn:(x:Tab)=>Tab)=>store.update(id,fn);
   // fn may return the selection to apply, for changes whose new slide IDs are only known inside it.
   const mutate=(fn:(d:Deck)=>string[]|void,selection?:string[],merge=false)=>{if(active===null)return;try{store.mutate(active,fn,selection,merge);}catch(e:any){setError(errorText(t,e));}};
   const notice=(text:string)=>toast(text);
   const railRef=useRef<HTMLDivElement>(null),canvasSel=useRef({slide:'',indices:[] as number[],editing:false}),railScroll=useRef<number|null>(null);
+  // Another presentation starts without a canvas selection, already in this render: copies of a file share slide IDs,
+  // and its canvas reads the selection while it renders (the effect below runs too late for that).
+  const selDoc=useRef(active);if(selDoc.current!==active){selDoc.current=active;canvasSel.current={slide:'',indices:[],editing:false};}
   useEffect(()=>{const rail=railRef.current;if(!rail)return;const item=rail.querySelector('.slide-item.selected');
     if(railScroll.current!==null){rail.scrollTop=railScroll.current;railScroll.current=null;const focus=document.activeElement;if(!focus||focus===document.body||rail.contains(focus))item?.querySelector('button')?.focus({preventScroll:true});return;}
     item?.scrollIntoView({block:'nearest'});},[tab?.selected[0],deck?.slides.indexOf(slide!),active,masterItem]);
@@ -377,6 +398,8 @@ function Editor(){
       // Pasted groups are new groups (the copies never join the originals).
       const groupIds=new Map<string,string>();for(const el of all)if(el.dataset.groupId){const old=el.dataset.groupId;if(!groupIds.has(old))groupIds.set(old,uid('group'));el.dataset.groupId=groupIds.get(old)!;}
       if(!added.length)return;
+      // Their animations go to the end of this slide's sequence.
+      appendAnimations(doc,added);
       const previous0=targetId.startsWith(masterPrefix)?d.masters.find(m=>masterPrefix+m.id===targetId)?.css||'':targetId.startsWith(layoutPrefix)?d.layouts.find(l=>layoutPrefix+l.id===targetId)?.css||'':targetCss;
       const css=pastedFonts(prepared.css,previous0),previous=targetId.startsWith(masterPrefix)?d.masters.find(m=>masterPrefix+m.id===targetId)?.css||'':targetId.startsWith(layoutPrefix)?d.layouts.find(l=>layoutPrefix+l.id===targetId)?.css||'':slide.css;
       putSlide(d,{...slide,html:doc.body.innerHTML,css:previous+(css&&!previous.includes(css)?'\n'+css:''),script:joinBehavior(slide.script,prepared.script),staticHtml:''});
@@ -425,7 +448,7 @@ function Editor(){
   const frameCommand=(message:object)=>editorFrame.current?.contentWindow?.postMessage({app:'esf-editor-command',...message},'*');
   const changeObjectStyle=(style:ObjectStyle)=>frameCommand({type:'style',style});
   const toCanvas=()=>setSelMode('canvas');
-  const toSlides=()=>{if(selModeRef.current==='slides')return;setSelMode('slides');if(canvasSel.current.indices.length){frameCommand({type:'deselect'});canvasSel.current={...canvasSel.current,indices:[],editing:false};setManualSelection(null);}};
+  const toSlides=()=>{if(selModeRef.current==='slides')return;setSelMode('slides');setSelKey('');if(canvasSel.current.indices.length){frameCommand({type:'deselect'});canvasSel.current={...canvasSel.current,indices:[],editing:false};setManualSelection(null);}};
   // on/script: the state the bar asks for, used when several texts are formatted together (each to the same state).
   const formatText=(cmd:string,value?:string,extra?:{on?:boolean;script?:string})=>frameCommand({type:'format',command:cmd,value,range:canvasRange.current,...extra});
   // A right click that stops at the canvas iframe element (instead of reaching its document) is passed to the frame.
@@ -573,7 +596,7 @@ function Editor(){
       common.EdukorsContextMenu.open({x:px,y:py,label:commonT('objectActions'),items,restoreFocus:editorFrame.current});},
     onFiles:files=>{toCanvas();void run(()=>dropFiles(files));},
     onRange:(start,end)=>{canvasRange.current=end>start?{start,end}:null;},
-    onState:(indices,editing,details,g)=>{setGrouping(x=>g&&(x.group!==g.group||x.ungroup!==g.ungroup)?g:x);if(indices.length)setSelMode('canvas');if(canvasSel.current.slide!==target.id||canvasSel.current.indices[0]!==indices[0])canvasRange.current=null;canvasSel.current={slide:target.id,indices,editing};setManualSelection(indices.length===1||indices.length>1&&details?{slide:target.id,index:indices[0],details}:null);setImageSel(!!details?.crop);},
+    onState:(indices,editing,details,g)=>{setSelKey(target.id+':'+indices.join(','));setGrouping(x=>g&&(x.group!==g.group||x.ungroup!==g.ungroup)?g:x);if(indices.length)setSelMode('canvas');if(canvasSel.current.slide!==target.id||canvasSel.current.indices[0]!==indices[0])canvasRange.current=null;canvasSel.current={slide:target.id,indices,editing};setManualSelection(indices.length===1||indices.length>1&&details?{slide:target.id,index:indices[0],details}:null);setImageSel(!!details?.crop);},
     onGroup:(type,indices)=>{const id=target.id;mutate(d=>{const s=findSlide(d,id);if(!s)return;const next=setGroup(s,indices,type==='group'?uid('group'):null);if(next.html===s.html)return;
       putSlide(d,next);canvasSel.current={slide:id,indices,editing:false};});},
     // Table actions and cell fill from the format bar, after the frame committed any text being typed.
@@ -585,7 +608,7 @@ function Editor(){
       putSlide(d,r.slide);canvasSel.current={slide:id,indices:r.select,editing:false};});
       if(!canvasSel.current.indices.length)setManualSelection(null);},
     // All operations of one gesture (a text commit followed by a drag) become a single undo step.
-    onOps:(ops,indices,editing,range)=>{canvasSel.current={slide:target.id,indices,editing};if(range!==undefined)canvasRange.current=range&&range.end>range.start?range:null;setManualSelection(previous=>indices.length===1?{slide:target.id,index:indices[0],details:previous?.slide===target.id&&previous.index===indices[0]?previous.details:undefined}:indices.length>1&&previous?.details&&previous.slide===target.id&&previous.index===indices[0]?previous:null);
+    onOps:(ops,indices,editing,range)=>{canvasSel.current={slide:target.id,indices,editing};setSelKey(target.id+':'+indices.join(','));if(range!==undefined)canvasRange.current=range&&range.end>range.start?range:null;setManualSelection(previous=>indices.length===1?{slide:target.id,index:indices[0],details:previous?.slide===target.id&&previous.index===indices[0]?previous.details:undefined}:indices.length>1&&previous?.details&&previous.slide===target.id&&previous.index===indices[0]?previous:null);
       mutate(d=>{const current=findSlide(d,target.id);if(!current)return;const edited=applyEdits(current,ops);if(edited.html===current.html&&edited.staticHtml===current.staticHtml&&edited.title===current.title)return;putSlide(d,edited);});}
   }))(editSlide):undefined;
 
@@ -593,9 +616,12 @@ function Editor(){
   // The groups follow the selected object: text, link, shape, image or box. Buttons keep the keyboard in the frame, so
   // a text being edited keeps its selected characters.
   const details=manualSelection?.slide===editSlide?.id?manualSelection?.details:undefined;
+  // Colors of this presentation for the color menus' "Custom colors" (saved list + colors in use).
+  const customColors=useMemo(()=>tab?fileColors(tab.deck):[],[tab?.deck]);
   useEffect(()=>{
     const bar=document.getElementById('context-toolbar');if(!bar)return;
     bar.onpointerdown=e=>{if((e.target as Element).closest('.pick-button,.color-chip,input'))frameCommand({type:'hold'});};
+    if(motionMode&&tab&&deck&&editSlide&&!masterItem){renderMotion(bar);return;}
     if(!tab||!editSlide||(!details&&!imageSel&&!grouping.group&&!grouping.ungroup)){bar.replaceChildren();return;}
     // Several objects (or a group): only the arrange menu (stacking order, group and ungroup).
     const arrangeOnly=!details&&!imageSel;
@@ -667,7 +693,7 @@ function Editor(){
       if(property==='fill')changeObjectStyle({'background-color':value});
       if(property==='shadow')changeObjectStyle({'box-shadow':value?'0 12px 30px #17203355':'none'});
     };
-    common.EdukorsFormat.render(bar,{groups,state,t:commonT,onChange,options:{compact:true,tableActions:slidesTableActions,fontFamilies:[...new Set([state.fontFamily,...(details?.fonts||[]),...common.EdukorsFormat.defaults.fontFamilies])]}});
+    common.EdukorsFormat.render(bar,{groups,state,t:commonT,onChange,options:{compact:true,customColors,tableActions:slidesTableActions,fontFamilies:[...new Set([state.fontFamily,...(details?.fonts||[]),...common.EdukorsFormat.defaults.fontFamilies])]}});
     // Shapes also change their type, with Common's shape picker.
     if(kind==='shape'&&look&&!arrangeOnly){
       const group=document.createElement('div');group.className='format-group';group.dataset.group='shapeType';group.setAttribute('role','group');
@@ -689,7 +715,49 @@ function Editor(){
       }
       const sep=document.createElement('span');sep.className='separator';sep.setAttribute('aria-hidden','true');bar.append(sep,group);
     }
-  },[tab?.version,active,editSlide?.id,details,manualSelection?.index,imageSel,cropOn,lang,!!tab,grouping]);
+  },[tab?.version,active,editSlide?.id,details,manualSelection?.index,imageSel,cropOn,lang,!!tab,grouping,motionMode,selKey,!!masterItem,tab?.selected.join(',')]);
+  // ---------- Motion bar: slide transition, entrance and exit animations (motion.ts) ----------
+  // The effect chosen plays once on the canvas when the frame has the new document (or at once if nothing changed).
+  useEffect(()=>{const on=(e:MessageEvent)=>{const p=pendingPreview.current;if(!p||e.data?.app!=='esf-slide'||e.data.type!=='ready')return;
+    if(Date.now()-p.at>5000||p.doc!==previewTarget.current.doc||p.slide!==previewTarget.current.slide){pendingPreview.current=null;return;}const w=editorFrame.current?.contentWindow;if(!w||e.source!==w)return;
+    pendingPreview.current=null;setTimeout(()=>p.msgs.forEach(m=>frameCommand(m)),80);};
+    addEventListener('message',on);return()=>removeEventListener('message',on);},[]);
+  function renderMotion(bar:HTMLElement){
+    if(!tab||!deck||!editSlide)return;
+    if(motionMode==='transition'){
+      const targets=deck.slides.filter(s=>tab.selected.includes(s.id)),first=targets.find(s=>s.transition)||targets[0],tr=first?.transition;
+      const state={motionEffect:tr?.type||'',motionDuration:(tr?.duration||defaultTransitionDuration)/1000,motionHint:targets.length>1?t('motionSlidesHint').replace('{n}',String(targets.length)):''};
+      const ids=targets.map(s=>s.id);
+      common.EdukorsFormat.render(bar,{groups:['motion'],state,t:commonT,options:{motion:{effects:transitionTypes.map(v=>({value:v,label:t(('tr_'+v) as any),icon:motionIcons[v]}))}},onChange:(property:string,value:any)=>{
+        if(property==='motionEffect')mutate(d=>{for(const s of d.slides)if(ids.includes(s.id)){if(value)s.transition={type:value as TransitionType,duration:s.transition?.duration||tr?.duration||defaultTransitionDuration};else delete s.transition;}});
+        if(property==='motionDuration')mutate(d=>{for(const s of d.slides)if(ids.includes(s.id)&&s.transition)s.transition={...s.transition,duration:clampDuration(Number(value)*1000)};});
+      }});
+      return;
+    }
+    const phase=motionMode as 'in'|'out',sel=canvasSel.current,id=editSlide.id;
+    const usable=sel.slide===id&&sel.indices.length>0&&tableSelection(editSlide,sel.indices)!=='cells';
+    const info=usable?animationsAt(editSlide,sel.indices):null,a=info&&info.objects?info[phase]:null,ok=!!info&&info.objects>0;
+    const state={motionEffect:a?a.effect:'',motionDuration:(a?.duration||defaultAnimDuration)/1000,motionOrder:a?.order||0,motionTotal:info?.total||0,motionTrigger:a?.trigger||'click',motionDisabled:!ok,motionHint:ok?'':t('motionSelectHint')};
+    const indices=[...sel.indices];
+    const apply=(patch:Parameters<typeof setAnimation>[3],preview:boolean)=>{
+      let changed=false;
+      mutate(d=>{const s=findSlide(d,id);if(!s)return;const next=setAnimation(s,indices,phase,patch);if(next===s)return;putSlide(d,next);changed=true;canvasSel.current={slide:id,indices,editing:false};});
+      if(!preview)return;
+      const after=findSlide(store.get(active!)!.deck,id),now=after?animationsAt(after,indices)[phase]:null;if(!now)return;
+      // The whole group plays when one of its members is selected (setAnimation set it on every member).
+      const doc=new DOMParser().parseFromString(after!.html,'text/html'),all=[...doc.body.querySelectorAll('*')],groups=new Set(indices.map(i=>all[i]?.getAttribute('data-group-id')).filter(Boolean));
+      const shown=[...new Set([...indices,...all.flatMap((el,i)=>groups.has(el.getAttribute('data-group-id'))?[i]:[])])];
+      const msgs=[{type:'motionPreview',indices:shown,phase,effect:now.effect,duration:now.duration}];
+      if(changed)pendingPreview.current={msgs,at:Date.now(),doc:active!,slide:id};else msgs.forEach(m=>frameCommand(m));
+    };
+    common.EdukorsFormat.render(bar,{groups:['motion'],state,t:commonT,options:{motion:{effects:animTypes.map(v=>({value:v,label:t((phase+'_'+v) as any),icon:v==='appear'&&phase==='out'?'common-motionDisappear':v==='zoom'&&phase==='out'?'common-motionZoomOut':motionIcons[v]})),sequence:true,trigger:true}},onChange:(property:string,value:any)=>{
+      if(!ok)return;
+      if(property==='motionEffect')apply({effect:value?value as AnimType:null},!!value);
+      if(property==='motionDuration')apply({duration:Number(value)*1000},true);
+      if(property==='motionOrder')apply({order:Number(value)},false);
+      if(property==='motionTrigger')apply({trigger:value as AnimTrigger},false);
+    }});
+  }
   // Replaces the selected image with another one (a file, or the image on the clipboard first).
   async function replaceImage(){
     if(!editSlide||!selectedManual)return;const index=selectedManual.index,id=editSlide.id;
@@ -728,6 +796,8 @@ function Editor(){
       <ShellTool command="present" icon="slides-play" className="tool-present" label={t('present')} keys="⌘↩" onClick={present}/>
       <div className="segmented-view" role="tablist" aria-label={t('editMaster')}>{([['slides-slides','viewSlides',false],['slides-master','editMaster',true]] as const).map(([icon,label,on])=><button key={icon} type="button" role="tab" className="tool" aria-selected={!!masterItem===on} aria-label={t(label)} onClick={()=>{if(!!masterItem!==on)toggleMaster();}}><span className="slides-contents" dangerouslySetInnerHTML={svg(icon)}/><span className="tooltip" aria-hidden="true">{t(label)}</span></button>)}</div>
     </>,viewGroup)}
+    {createPortal(tab&&<>{([['transition','slides-transition','motionTransition'],['in','slides-animIn','motionIn'],['out','slides-animOut','motionOut']] as const).map(([mode,icon,label])=>
+      <ShellTool key={mode} command={'slidesMotion-'+mode} icon={icon} label={masterItem?`${t(label)} · ${t('motionNoMaster')}`:t(label)} pressed={motionMode===mode} disabled={!!masterItem} onClick={()=>setMotionMode(m=>m===mode?null:mode)}/>)}</>,motionSlot)}
     {createPortal(tab&&<><ShellTool command="insertLink" icon="slides-link" label={t('manualLink')} onClick={()=>void run(insertLink)}/>{!masterItem&&<ShellTool command="insertPoll" icon="slides-poll" label={pollWords[lang].title} pressed={!!slide?.poll} onClick={()=>command('insertPoll')}/>}</>,insertExtra)}
     {createPortal(tab&&deck&&slide?<>{masterItem?`${t('editMaster')} · ${itemName(deck,masterItem)}`:<>{t('slide')} {deck.slides.indexOf(slide)+1} {t('of')} {deck.slides.length} · <button type="button" className="layout-name" title={t('changeLayout')} onClick={()=>setLayoutPick('change')}>{layoutOf(deck,slide.layoutId).name}</button></>}{zoom!==100&&` · ${zoom}%`}</>:null,statusSlot)}
     {settingsSections.map(({key,label,section})=><React.Fragment key={key}>{createPortal(t(key==='poll'?'pollSettings':'promptDeck'),label)}{createPortal(key==='poll'

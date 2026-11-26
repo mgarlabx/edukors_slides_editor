@@ -1,6 +1,7 @@
 import './pptx-import.test';
 import './openxml.test';
 import './poll.test';
+import './motion.test';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';

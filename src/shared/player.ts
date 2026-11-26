@@ -3,6 +3,7 @@
 // without the editing commands. Each slide still runs isolated in its own sandboxed frame; the
 // overlays sit on top of it in the same 1600 × 900 coordinate space.
 import {Deck,Language,safeJson,escapeHtml} from './model';
+import {countSteps} from './motion';
 import {slideDocument,fill} from './render';
 import {createPollController,normalizePollServer,pollEndpoint,pollWords} from './poll';
 import {qrRuntimeSource} from './qr';
@@ -23,7 +24,8 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
   const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
   const doc=(i:number,kind:'html'|'static')=>(data.slides[i][kind] as string).replace(/asset:([\w-]+)/g,(ref:string,id:string)=>data.assets[id]||ref);
   let forceMotion=false;
-  const live=(i:number,t:string,s:number)=>doc(i,'html').replace('<html ',forceMotion?'<html data-esf-motion="full" ':'<html ').split('__ESF_TOKEN__').join(t).replace('"steps":'+data.sentinel,'"steps":'+s);
+  // wait: a stage frame starts its automatic animations when the player says (after the transition).
+  const live=(i:number,t:string,s:number,wait=false)=>doc(i,'html').replace('<html ',forceMotion?'<html data-esf-motion="full" ':'<html ').split('__ESF_TOKEN__').join(t).replace('"steps":'+data.sentinel,'"steps":'+s+(wait?',"wait":true':''));
   const stage=$('stage'),frames:any[]=[...document.querySelectorAll('#stage > .frame')];
   // Slide frames are sandboxed without clipboard access; the player copies on their behalf (the click's activation reaches it).
   const copyText=async(text:string)=>{if(!text)return false;try{await navigator.clipboard.writeText(text);return true;}catch{}const t=document.createElement('textarea');t.value=text;t.style.cssText='position:fixed;opacity:0';document.body.append(t);t.select();let ok=false;try{ok=document.execCommand('copy');}catch{}t.remove();return ok;};
@@ -126,16 +128,40 @@ function playerRuntime(data:any,pollFactory:typeof createPollController,qr:(url:
     ready=false;polls.activate(cur);
     if(cur!==from&&tools)clearInk();
     token=random();ready=false;queued=0;step=atEnd?data.slides[cur].steps:initial;total=data.slides[cur].steps;
-    const f=frames[1-front];f.dataset.token=token;f.srcdoc=live(cur,token,atEnd?-1:initial);
+    // The slide's own transition plays only when moving forward to it (back and jumps keep the short fade).
+    entering=started&&cur===from+1&&!atEnd&&!initial?data.slides[cur].transition||null:null;started=true;
+    const f=frames[1-front];f.dataset.token=token;f.srcdoc=live(cur,token,atEnd?-1:initial,true);
     announce();
+  }
+  let entering:{type:string;duration:number}|null=null,moving:Animation[]=[],started=false;
+  // Transition keyframes for the frame coming in and the one going out (fade, zoom, split, slide up/down/left/right).
+  function transitionFrames(type:string):[Keyframe[],Keyframe[]|null]{
+    const push:Record<string,[string,string]>={up:['translateY(100%)','translateY(-100%)'],down:['translateY(-100%)','translateY(100%)'],left:['translateX(100%)','translateX(-100%)'],right:['translateX(-100%)','translateX(100%)']};
+    if(push[type])return[[{transform:push[type][0]},{transform:'none'}],[{transform:'none'},{transform:push[type][1]}]];
+    if(type==='zoom')return[[{opacity:0,transform:'scale(.3)'},{opacity:1,transform:'none'}],null];
+    if(type==='split')return[[{clipPath:'inset(0 50% 0 50%)'},{clipPath:'inset(0 0% 0 0%)'}],null];
+    return[[{opacity:0},{opacity:1}],null];
   }
   function shown(f:any){
     if(f===frames[front])return;
-    const old=frames[front],oldToken=old.dataset.token;front=frames.indexOf(f);
-    f.classList.add('on');old.classList.remove('on');
+    const old=frames[front],oldToken=old.dataset.token,newToken=f.dataset.token;front=frames.indexOf(f);
+    moving.forEach(a=>{try{a.finish();}catch{}});moving=[];
+    const tr=entering,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches&&!forceMotion;entering=null;
+    // Automatic animations of the slide start once it is on screen.
+    const play=()=>{if(f===frames[front]&&f.dataset.token===newToken)post(f,newToken,'play');};
+    let wait=400;
+    if(tr&&!reduced&&typeof f.animate==='function'){
+      wait=tr.duration;const [inFrames,outFrames]=transitionFrames(tr.type);
+      // The slide going out stays visible under the new one (without the .on class, which belongs to the current slide).
+      f.style.transition=old.style.transition='none';f.style.zIndex='2';old.style.opacity='1';f.classList.add('on');old.classList.remove('on');
+      const a=f.animate(inFrames,{duration:tr.duration,easing:'cubic-bezier(.4,0,.2,1)'});moving.push(a);
+      if(outFrames)moving.push(old.animate(outFrames,{duration:tr.duration,easing:'cubic-bezier(.4,0,.2,1)'}));
+      const end=()=>{old.style.opacity='';f.style.zIndex='';void getComputedStyle(old).opacity;f.style.transition=old.style.transition='';play();};
+      a.finished.then(end,end);
+    }else{f.classList.add('on');old.classList.remove('on');setTimeout(play,reduced?0:wait);}
     // Keyboard focus must not stay in the frame that is about to be emptied.
     if(document.activeElement===old){old.blur();window.focus();}
-    setTimeout(()=>{if(old.dataset.token===oldToken&&old!==frames[front]){post(old,oldToken,'dispose');old.dataset.token='';old.srcdoc='';}},450);
+    setTimeout(()=>{if(old.dataset.token===oldToken&&old!==frames[front]){post(old,oldToken,'dispose');old.dataset.token='';old.srcdoc='';}},Math.max(450,wait+80));
   }
   function sendStep(){post(frames[front],token,'step',{step});refreshLens();announce();}
   function next(){if(!ready){queued++;return;}if(step<total){step++;sendStep();}else if(cur<N-1)go(cur+1);}
@@ -837,7 +863,7 @@ export function playerDocument(deck:Deck,options:{tools?:boolean;start?:number;t
   // The in-app window speaks the interface language when the player has its words (pt, en, es); otherwise English.
   const tools=options.tools!==false,lang=(!tools&&['pt','en','es'].includes(options.lang as string)?options.lang:'en') as 'pt'|'en'|'es';
   const W=playerWords[lang];
-  const slides=deck.slides.map(s=>({id:s.id,title:s.title,...tools&&s.notes?.trim()?{notes:s.notes}:{},steps:s.poll?0:(s.html.match(/\sdata-step\b/g)||[]).length,poll:s.poll,html:slideDocument(deck,s,false,'__ESF_TOKEN__',STEP_SENTINEL,false,undefined,lang,options.minify),static:slideDocument(deck,s,true,'',0,false,undefined,lang,options.minify)}));
+  const slides=deck.slides.map(s=>({id:s.id,title:s.title,...tools&&s.notes?.trim()?{notes:s.notes}:{},steps:s.poll?0:countSteps(s.html),poll:s.poll,...s.transition?{transition:s.transition}:{},html:slideDocument(deck,s,false,'__ESF_TOKEN__',STEP_SENTINEL,false,undefined,lang,options.minify),static:slideDocument(deck,s,true,'',0,false,undefined,lang,options.minify)}));
   const used=slides.map(s=>s.html+s.static).join('\n');
   const assets=Object.fromEntries(deck.assets.filter(a=>used.includes('asset:'+a.id)).map(a=>[a.id,`data:${a.mime};base64,${a.data}`]));
   const server=normalizePollServer(options.pollServer),endpoint=server?pollEndpoint(server):'',hasPoll=deck.slides.some(s=>s.poll);

@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.11.26
+
+- **Slide transitions:** a toolbar button after the interactive question opens the transitions in place of the format bar: Fade in, Zoom (expand), Split (expand) and Slide up, down, left or right, with a duration. They apply to the selected slides and play when the presentation moves forward (Present and the exported HTML).
+- **Entrance and exit animations:** two more buttons for the selected objects: Appear/Disappear, Fade, Spin, Dissolve, Zoom (expand/contract) and Slide in four directions, with duration, place in the slide's sequence and start (on click, with previous, after previous). The chosen effect plays once on the canvas; objects keep their place, rotation and opacity. Earlier click reveals (`data-step`) keep working, first in the sequence. The assistant knows the same settings.
+- **Animations of groups:** an entrance or exit animation set on a group (or one of its objects) applies to the whole group: its objects play together as one effect, spinning and zooming around the group's center, and take one place in the sequence.
+- **Custom colors:** the color menus (text, border, line, fill) list, below the palette, the colors outside it that the presentation uses. Each file saves its own list, completed on opening with the colors of its texts, borders, lines and backgrounds.
+- **Tabs:** a presentation opened in another tab no longer starts with the canvas selection of the previous one.
+
 ## 26.11.17
 
 - **Word cloud** (exported HTML): the answers form a packed cloud, the most frequent term in the middle, others around it in several colors, some upright; refreshing keeps the same picture.

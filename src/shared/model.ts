@@ -1,4 +1,5 @@
 import {PollConfig,validPoll} from './poll';
+import {Transition,validTransition} from './motion';
 // Interface languages. Content has no language; the exported HTML is always in English.
 export type Language = 'pt' | 'en' | 'es' | 'zh' | 'hi';
 export interface Asset { id: string; name: string; mime: string; data: string }
@@ -6,6 +7,8 @@ export interface Slide {
   id: string; title: string; layoutId: string; html: string; css: string;
   script: string; staticHtml: string; notes: string;
   poll?: PollConfig;
+  // The transition that plays when the presentation moves forward to this slide (motion.ts); without it, a short fade.
+  transition?: Transition;
 }
 // Ordinary layouts follow the active master. Imported layouts may bind to a copied source master to preserve appearance.
 // Master HTML/CSS and layout HTML/CSS are independent from slides; only inheritance flows down to slide instances.
@@ -20,6 +23,8 @@ export interface Deck {
   masters: Master[]; activeMaster: string; layouts: Layout[]; slides: Slide[]; assets: Asset[];
   // Context of this talk for the assistant (ai/system-prompt.md in the package); the agent changes it only when asked.
   systemPrompt?: string;
+  // Colors this presentation uses beyond the palette (#rrggbb), shown under "Custom colors" in the color menus.
+  customColors?: string[];
   importReport?: ImportReport;
 }
 // path: the .ESF the user sees (never the app's private working folder). pending: the save left out files the
@@ -126,6 +131,7 @@ export function validateDeck(value:unknown):asserts value is Deck {
   const ids=new Set<string>();
   for(const s of d.slides){
     if(s.poll!==undefined&&!validPoll(s.poll))throw Error('Invalid interactive question.');
+    if(s.transition!==undefined&&!validTransition(s.transition))throw Error('Invalid slide transition.');
     if(!s||!/^s-[\w-]+$/.test(s.id)||ids.has(s.id))throw Error('Invalid or duplicate slide ID.');
     ids.add(s.id);
     for(const key of ['title','layoutId','html','css','script','staticHtml','notes'] as const){
@@ -141,6 +147,7 @@ export function validateDeck(value:unknown):asserts value is Deck {
   const badHtml=(v:unknown)=>typeof v!=='string'||v.length>2_000_000||/<(?:script|iframe|object|embed|base|form|link|meta)\b/i.test(v)||/\son[a-z]+\s*=/i.test(v);
   const named=(x:any)=>x&&typeof x.id==='string'&&/^[\w-]+$/.test(x.id)&&x.id.length<=100&&typeof x.name==='string'&&x.name.trim()&&x.name.length<=200;
   if(d.systemPrompt!==undefined&&(typeof d.systemPrompt!=='string'||d.systemPrompt.length>20000))throw Error('Invalid presentation system prompt.');
+  if(d.customColors!==undefined&&(!Array.isArray(d.customColors)||d.customColors.length>100||d.customColors.some((c:unknown)=>typeof c!=='string'||!/^#[\da-f]{6}$/.test(c))))throw Error('Invalid custom colors.');
   if(!Array.isArray(d.masters)||d.masters.length<1||d.masters.length>50)throw Error('A presentation needs 1–50 slide masters.');
   const masterIds=new Set<string>(),layoutIds=new Set<string>();
   for(const m of d.masters){
