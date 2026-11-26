@@ -148,6 +148,7 @@ try{
     await page.keyboard.press(`${mod}+d`);await count(10);
     assert.equal(new Set([...(await html()).matchAll(/data-group-id="([^"]+)"/g)].map(m=>m[1])).size,2,'the duplicate is a group of its own');
     await page.keyboard.press(`${mod}+z`);await count(5);await ready();
+    for(let i=0;i<50&&await frame().locator('[data-shape]').count()!==1;i++)await page.waitForTimeout(100);
     await frame().locator('[data-shape]').click({position:{x:20,y:20},force:true});await page.waitForTimeout(400);
     await bar.locator('[data-control=arrangeMenu]').click();assert.equal(await page.locator('.pick-menu [role=option]').count(),2,'the arrange menu has only the stacking order');await bar.locator('[data-control=arrangeMenu]').click();
     await bar.locator('[data-control=ungroup]').click();await count(0);
@@ -229,7 +230,7 @@ try{
     await pick('m2');assert.match(await bar.locator('.motion-order-value').textContent(),/^2\/2$/);await bar.locator('[data-control="motionEarlier"]').click();
     await until(d=>attrs(d,'m2')['data-anim-in-order']==='1'&&attrs(d,'m1')['data-anim-in-order']==='2','earlier in the sequence');
     await page.locator('[data-command="slidesMotion-out"]').click();assert.equal(await page.locator('[data-command="slidesMotion-in"]').getAttribute('aria-pressed'),'false');
-    await pick('m1');await bar.locator('[data-control="motion-spin"]:not([aria-disabled])').click();
+    await pick('m1');await bar.locator('[data-control="motion-spin"][aria-label="Spin out" i]:not([aria-disabled])').click();
     await until(d=>attrs(d,'m1')['data-anim-out']==='spin'&&attrs(d,'m1')['data-anim-out-order']==='3','spin exit, third in the sequence');
     await page.locator('#edit-actions [data-command="undo"]').click();
     await until(d=>!attrs(d,'m1')['data-anim-out']&&attrs(d,'m1')['data-anim-in']==='zoom','undo removes the exit only');
