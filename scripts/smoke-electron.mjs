@@ -127,7 +127,10 @@ try{
     await app.evaluate(({clipboard})=>clipboard.clear());await next('open',png);
     const before=await canvas.locator('img').count();await page.locator('#insert-actions [data-command="insertImage"]').click();
     await page.waitForFunction(async n=>{const c=await EdukorsAppDocument.fromBytes((await EdukorsAppDocument.toBytes(EdukorsDocuments.active())).bytes);return c.deck.assets.some(a=>a.name==='Picture.png'&&a.mime==='image/png');},before);
-    await page.keyboard.press(mod+'+s');await page.waitForFunction(()=>!EdukorsDocuments.isModified(EdukorsDocuments.active()));}
+    // The box takes the picture's proportions a moment after it enters: save once that is done (again if an edit came later).
+    await page.waitForTimeout(800);
+    let saved=false;for(let i=0;i<3&&!saved;i++){await page.keyboard.press(mod+'+s');saved=await page.waitForFunction(()=>!EdukorsDocuments.isModified(EdukorsDocuments.active()),null,{timeout:10000}).then(()=>true,()=>false);}
+    assert.ok(saved,'the presentation with the inserted picture is saved');}
   pass('Insert image takes a picture from a file through Common\'s picker');
   // Export HTML (player, fonts) next to the document; an export never replaces the document.
   // Common's export screen: the file goes next to the document, with its name.
