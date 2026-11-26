@@ -52,7 +52,9 @@ try{
     const choose=async(menu,option)=>{await bar.locator(`[data-control="${menu}"]`).click();await page.waitForTimeout(400);await (typeof option==='number'?page.locator('.pick-menu [role=option]').nth(option):page.locator('.pick-menu [role=option]').filter({hasText:option}).first()).click();await page.waitForTimeout(700);};
     await bar.locator('[data-control="bold"]').click();await page.waitForTimeout(700);
     await choose('alignMenu',1);await choose('paragraphMenu',/^1\.5$/);await choose('paragraphMenu',0);
-    const look=await page.evaluate(h=>{const doc=new DOMParser().parseFromString(h,'text/html');return['a','b'].map(f=>{const el=doc.querySelector(`[data-field=${f}]`);return{style:el.getAttribute('style'),list:!!el.querySelector(':scope>ul>li>b'),items:el.querySelectorAll('li').length};});},await html());
+    const readLook=async()=>page.evaluate(h=>{const doc=new DOMParser().parseFromString(h,'text/html');return['a','b'].map(f=>{const el=doc.querySelector(`[data-field=${f}]`);return{style:el.getAttribute('style'),list:!!el.querySelector(':scope>ul>li>b'),items:el.querySelectorAll('li').length};});},await html());
+    // Slow runners save the last menu's change a little later: wait for it instead of a fixed time.
+    let look=await readLook();for(let i=0;i<40&&!look.every(x=>/text-align: center/.test(x.style)&&/line-height: 1.5/.test(x.style)&&x.list);i++){await page.waitForTimeout(150);look=await readLook();}
     for(const x of look){assert.ok(/text-align: center/.test(x.style)&&/line-height: 1.5/.test(x.style),'alignment and line spacing on every text');assert.ok(x.list,'bold bulleted list in every text');}
     assert.equal(look[0].items,2,'each line is an item, also inside the bold');
     // A bigger font (typed: 48) on list texts keeps their items (it used to wrap the items in a span and add new bullets).
